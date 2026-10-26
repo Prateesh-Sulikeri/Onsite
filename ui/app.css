@@ -177,7 +177,15 @@ textarea{resize:vertical; line-height:1.5}
 .start-row{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto; gap:14px; align-items:end; margin-top:22px; padding-top:20px; border-top:1px solid var(--line)}
 
 .loop-card{position:sticky; top:0}
-.ac-meter{max-width:none; margin-top:12px}
+.ac-meter{max-width:none}
+.ready-grid{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:20px; align-items:start}
+.ready-meter{display:flex; align-items:center; gap:10px; margin-top:18px}
+.ready-meter .meter{flex:1; height:12px}
+.ready-meter .muted{font-size:12.5px; white-space:nowrap}
+.ready-card{display:flex; flex-direction:column; align-items:flex-start; gap:8px}
+.ready-card .btn{width:100%; justify-content:center; margin-top:10px}
+.check{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-2); margin-top:6px}
+@media (max-width: 900px){ .ready-grid{grid-template-columns:1fr} .ready-meter .muted{white-space:normal} }
 .ac-lang{font-size:12.5px; margin-top:8px}
 .room-mic{display:flex; align-items:center; gap:6px; color:var(--ink-2)}
 .room-mic svg{width:16px; height:16px}
@@ -417,9 +425,17 @@ code{font-family:var(--mono); font-size:.9em; background:var(--code-bg); padding
 .btn.danger-fill:hover{background:var(--bad); filter:brightness(1.08)}
 
 /* ---------- coding round: problem tab + runner ---------- */
-.room-body.coding{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
+/* Left: problem on top, conversation below (each scrolls). Right: the editor, full height. */
+.room-body.coding{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}
 .room-body.coding .rail{display:none}
-.pane.problem{overflow:auto}
+.convo-prob{flex:1 1 50%; min-height:0; overflow-y:auto; background:var(--side)}
+.convo-prob .prob{max-width:none}
+.room-body.coding .transcript{flex:1 1 50%; min-height:0}
+.split{flex:none; height:9px; margin:-4px 0; position:relative; z-index:1; cursor:row-resize; touch-action:none}
+.split::before{content:""; position:absolute; left:0; right:0; top:4px; border-top:1px solid var(--line)}
+.split::after{content:""; position:absolute; left:50%; top:2px; width:36px; height:5px; margin-left:-18px; border-radius:99px; background:var(--line-2)}
+.split:hover::after,.split.dragging::after,.split:focus-visible::after{background:var(--accent)}
+.split:focus-visible{outline:none}
 .prob{padding:18px 20px 28px; font-size:14px; line-height:1.6; max-width:760px}
 .prob h2{display:flex; align-items:center; gap:10px; font-size:19px; margin-bottom:12px}
 .prob h3{font-size:14px; margin:18px 0 6px}

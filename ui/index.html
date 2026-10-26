@@ -177,18 +177,44 @@
             <h2>Your loop</h2>
             <ol class="timeline" id="agenda"></ol>
           </div>
-          <div class="panel" id="audioCheck">
-            <div class="panel-head"><h2>Check your audio</h2><span class="pill" id="acPill">Checking…</span></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ GET READY (before the call) ============ -->
+    <section class="view" id="view-ready" hidden>
+      <header class="page-head">
+        <div>
+          <button class="crumb link" id="readyBack"><svg><use href="#i-back"/></svg>Interviews</button>
+          <h1>Get ready</h1>
+          <p class="lede" id="readySub"></p>
+        </div>
+      </header>
+      <div class="ready-grid">
+        <div class="panel" id="audioCheck">
+          <div class="panel-head"><h2>Check your mic and speaker</h2><span class="pill" id="acPill">Checking…</span></div>
+          <div class="form-grid">
             <label class="field"><span>Microphone</span><select id="acMic"></select></label>
-            <label class="field" style="margin-top:12px"><span>Speaker</span><select id="acSpk"></select></label>
-            <div class="btn-row">
-              <button class="btn sm" id="acSpeak"><svg><use href="#i-speaker"/></svg>Test speaker</button>
-              <button class="btn sm" id="acListen"><svg><use href="#i-mic"/></svg>Test mic</button>
-            </div>
-            <div class="meter ac-meter" aria-hidden="true"><i id="acMeter"></i></div>
-            <p class="form-msg" id="acResult" role="status"></p>
-            <p class="muted ac-lang" id="acLang"></p>
+            <label class="field"><span>Speaker</span><select id="acSpk"></select></label>
           </div>
+          <div class="ready-meter">
+            <svg><use href="#i-mic"/></svg>
+            <div class="meter ac-meter" aria-hidden="true"><i id="acMeter"></i></div>
+            <span class="muted" id="acMeterHint">Say something. The bar should move.</span>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="acSpeak"><svg><use href="#i-speaker"/></svg>Test speaker</button>
+            <button class="btn" id="acListen"><svg><use href="#i-mic"/></svg>Test mic</button>
+          </div>
+          <p class="form-msg" id="acResult" role="status"></p>
+          <p class="muted ac-lang" id="acLang"></p>
+        </div>
+        <aside class="panel ready-card">
+          <span class="room-ic" id="readyIc">D</span>
+          <h2 id="readyRound"></h2>
+          <p class="muted" id="readyWho"></p>
+          <button class="btn primary lg" id="readyJoin">Join interview<svg><use href="#i-arrow"/></svg></button>
+          <label class="check"><input type="checkbox" id="readyEvery"><span>Check before every round</span></label>
         </aside>
       </div>
     </section>
@@ -301,6 +327,10 @@
 
       <div class="room-body">
         <div class="convo">
+          <div class="convo-prob" id="convoProb" hidden>
+            <div class="prob" id="probBody" role="region" aria-label="Problem"></div>
+          </div>
+          <div class="split" id="probSplit" role="separator" aria-orientation="horizontal" aria-label="Resize problem and conversation" tabindex="0" hidden></div>
           <div class="transcript" id="transcript" role="log" aria-label="Conversation"></div>
           <div class="closed-note" id="wrapBanner" hidden>
             <span>The interviewer has closed the round.</span>
@@ -326,13 +356,9 @@
 
         <div class="work">
           <div class="tabs" role="tablist">
-            <button class="tab" role="tab" data-tab="problem" aria-selected="false" id="problemTab" hidden><svg><use href="#i-bulb"/></svg>Problem</button>
             <button class="tab" role="tab" data-tab="editor" aria-selected="true"><svg><use href="#i-code"/></svg>Editor</button>
             <button class="tab" role="tab" data-tab="notes" aria-selected="false"><svg><use href="#i-pen"/></svg>Whiteboard</button>
             <button class="tab" role="tab" data-tab="shared" aria-selected="false"><svg><use href="#i-user"/></svg>From interviewer<i class="tab-dot" id="sharedDot" hidden></i></button>
-          </div>
-          <div class="pane problem" data-pane="problem" hidden>
-            <div class="prob" id="probBody"></div>
           </div>
           <div class="pane" data-pane="editor">
             <div class="pane-bar"><span class="lang-tag" id="edLang"></span><span class="muted" id="edHint">The interviewer sees this when you send.</span>

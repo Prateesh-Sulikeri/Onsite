@@ -173,6 +173,8 @@ pub fn run() {
             commands::voice_interrupt,
             commands::voice_set_devices,
             commands::audio_devices,
+            commands::mic_monitor_start,
+            commands::mic_monitor_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Onsite");

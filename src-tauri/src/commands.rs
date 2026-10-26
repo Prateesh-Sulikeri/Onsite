@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_json::Value;
 use crate::voice::vs::VoiceStudio;
 use crate::voice::VoiceSettings;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// UI errors land in the same log file as the backend's.
 #[tauri::command]
@@ -208,6 +208,45 @@ pub async fn warm_voice(settings: &VoiceSettings) {
 #[tauri::command]
 pub fn audio_devices() -> Result<crate::voice::audio::AudioDevices> {
     crate::voice::audio::list_devices()
+}
+
+/// Bumped by every start and stop; a monitor runs only while the counter still holds its own value.
+static MIC_MONITOR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[derive(Clone, Serialize)]
+struct MicLevel {
+    mic: f32,
+}
+
+/// Opens the chosen mic for the "Get ready" meter and emits `mic_level` every 80 ms. No STT.
+/// Stops on `mic_monitor_stop`, on the next start, or after 10 minutes.
+#[tauri::command]
+pub async fn mic_monitor_start(app: AppHandle, input: String) -> Result<()> {
+    use std::sync::atomic::Ordering;
+    let me = MIC_MONITOR.fetch_add(1, Ordering::SeqCst) + 1;
+    let s = app.state::<AppState>().settings();
+    crate::voice::audio::set_devices(&input, &s.voice.output_device);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
+    let mic = crate::voice::audio::Mic::open(tx)?;
+    tokio::spawn(async move {
+        let started = std::time::Instant::now();
+        let mut tick = tokio::time::interval(std::time::Duration::from_millis(80));
+        while MIC_MONITOR.load(Ordering::SeqCst) == me && !mic.is_dead() && started.elapsed().as_secs() < 600 {
+            tokio::select! {
+                _ = tick.tick() => { let _ = app.emit("mic_level", MicLevel { mic: mic.level.get() }); }
+                c = rx.recv() => if c.is_none() { break },
+            }
+        }
+        if mic.is_dead() {
+            let _ = app.emit("mic_level", MicLevel { mic: -1.0 });
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn mic_monitor_stop() {
+    MIC_MONITOR.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// Returns ms to first audio.

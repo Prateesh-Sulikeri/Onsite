@@ -49,12 +49,13 @@ const TIPS = {
 /* ---------------- shell ---------------- */
 function nav(view){
   $$(".view").forEach(v => v.hidden = v.id !== "view-" + view);
-  const section = view === "report" ? "feedback" : view === "room" ? "interviews" : view;
+  const section = view === "report" ? "feedback" : view === "room" || view === "ready" ? "interviews" : view;
   $$(".nav-item").forEach(b => b.dataset.nav === section ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
   $("#app").classList.toggle("in-call", view === "room");
   $(".main").scrollTop = 0;
   if (view === "dashboard") renderDashboard();
-  if (view === "interviews"){ renderAgenda(); renderAudioCheck(); }
+  if (view === "interviews") renderAgenda();
+  if (view !== "ready") stopMonitor();
   if (view === "feedback") renderHistory();
   if (view === "settings") renderSettings();
 }
@@ -225,7 +226,7 @@ $("#startBtn").onclick = async () => {
     const id = await api.invoke("create_loop", {setup});
     loop = {id, setup, count: rounds.length};
     m.textContent = "";
-    await startRound(0);
+    openReady(0);
   }catch(e){ m.className = "form-msg err"; m.textContent = errText(e); }
   finally{ btn.classList.remove("is-busy"); btn.removeAttribute("aria-busy"); renderAgenda(); }
 };
@@ -645,8 +646,10 @@ const STATUS_TEXT = {accepted: "Accepted", wrong_answer: "Wrong answer", runtime
 function showProblem(p){
   const on = !!p;
   if (session) session.problem = p;
-  $("#problemTab").hidden = !on;
+  // Coding rounds: problem on top of the conversation, editor on the right, no rail.
+  $("#convoProb").hidden = $("#probSplit").hidden = !on;
   $(".room-body").classList.toggle("coding", on);
+  if (on) $("#convoProb").scrollTop = 0;
   $("#runBtns").hidden = !(on && p.runnable);
   $("#runOut").hidden = true; $("#runOut").innerHTML = "";
   $("#edHint").hidden = on;
@@ -660,8 +663,34 @@ function showProblem(p){
     <p class="muted prob-foot">${p.hidden} hidden tests${p.runnable ? " plus one full-size test run on Submit" : ""}. ${p.topics.length ? "Topics: " + esc(p.topics.join(", ")) : ""}</p>
     ${p.runnable ? "" : `<p class="form-msg err">Run isn’t available for ${esc(loop.setup.lang)} yet. Use Java, Python, C++ or JavaScript to run tests.</p>`}`;
   if (p.starter && !$("#code").value.trim()){ $("#code").value = p.starter; updateGutter(); }
-  selectTab("problem");
+  selectTab("editor");
 }
+/* Drag (or arrow keys on) the bar between problem and conversation. The share is remembered. */
+const PROB_SHARE = "onsite.probShare";
+function setProbShare(f){
+  f = Math.min(.8, Math.max(.2, f));
+  $("#convoProb").style.flexBasis = `${f * 100}%`;
+  $("#transcript").style.flexBasis = `${(1 - f) * 100}%`;
+  return f;
+}
+setProbShare(LS.get(PROB_SHARE, .5));
+$("#probSplit").addEventListener("pointerdown", e => {
+  const bar = e.currentTarget, top = $("#convoProb").getBoundingClientRect().top;
+  const span = $("#convoProb").offsetHeight + $("#transcript").offsetHeight;
+  bar.setPointerCapture(e.pointerId); bar.classList.add("dragging");
+  const move = ev => setProbShare((ev.clientY - top) / span);
+  bar.addEventListener("pointermove", move);
+  bar.addEventListener("pointerup", ev => {
+    bar.removeEventListener("pointermove", move); bar.classList.remove("dragging");
+    LS.set(PROB_SHARE, setProbShare((ev.clientY - top) / span));
+  }, {once: true});
+});
+$("#probSplit").addEventListener("keydown", e => {
+  if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+  e.preventDefault();
+  const cur = LS.get(PROB_SHARE, .5);
+  LS.set(PROB_SHARE, setProbShare(cur + (e.key === "ArrowDown" ? .05 : -.05)));
+});
 async function runCode(submit){
   const s = session; if (!s || s.roundId === null || s.running) return;
   s.running = true;
@@ -930,7 +959,10 @@ function loopButtons(round, live){
 }
 function bindStart(sel, idx){
   const b = $(sel); if (!b) return;
-  b.onclick = () => { b.disabled = true; b.classList.add("is-busy"); startRound(idx); };
+  b.onclick = () => {
+    if (readyEvery()) return openReady(idx);
+    b.disabled = true; b.classList.add("is-busy"); startRound(idx);
+  };
 }
 function renderNothing(round, live, st, detail){
   const {inLoop, hasNext} = loopButtons(round, live);
@@ -1278,22 +1310,73 @@ function showLang(sel){
     : e.state === "installing" ? `Downloading the English speech model… ${Math.round(e.pct)}%. Until it’s done, a strong accent may come out as another language.`
     : `English speech model missing (${e.reason}). Install Parakeet TDT v2 in VoiceStudio’s dictation settings.`;
 }
+/* ---------------- get ready (before the call) ---------------- */
+/* Shown before round 1 of every loop, and before later rounds when "Check before every round" is on. */
+let readyIndex = 0;
+const readyEvery = () => !!LS.get("onsite.readyEvery", false);
+async function openReady(index){
+  readyIndex = index;
+  nav("ready");
+  const k = loop.setup.rounds[index];
+  const who = interviewerFor(index, k, loop.setup.panel);
+  const comp = companyLabel(loop.setup);
+  $("#readyIc").textContent = comp[0];
+  $("#readyRound").textContent = `${comp} — ${CAT.ROUNDS[k].name}`;
+  $("#readyWho").textContent = `Round ${index+1} of ${loop.count} · ${roundMinutes(k)} minutes · with ${who.full ? `${who.full}, ${who.role}` : who.name}`;
+  $("#readySub").textContent = "Pick your mic and speaker, then check they work. Takes ten seconds.";
+  $("#readyEvery").checked = readyEvery();
+  $("#readyJoin").disabled = false; $("#readyJoin").classList.remove("is-busy");
+  msg("#acResult", "");
+  await renderAudioCheck();
+}
 async function renderAudioCheck(){
   await Promise.all([refreshStatus(), loadDevices()]);
-  if (!SETTINGS) return;
+  if (!SETTINGS || $("#view-ready").hidden) return;
   fillDevice($("#acMic"), DEVICES.inputs, SETTINGS.voice.input_device);
   fillDevice($("#acSpk"), DEVICES.outputs, SETTINGS.voice.output_device);
+  const on = SETTINGS.voice.enabled && VS.up;
   const p = $("#acPill");
-  p.className = "pill " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
-  p.textContent = !VS.up ? "VoiceStudio off" : VS.loaded ? "Ready" : "Loading";
-  const off = !SETTINGS.voice.enabled ? "Spoken interviews are off in Settings, so rounds will be typed."
-    : !VS.up ? "VoiceStudio isn’t running, so rounds will be typed. Start it in Settings." : "";
-  if (!testing && (off || / so rounds will be typed/.test($("#acResult").textContent))) msg("#acResult", off);
+  p.className = "pill " + (!on ? "bad" : VS.loaded ? "ok" : "warn");
+  p.textContent = !SETTINGS.voice.enabled ? "Voice off" : !VS.up ? "VoiceStudio off" : VS.loaded ? "Ready" : "Loading";
+  const off = !SETTINGS.voice.enabled ? "Spoken interviews are off in Settings, so this round will be typed."
+    : !VS.up ? "VoiceStudio isn’t running, so this round will be typed. Start it in Settings to talk." : "";
+  if (!testing && (off || / will be typed/.test($("#acResult").textContent))) msg("#acResult", off, off ? "err" : "");
+  $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";
   showLang("#acLang");
   setTesting(testing);
+  startMonitor();
 }
-$("#acMic").addEventListener("change", () => setDevices($("#acMic").value, null));
+/* Live mic meter: moves as soon as the screen opens, no speech recognition involved. */
+let monitorUnlisten = null, monitorOn = false;
+async function startMonitor(){
+  if (!SETTINGS) return;
+  if (!monitorUnlisten) monitorUnlisten = await api.listen("mic_level", ev => {
+    if (!monitorOn || testing) return;
+    if (ev.mic < 0){ $("#acMeterHint").textContent = "The mic was disconnected. Pick another one."; $("#acMeter").style.width = "0"; return; }
+    $("#acMeter").style.width = `${Math.min(100, ev.mic * 900)}%`;
+    if (ev.mic * 900 > 8) $("#acMeterHint").textContent = "We can hear you.";
+  });
+  monitorOn = true;
+  $("#acMeterHint").textContent = "Say something. The bar should move.";
+  try{ await api.invoke("mic_monitor_start", {input: SETTINGS.voice.input_device}); }
+  catch(e){ monitorOn = false; $("#acMeterHint").textContent = `Can’t open the mic: ${errText(e)}`; }
+}
+function stopMonitor(){
+  if (!monitorOn) return;
+  monitorOn = false;
+  $("#acMeter").style.width = "0";
+  api.invoke("mic_monitor_stop").catch(() => {});
+}
+$("#acMic").addEventListener("change", async () => { await setDevices($("#acMic").value, null); startMonitor(); });
 $("#acSpk").addEventListener("change", () => setDevices(null, $("#acSpk").value));
+$("#readyEvery").addEventListener("change", e => LS.set("onsite.readyEvery", e.target.checked));
+$("#readyBack").onclick = () => nav("interviews");
+$("#readyJoin").onclick = () => {
+  if (starting) return;
+  const b = $("#readyJoin"); b.disabled = true; b.classList.add("is-busy");
+  stopMonitor();
+  startRound(readyIndex);
+};
 function fillRoomMic(){
   fillDevice($("#roomMic"), DEVICES.inputs, SETTINGS ? SETTINGS.voice.input_device : "");
   loadDevices().then(() => { if (session) fillDevice($("#roomMic"), DEVICES.inputs, SETTINGS ? SETTINGS.voice.input_device : ""); });
