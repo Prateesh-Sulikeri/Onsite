@@ -50,7 +50,9 @@ and then move on to the main problem. Take your time, think out loud, and ask me
 
 /// (seed, steps) tried in order when rendering a persona sample. OmniVoice's voice design is
 /// hit-and-miss: some renders are near-silent hiss (cloning one gave static), so each is scored.
-const SAMPLE_TRIES: &[(i64, u32)] = &[(42, 32), (7, 16), (42, 16), (1234, 16), (99, 32), (2024, 32), (5, 16), (77, 32)];
+/// The stricter check (below) passes about one take in eight for some specs, so there are more tries.
+const SAMPLE_TRIES: &[(i64, u32)] =
+    &[(42, 32), (7, 16), (42, 16), (1234, 16), (99, 32), (2024, 32), (5, 16), (77, 32), (314, 32), (8, 32), (123, 32), (2718, 32)];
 
 /// Stored in the profile's `personality` field: which checks and voice spec built it. A change
 /// to either (e.g. a persona's pitch in panels.json) rebuilds the voice.
@@ -85,6 +87,8 @@ pub struct SampleScore {
     pub zcr: f32,
     /// Median pitch of voiced frames, in Hz (0 = none found).
     pub f0: f32,
+    /// Mean RMS of the quietest 10 % of frames: the hum or hiss left in the pauses.
+    pub floor: f32,
 }
 
 pub fn score_sample(pcm: &[i16]) -> SampleScore {
@@ -92,9 +96,12 @@ pub fn score_sample(pcm: &[i16]) -> SampleScore {
     let x: Vec<f32> = pcm.iter().map(|&v| v as f32 / 32768.0).collect();
     let win = rate / 20;
     let (mut frames, mut voiced, mut zcr) = (0usize, 0usize, 0f32);
+    let mut levels = Vec::new();
     for f in x.chunks_exact(win) {
         frames += 1;
-        if crate::voice::audio::rms(f) > 0.02 {
+        let level = crate::voice::audio::rms(f);
+        levels.push(level);
+        if level > 0.02 {
             voiced += 1;
             zcr += f.windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count() as f32 * rate as f32 / (2.0 * win as f32);
         }
@@ -113,7 +120,10 @@ pub fn score_sample(pcm: &[i16]) -> SampleScore {
         })
         .collect();
     f0s.sort_by(f32::total_cmp);
+    levels.sort_by(f32::total_cmp);
+    let quiet = &levels[..levels.len().div_ceil(10)];
     SampleScore {
+        floor: if quiet.is_empty() { 0.0 } else { quiet.iter().sum::<f32>() / quiet.len() as f32 },
         voiced: if frames == 0 { 0.0 } else { voiced as f32 / frames as f32 },
         zcr: if voiced == 0 { f32::MAX } else { zcr / voiced as f32 },
         f0: f0s.get(f0s.len() / 2).copied().unwrap_or(0.0),
@@ -138,11 +148,13 @@ pub fn pitch_range(instruct: &str) -> (f32, f32) {
     }
 }
 
-/// Clean speech in the persona's register. Measured: good renders 57-71 % voiced with ZCR
-/// ~1000-1550 Hz; hiss renders 8-35 % voiced or ZCR ~3000 Hz.
+/// Clean speech in the persona's register. Measured on accepted voices that sound clean: ZCR
+/// 920-1160 Hz, 46-74 % voiced, floor <= 0.0016. Arjun's take at ZCR 1440 passed the old
+/// limit (1800) and was raspy and crackling in every reply. A take with a hum under it reads
+/// 95 % voiced, so the floor and the top of the voiced range are checked too.
 pub fn sample_ok(s: &SampleScore, instruct: &str) -> bool {
     let (lo, hi) = pitch_range(instruct);
-    s.voiced >= 0.45 && s.zcr < 1800.0 && (lo..=hi).contains(&s.f0)
+    (0.45..=0.9).contains(&s.voiced) && s.zcr < 1250.0 && s.floor < 0.004 && (lo..=hi).contains(&s.f0)
 }
 
 /// 16-bit mono WAV at the TTS rate.
@@ -492,13 +504,21 @@ mod tests {
         assert!(sample_ok(&s, "female, young adult, high pitch, indian accent"));
         assert!(sample_ok(&s, "female, young adult, moderate pitch, indian accent"));
         assert!(!sample_ok(&s, "male, middle-aged"));
+        assert!(s.floor < 0.001, "gaps are silent: {s:?}");
+        // Raspy (Arjun's old take), and a hum under the pauses.
+        assert!(!sample_ok(&SampleScore { zcr: 1440.0, ..s }, "female, young adult, high pitch, indian accent"));
+        assert!(!sample_ok(&SampleScore { floor: 0.017, ..s }, "female, young adult, high pitch, indian accent"));
+        assert!(!sample_ok(&SampleScore { voiced: 0.95, ..s }, "female, young adult, high pitch, indian accent"));
         // The shrill 267 Hz take that passed before must fail now.
         let shrill = SampleScore { f0: 267.0, ..s };
         assert!(!sample_ok(&shrill, "female, young adult, high pitch, indian accent"));
         assert!(!sample_ok(&SampleScore { f0: 307.0, ..s }, "female"));
 
-        let s = score_sample(&tone(130.0, 0.3, 2.0));
+        let mut male = tone(130.0, 0.3, 2.0);
+        male.extend(vec![0i16; TTS_RATE as usize / 2]);
+        let s = score_sample(&male);
         assert!((s.f0 - 130.0).abs() < 6.0, "{s:?}");
+        assert!(!sample_ok(&score_sample(&tone(130.0, 0.3, 2.0)), "male"), "no pauses at all: a hum, not speech");
         assert!(sample_ok(&s, "male, middle-aged, moderate pitch"));
         assert!(!sample_ok(&s, "female, high pitch"));
 
