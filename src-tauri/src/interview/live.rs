@@ -103,6 +103,12 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         system_prompt: system_prompt.clone(),
         resume: None,
     };
+    if settings.voice.enabled {
+        if let Err(e) = state.voice.begin(app, round_id, settings.voice.clone()) {
+            tracing::warn!("voice off for this round: {e}");
+            let _ = app.emit("voice", &crate::voice::VoiceEvent::Error { message: e.to_string() });
+        }
+    }
     let mut session = spawn_session(app, round_id, cfg, log.clone()).await?;
     session.send(&opening_message(plan.minutes)).await?;
 
@@ -139,7 +145,10 @@ async fn spawn_session(app: &AppHandle, round_id: i64, cfg: SessionConfig, log: 
             let state = app.state::<AppState>();
             match &ev {
                 SessionEvent::Started { session_id, .. } => log.persist(&state, Some(session_id)),
-                SessionEvent::TurnDone { text, ttft_ms, .. } => {
+                SessionEvent::Sentence { text, .. } => state.voice.say(round_id, text),
+                SessionEvent::Error { .. } => state.voice.turn_done(round_id, false),
+                SessionEvent::TurnDone { text, ttft_ms, ended, .. } => {
+                    state.voice.turn_done(round_id, *ended);
                     log.turns.lock().unwrap().push(Turn {
                         who: "iv".into(),
                         text: text.clone(),
@@ -199,6 +208,7 @@ pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, ws: Works
 
 pub async fn end_round(app: &AppHandle, round_id: i64, ws: Workspace) -> Result<()> {
     let state = app.state::<AppState>();
+    state.voice.end();
     let active = state.rounds.lock().await.remove(&round_id);
     if let Some(r) = active {
         *r.log.workspace.lock().unwrap() = ws;

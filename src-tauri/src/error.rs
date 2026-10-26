@@ -7,6 +7,8 @@ pub enum AppError {
     #[error("Claude Code failed: {0}")]
     Claude(String),
     #[error("{0}")]
+    Voice(String),
+    #[error("{0}")]
     NotFound(String),
     #[error("{0}")]
     Invalid(String),

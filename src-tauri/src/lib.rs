@@ -4,6 +4,7 @@ mod commands;
 pub mod error;
 pub mod interview;
 pub mod store;
+pub mod voice;
 
 use brain::ClaudeLocation;
 use catalog::Catalog;
@@ -23,11 +24,17 @@ pub struct Settings {
     pub claude: Option<ClaudeLocation>,
     pub interviewer_model: String,
     pub report_model: String,
+    pub voice: voice::VoiceSettings,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { claude: None, interviewer_model: "sonnet".into(), report_model: "opus".into() }
+        Self {
+            claude: None,
+            interviewer_model: "sonnet".into(),
+            report_model: "opus".into(),
+            voice: Default::default(),
+        }
     }
 }
 
@@ -36,6 +43,7 @@ pub struct AppState {
     pub catalog: Catalog,
     pub prompts_dir: PathBuf,
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
+    pub voice: voice::Voice,
 }
 
 impl AppState {
@@ -90,6 +98,15 @@ pub fn run() {
                 catalog,
                 prompts_dir,
                 rounds: Default::default(),
+                voice: Default::default(),
+            });
+            // Warm VoiceStudio up so the first spoken reply is not a 60 s cold start.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let settings = handle.state::<AppState>().settings().voice;
+                if settings.enabled {
+                    commands::warm_voice(&settings).await;
+                }
             });
             Ok(())
         })
@@ -108,6 +125,13 @@ pub fn run() {
             commands::get_round,
             commands::loop_verdict,
             commands::history,
+            commands::voice_status,
+            commands::voice_launch,
+            commands::voice_test_speak,
+            commands::voice_test_listen,
+            commands::voice_finish,
+            commands::voice_mute,
+            commands::voice_cancel_listen,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Onsite");
