@@ -177,6 +177,11 @@ textarea{resize:vertical; line-height:1.5}
 .start-row{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto; gap:14px; align-items:end; margin-top:22px; padding-top:20px; border-top:1px solid var(--line)}
 
 .loop-card{position:sticky; top:0}
+.ac-meter{max-width:none; margin-top:12px}
+.ac-lang{font-size:12.5px; margin-top:8px}
+.room-mic{display:flex; align-items:center; gap:6px; color:var(--ink-2)}
+.room-mic svg{width:16px; height:16px}
+.room-mic select{max-width:200px}
 .timeline{list-style:none; margin:0; padding:0; display:flex; flex-direction:column}
 .timeline li{display:grid; grid-template-columns:28px 1fr; gap:12px; position:relative; padding-bottom:16px}
 .timeline li:not(:last-child)::before{content:""; position:absolute; left:13px; top:28px; bottom:2px; width:2px; background:var(--line)}

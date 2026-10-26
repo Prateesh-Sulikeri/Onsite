@@ -54,7 +54,7 @@ function nav(view){
   $("#app").classList.toggle("in-call", view === "room");
   $(".main").scrollTop = 0;
   if (view === "dashboard") renderDashboard();
-  if (view === "interviews") renderAgenda();
+  if (view === "interviews"){ renderAgenda(); renderAudioCheck(); }
   if (view === "feedback") renderHistory();
   if (view === "settings") renderSettings();
 }
@@ -272,6 +272,7 @@ async function openRoom(index){
   $("#wrapBanner").hidden = true;
   $("#sharedDot").hidden = true;
   applyVoiceUi();
+  fillRoomMic();
   if (!voiceOn && SETTINGS && SETTINGS.voice.enabled) toast("VoiceStudio isn’t running, so this round is typed. Start it in Settings.", "err");
   showProblem(null);
   renderShared(); selectTab(CAT.ROUNDS[k].tab === "shared" ? "editor" : CAT.ROUNDS[k].tab);
@@ -294,7 +295,7 @@ async function openRoom(index){
     if (typeof info.voice === "boolean" && info.voice !== s.voiceOn){
       s.voiceOn = info.voice; applyVoiceUi();
       if (!info.voice) toast("Voice couldn’t start, so this round is typed.", "err");
-      if (s.phase !== "thinking") setPhase("idle");
+      if (s.phase !== "thinking" || !s.busy) setPhase("idle");
     }
   }catch(e){
     if (session !== s) return;
@@ -313,6 +314,7 @@ function applyVoiceUi(){
   mb.querySelector("use").setAttribute("href", s.muted ? "#i-mic" : "#i-mic-off");
   mb.disabled = !s.voiceOn || s.closed;
   mb.title = !s.voiceOn ? "Voice is off for this round" : s.muted ? "Unmute" : "Mute";
+  $("#roomMic").disabled = !s.voiceOn;
   $("#answer").placeholder = s.voiceOn ? "Type instead…" : "Type your answer…";
 }
 
@@ -327,7 +329,8 @@ async function leaveRound(){
   await api.invoke("end_round", {roundId: s.roundId, workspace: {code: $("#code").value, notes: $("#notes").value}}).catch(e => api.log("error", `end_round: ${errText(e)}`));
 }
 
-/* phases: thinking | speaking | listening | hearing | transcribing | idle | muted | closed */
+/* phases: thinking | speaking | cutting | listening | hearing | transcribing | idle | muted | closed
+   cutting = the candidate tapped the mic over the interviewer; the mic opens next. */
 function setPhase(p){
   if (!session) return;
   session.phase = p;
@@ -335,7 +338,8 @@ function setPhase(p){
   const orb = $("#orb");
   const label = {
     thinking: `${session.persona} is thinking…`,
-    speaking: `${session.persona} is speaking`,
+    speaking: `${session.persona} is speaking — tap to cut in`,
+    cutting: "Go ahead…",
     listening: "Listening…",
     hearing: "Hearing you… tap when done",
     transcribing: "Got it. Writing it down…",
@@ -343,7 +347,7 @@ function setPhase(p){
     muted: "Muted — tap to unmute",
     closed: "Round closed",
   }[p];
-  orb.dataset.state = p === "hearing" ? "listening" : p === "transcribing" ? "thinking" : (p === "idle" && !session.voiceOn) || p === "closed" ? "off" : p;
+  orb.dataset.state = p === "hearing" || p === "cutting" ? "listening" : p === "transcribing" ? "thinking" : (p === "idle" && !session.voiceOn) || p === "closed" ? "off" : p;
   orb.setAttribute("aria-label", label);
   $("#orbLabel").textContent = label;
   $$(".wave").forEach(w => w.classList.toggle("live", p === "speaking" || p === "listening" || p === "hearing"));
@@ -370,6 +374,12 @@ $("#orb").onclick = () => {
   if (!s || !s.voiceOn || s.closed){ $("#answer").focus(); return; }
   if (s.phase === "listening" || s.phase === "hearing") api.invoke("voice_finish");
   else if (s.phase === "muted" || s.phase === "idle") setMuted(false);
+  else if (s.phase === "speaking"){
+    // Cut in: stop the interviewer now. The mic opens as soon as their turn is over.
+    if (s.muted) setMuted(false);
+    api.invoke("voice_interrupt").catch(() => {});
+    setPhase("cutting");
+  }
 };
 $("#muteBtn").onclick = () => session && session.voiceOn && !session.closed && setMuted(!session.muted);
 function setMuted(m){
@@ -454,7 +464,8 @@ api.listen("round", ev => {
         if (s.phase !== "speaking") setPhase("closed");
       }
       else if (!s.voiceOn){ setPhase("idle"); $("#answer").focus({preventScroll:true}); }
-      else if (s.phase === "thinking") setPhase(restPhase());
+      // Voice on: the reply may not have started playing yet. Stay on "thinking" until
+      // the voice loop reports speaking-off (always sent at the end of a turn).
       break;
     case "error":
       failPending(ev.message);
@@ -474,8 +485,9 @@ api.listen("voice", ev => {
   if (!s || !s.voiceOn) return;
   switch (ev.kind){
     case "speaking":
-      if (ev.active) setPhase("speaking");
-      else if (s.phase === "speaking") setPhase(s.busy ? "thinking" : restPhase());
+      if (ev.active){ if (s.phase !== "cutting") setPhase("speaking"); }
+      else if (s.phase === "speaking" || s.phase === "cutting") setPhase(s.busy ? "thinking" : restPhase());
+      else if (s.phase === "thinking" && !s.busy) setPhase(restPhase());
       break;
     case "listening":
       if (ev.active){ if (!s.muted && !s.closed) setPhase("listening"); }
@@ -1024,6 +1036,10 @@ async function renderSettings(){
   let opts = profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
   if (saved && !profiles.some(p => p.id === saved)) opts += `<option value="${esc(saved)}">${VS.up ? "Saved voice (missing in VoiceStudio)" : "Saved voice"}</option>`;
   if (!opts) opts = `<option value="" disabled>${VS.up ? "No voices in VoiceStudio — create one there" : "Start VoiceStudio to pick a voice"}</option>`;
+  await loadDevices();
+  fillDevice($("#vMic"), DEVICES.inputs, s.voice.input_device);
+  fillDevice($("#vSpk"), DEVICES.outputs, s.voice.output_device);
+  showLang("#vLang");
   const vv = $("#vVoice");
   vv.innerHTML = opts;
   vv.value = saved || (profiles[0] || {}).id || "";
@@ -1052,6 +1068,8 @@ function saveSettings(){
   });
 }
 ["#ivModel","#repModel","#vEnabled","#vVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
+$("#vMic").addEventListener("change", () => setDevices($("#vMic").value, null));
+$("#vSpk").addEventListener("change", () => setDevices(null, $("#vSpk").value));
 
 $("#clDetect").onclick = async () => {
   const b = $("#clDetect"); b.disabled = true;
@@ -1099,36 +1117,106 @@ async function waitForVoice(){
     msg("#vResult", "VoiceStudio didn’t come up after 3 minutes. Open it yourself and check it for errors.", "err");
   } finally { waitingVoice = false; }
 }
-let testing = false;
+/* Voice tests run from Settings and from the setup screen's audio check. One at a time. */
+const TESTERS = {
+  settings: {speak: "#vTestSpeak", mic: "#vTestMic", meter: "#vMeter", out: "#vResult", voice: () => formVoice()},
+  setup:    {speak: "#acSpeak",    mic: "#acListen", meter: "#acMeter", out: "#acResult", voice: () => ({...SETTINGS.voice})},
+};
+let testing = false, testTarget = TESTERS.settings;
 function setTesting(on){
   testing = on;
-  ["#vTestSpeak","#vTestMic"].forEach(sel => { $(sel).disabled = on || !VS.up; });
-  if (!VS.up && !on) $("#vTestSpeak").title = $("#vTestMic").title = "Start VoiceStudio first";
-  else $("#vTestSpeak").title = $("#vTestMic").title = "";
+  Object.values(TESTERS).forEach(t => [t.speak, t.mic].forEach(sel => {
+    $(sel).disabled = on || !VS.up;
+    $(sel).title = !VS.up && !on ? "Start VoiceStudio first" : "";
+  }));
 }
-$("#vTestSpeak").onclick = async () => {
-  if (testing) return;
-  const b = $("#vTestSpeak"); setTesting(true); b.classList.add("is-busy"); msg("#vResult", "Generating…");
+async function testSpeak(t){
+  if (testing || !SETTINGS) return;
+  testTarget = t;
+  const b = $(t.speak); setTesting(true); b.classList.add("is-busy"); msg(t.out, "Generating…");
   try{
-    const ms = await api.invoke("voice_test_speak", {settings: formVoice(), text: "Hi, I'm your interviewer today. Let's start with a quick intro."});
-    msg("#vResult", `First audio in ${(ms/1000).toFixed(1)} s.`, "ok");
-  }catch(e){ msg("#vResult", esc(errText(e)), "err"); }
+    const ms = await api.invoke("voice_test_speak", {settings: t.voice(), text: "Hi, I'm your interviewer today. Let's start with a quick intro."});
+    msg(t.out, `First audio in ${(ms/1000).toFixed(1)} s. Didn’t hear it? Pick another speaker.`, "ok");
+  }catch(e){ msg(t.out, esc(errText(e)), "err"); }
   finally{ b.classList.remove("is-busy"); setTesting(false); }
-};
+}
 let testUnlisten = null;
-$("#vTestMic").onclick = async () => {
-  if (testing) return;
-  const b = $("#vTestMic"); setTesting(true); b.classList.add("is-busy"); msg("#vResult", "Say a sentence. I’ll stop when you pause.");
+async function testMic(t){
+  if (testing || !SETTINGS) return;
+  testTarget = t;
+  const b = $(t.mic); setTesting(true); b.classList.add("is-busy"); msg(t.out, "Say a sentence. I’ll stop when you pause.");
   if (!testUnlisten) testUnlisten = await api.listen("voice_test", ev => {
-    if (ev.kind === "partial") msg("#vResult", `Hearing: “${esc(ev.text)}”`);
-    if (ev.kind === "level") $("#vMeter").style.width = `${Math.min(100, ev.mic * 900)}%`;
+    if (ev.kind === "partial") msg(testTarget.out, `Hearing: “${esc(ev.text)}”`);
+    if (ev.kind === "level") $(testTarget.meter).style.width = `${Math.min(100, ev.mic * 900)}%`;
   });
   try{
-    const text = await api.invoke("voice_test_listen", {settings: formVoice()});
-    msg("#vResult", `Heard: “${esc(text)}”`, "ok");
-  }catch(e){ msg("#vResult", esc(errText(e)), "err"); }
-  finally{ $("#vMeter").style.width = "0"; b.classList.remove("is-busy"); setTesting(false); }
-};
+    const text = await api.invoke("voice_test_listen", {settings: t.voice()});
+    msg(t.out, `Heard: “${esc(text)}”`, "ok");
+  }catch(e){ msg(t.out, esc(errText(e)), "err"); }
+  finally{ $(t.meter).style.width = "0"; b.classList.remove("is-busy"); setTesting(false); }
+}
+$("#vTestSpeak").onclick = () => testSpeak(TESTERS.settings);
+$("#vTestMic").onclick = () => testMic(TESTERS.settings);
+$("#acSpeak").onclick = () => testSpeak(TESTERS.setup);
+$("#acListen").onclick = () => testMic(TESTERS.setup);
+
+/* ---------------- audio devices ---------------- */
+let DEVICES = {inputs: [], outputs: []};
+async function loadDevices(){
+  try{ DEVICES = await api.invoke("audio_devices"); }catch(e){ api.log("error", `audio_devices: ${errText(e)}`); }
+}
+/* "" = follow the Windows default. A saved device that is unplugged stays listed so the pick isn't lost. */
+function fillDevice(sel, list, saved){
+  const def = list.find(d => d.default);
+  let opts = `<option value="">Windows default${def ? ` (${esc(def.name)})` : ""}</option>`;
+  opts += list.map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
+  if (saved && !list.some(d => d.id === saved)) opts += `<option value="${esc(saved)}">Saved device (not connected — using default)</option>`;
+  sel.innerHTML = opts;
+  sel.value = saved || "";
+}
+/* Saves only the device fields. `null` keeps the current pick. */
+async function setDevices(input, output, relisten = false){
+  if (!SETTINGS) return;
+  const v = SETTINGS.voice;
+  if (input !== null) v.input_device = input;
+  if (output !== null) v.output_device = output;
+  try{ await api.invoke("voice_set_devices", {input: v.input_device, output: v.output_device, relisten}); }
+  catch(e){ toast(`Couldn’t switch device: ${errText(e)}`, "err"); }
+}
+/* Where English-only speech recognition stands. */
+function showLang(sel){
+  const e = VS.english, el = $(sel);
+  if (!VS.up || !e){ el.textContent = ""; return; }
+  el.textContent = e.state === "ready" ? "Speech recognition: English only."
+    : e.state === "installing" ? `Downloading the English speech model… ${Math.round(e.pct)}%. Until it’s done, a strong accent may come out as another language.`
+    : `English speech model missing (${e.reason}). Install Parakeet TDT v2 in VoiceStudio’s dictation settings.`;
+}
+async function renderAudioCheck(){
+  await Promise.all([refreshStatus(), loadDevices()]);
+  if (!SETTINGS) return;
+  fillDevice($("#acMic"), DEVICES.inputs, SETTINGS.voice.input_device);
+  fillDevice($("#acSpk"), DEVICES.outputs, SETTINGS.voice.output_device);
+  const p = $("#acPill");
+  p.className = "pill " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
+  p.textContent = !VS.up ? "VoiceStudio off" : VS.loaded ? "Ready" : "Loading";
+  const off = !SETTINGS.voice.enabled ? "Spoken interviews are off in Settings, so rounds will be typed."
+    : !VS.up ? "VoiceStudio isn’t running, so rounds will be typed. Start it in Settings." : "";
+  if (!testing && (off || / so rounds will be typed/.test($("#acResult").textContent))) msg("#acResult", off);
+  showLang("#acLang");
+  setTesting(testing);
+}
+$("#acMic").addEventListener("change", () => setDevices($("#acMic").value, null));
+$("#acSpk").addEventListener("change", () => setDevices(null, $("#acSpk").value));
+function fillRoomMic(){
+  fillDevice($("#roomMic"), DEVICES.inputs, SETTINGS ? SETTINGS.voice.input_device : "");
+  loadDevices().then(() => { if (session) fillDevice($("#roomMic"), DEVICES.inputs, SETTINGS ? SETTINGS.voice.input_device : ""); });
+}
+$("#roomMic").addEventListener("change", () => {
+  const s = session;
+  // Reopen the mic on the new device only if it's waiting and hasn't heard words yet.
+  setDevices($("#roomMic").value, null, !!s && s.phase === "listening");
+  toast(s && (s.phase === "hearing" || s.phase === "transcribing") ? "The new mic is used from your next answer." : "Microphone switched.");
+});
 
 /* ---------------- init ---------------- */
 (async function init(){

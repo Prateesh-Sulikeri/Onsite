@@ -141,6 +141,8 @@ pub struct VoiceStatus {
     pub device: String,
     pub profiles: Vec<crate::voice::vs::Profile>,
     pub installed: bool,
+    /// The English-only speech-to-text model (installed on demand).
+    pub english: Option<crate::voice::stt::EnglishModel>,
 }
 
 fn voicestudio_exe() -> Option<std::path::PathBuf> {
@@ -153,7 +155,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
     let vs = VoiceStudio::new(&state.settings().voice.base_url);
     let installed = voicestudio_exe().is_some();
     let Ok(health) = vs.health().await else {
-        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed });
+        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None });
     };
     Ok(VoiceStatus {
         up: true,
@@ -161,6 +163,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
         device: health["device"].as_str().unwrap_or_default().to_string(),
         profiles: vs.profiles().await.unwrap_or_default(),
         installed,
+        english: Some(crate::voice::stt::english_model(&vs).await),
     })
 }
 
@@ -190,14 +193,21 @@ pub async fn warm_voice(settings: &VoiceSettings) {
     }
 }
 
+#[tauri::command]
+pub fn audio_devices() -> Result<crate::voice::audio::AudioDevices> {
+    crate::voice::audio::list_devices()
+}
+
 /// Returns ms to first audio.
 #[tauri::command]
 pub async fn voice_test_speak(state: State<'_, AppState>, settings: VoiceSettings, text: String) -> Result<u64> {
+    crate::voice::audio::set_devices(&settings.input_device, &settings.output_device);
     state.voice.test_speak(&settings, &text).await
 }
 
 #[tauri::command]
 pub async fn voice_test_listen(app: AppHandle, settings: VoiceSettings) -> Result<String> {
+    crate::voice::audio::set_devices(&settings.input_device, &settings.output_device);
     let ctl = crate::voice::stt::ListenCtl::default();
     let vs = VoiceStudio::new(&settings.base_url);
     let pause = if settings.pause_ms == 0 { 1800 } else { settings.pause_ms };
@@ -229,4 +239,24 @@ pub fn voice_mute(state: State<AppState>, muted: bool) {
 #[tauri::command]
 pub fn voice_cancel_listen(state: State<AppState>) {
     state.voice.cancel_listen();
+}
+
+/// Tapped the mic while the interviewer was talking.
+#[tauri::command]
+pub fn voice_interrupt(state: State<AppState>) {
+    state.voice.interrupt();
+}
+
+/// Switches the mic (and speaker) mid-round. The speaker changes on the next reply.
+#[tauri::command]
+pub fn voice_set_devices(state: State<AppState>, input: String, output: String, relisten: bool) -> Result<()> {
+    crate::voice::audio::set_devices(&input, &output);
+    let mut s = state.settings();
+    s.voice.input_device = input;
+    s.voice.output_device = output;
+    state.save_settings(&s)?;
+    if relisten {
+        state.voice.relisten();
+    }
+    Ok(())
 }

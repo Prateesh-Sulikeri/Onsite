@@ -40,8 +40,10 @@ const SEG_PAUSE_LONG_MS: u32 = 300;
 const FINAL_WAIT: Duration = Duration::from_secs(15);
 
 /// Dictation models to request, best first. Only installed ones are used.
-/// v2 is English-only and a little better on English; v3 is multilingual.
-const MODEL_PREFERENCE: &[&str] = &["sherpa-parakeet-tdt-v2", "sherpa-parakeet-tdt-v3"];
+/// v2 is English-only. v3 guesses among 25 languages and turned accented English into Spanish,
+/// so it is only a stopgap while v2 downloads.
+const MODEL_PREFERENCE: &[&str] = &[ENGLISH_MODEL, "sherpa-parakeet-tdt-v3"];
+pub const ENGLISH_MODEL: &str = "sherpa-parakeet-tdt-v2";
 
 /// Tech and payments words the recogniser often gets wrong. Matched case- and space-insensitively.
 pub const TECH_TERMS: &[&str] = &[
@@ -273,6 +275,69 @@ fn http_base(vs: &VoiceStudio) -> String {
     base.replacen("ws", "http", 1)
 }
 
+/// Where the English-only model stands.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum EnglishModel {
+    Ready,
+    /// Downloading through VoiceStudio; `pct` 0-100.
+    Installing { pct: f32 },
+    /// Not installed and the download could not start.
+    Missing { reason: String },
+}
+
+/// `repo_id` of the English model in `GET /dictation/models`, when it is listed but not installed.
+pub fn english_repo_to_install(models: &Value) -> Option<String> {
+    let m = models["models"].as_array()?.iter().find(|m| m["id"] == ENGLISH_MODEL)?;
+    (m["installed"].as_bool() != Some(true)).then(|| m["repo_id"].as_str().map(str::to_string)).flatten()
+}
+
+fn get(vs: &VoiceStudio, path: &str) -> reqwest::RequestBuilder {
+    let mut req = reqwest::Client::new().get(format!("{}{path}", http_base(vs))).timeout(Duration::from_secs(3));
+    if let Some(k) = std::env::var("OMNIVOICE_API_KEY").ok().filter(|k| !k.is_empty()) {
+        req = req.bearer_auth(k);
+    }
+    req
+}
+
+/// Checks the English model and starts its download in VoiceStudio (0.66 GB, once) when missing.
+pub async fn english_model(vs: &VoiceStudio) -> EnglishModel {
+    let models: Value = match get(vs, "/dictation/models").send().await {
+        Ok(r) => r.json().await.unwrap_or_default(),
+        Err(e) => return EnglishModel::Missing { reason: e.to_string() },
+    };
+    let Some(repo) = english_repo_to_install(&models) else {
+        return if pick_model(&models).as_deref() == Some(ENGLISH_MODEL) {
+            EnglishModel::Ready
+        } else {
+            EnglishModel::Missing { reason: "VoiceStudio doesn't offer Parakeet TDT v2".into() }
+        };
+    };
+    let jobs: Value = match get(vs, "/models/install/status").send().await {
+        Ok(r) => r.json().await.unwrap_or_default(),
+        Err(e) => return EnglishModel::Missing { reason: e.to_string() },
+    };
+    let job = jobs["jobs"].as_array().into_iter().flatten().find(|j| j["repo_id"] == repo.as_str());
+    if let Some(j) = job.filter(|j| !matches!(j["state"].as_str(), Some("error" | "failed" | "cancelled"))) {
+        let (done, total) = (j["bytes_done"].as_f64().unwrap_or(0.0), j["total_bytes"].as_f64().unwrap_or(0.0));
+        return EnglishModel::Installing { pct: if total > 0.0 { (done / total * 100.0) as f32 } else { 0.0 } };
+    }
+    let mut req = reqwest::Client::new().post(format!("{}/models/install", http_base(vs))).timeout(Duration::from_secs(10));
+    if let Some(k) = std::env::var("OMNIVOICE_API_KEY").ok().filter(|k| !k.is_empty()) {
+        req = req.bearer_auth(k);
+    }
+    match req.json(&serde_json::json!({ "repo_id": repo })).send().await.and_then(|r| r.error_for_status()) {
+        Ok(_) => {
+            tracing::info!(%repo, "installing the English STT model in VoiceStudio");
+            EnglishModel::Installing { pct: 0.0 }
+        }
+        Err(e) => {
+            tracing::warn!(%repo, "English STT model install: {e}");
+            EnglishModel::Missing { reason: e.to_string() }
+        }
+    }
+}
+
 /// Best installed dictation model from `GET /dictation/models`.
 pub fn pick_model(models: &Value) -> Option<String> {
     let installed: Vec<&str> = models["models"]
@@ -289,12 +354,7 @@ async fn choose_model(vs: &VoiceStudio) -> Option<String> {
     if let Some(m) = MODEL.lock().unwrap().clone() {
         return m;
     }
-    let url = format!("{}/dictation/models", http_base(vs));
-    let mut req = reqwest::Client::new().get(&url).timeout(Duration::from_secs(3));
-    if let Some(k) = std::env::var("OMNIVOICE_API_KEY").ok().filter(|k| !k.is_empty()) {
-        req = req.bearer_auth(k);
-    }
-    let models: Value = match req.send().await {
+    let models: Value = match get(vs, "/dictation/models").send().await {
         Ok(r) => match r.json().await {
             Ok(v) => v,
             Err(e) => {
@@ -308,6 +368,11 @@ async fn choose_model(vs: &VoiceStudio) -> Option<String> {
         }
     };
     let pick = pick_model(&models);
+    if pick.as_deref() != Some(ENGLISH_MODEL) {
+        // Starts the download for next time; this answer uses what is installed.
+        let vs = vs.clone();
+        tokio::spawn(async move { english_model(&vs).await });
+    }
     if let Some(m) = &pick {
         undemote(vs, m).await;
     }
@@ -719,6 +784,18 @@ mod tests {
         assert_eq!(pick_model(&models).as_deref(), Some("sherpa-parakeet-tdt-v3"));
         assert_eq!(pick_model(&json!({"models":[{"id":"sherpa-whisper-tiny","installed":true}]})), None);
         assert_eq!(pick_model(&json!({})), None);
+    }
+
+    #[test]
+    fn english_model_install_target() {
+        let models = json!({"models":[
+            {"id":"sherpa-parakeet-tdt-v3","repo_id":"x/v3","installed":true},
+            {"id":"sherpa-parakeet-tdt-v2","repo_id":"x/v2","installed":false}]});
+        assert_eq!(english_repo_to_install(&models).as_deref(), Some("x/v2"));
+        let ready = json!({"models":[{"id":"sherpa-parakeet-tdt-v2","repo_id":"x/v2","installed":true}]});
+        assert_eq!(english_repo_to_install(&ready), None);
+        assert_eq!(pick_model(&ready).as_deref(), Some(ENGLISH_MODEL));
+        assert_eq!(english_repo_to_install(&json!({})), None);
     }
 
     #[test]

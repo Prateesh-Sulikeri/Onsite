@@ -2,6 +2,7 @@
 
 use crate::error::{AppError, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
@@ -246,6 +247,65 @@ fn on_audio_thread<R: Send + 'static>(f: impl FnOnce() -> R + Send + 'static) ->
     rx.recv().expect("audio job finished")
 }
 
+/// Chosen devices as cpal device ids; empty = the Windows default. Read whenever a stream opens.
+static INPUT: Mutex<String> = Mutex::new(String::new());
+static OUTPUT: Mutex<String> = Mutex::new(String::new());
+
+/// Sets the mic and speaker for the next stream that opens. The speaker switches on the next reply.
+pub fn set_devices(input: &str, output: &str) {
+    *INPUT.lock().unwrap() = input.trim().to_string();
+    *OUTPUT.lock().unwrap() = output.trim().to_string();
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AudioDevice {
+    pub id: String,
+    pub name: String,
+    pub default: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct AudioDevices {
+    pub inputs: Vec<AudioDevice>,
+    pub outputs: Vec<AudioDevice>,
+}
+
+/// Microphones and speakers Windows offers right now.
+pub fn list_devices() -> Result<AudioDevices> {
+    on_audio_thread(|| {
+        let host = cpal::default_host();
+        let id = |d: &cpal::Device| d.id().map(|i| i.to_string()).unwrap_or_default();
+        let collect = |devs: Vec<cpal::Device>, default: Option<cpal::Device>| {
+            let def = default.as_ref().map(id);
+            devs.iter()
+                .map(|d| AudioDevice { id: id(d), name: d.to_string(), default: def.as_deref() == Some(id(d).as_str()) })
+                .filter(|d| !d.id.is_empty())
+                .collect()
+        };
+        Ok(AudioDevices {
+            inputs: collect(host.input_devices().map_err(err)?.collect(), host.default_input_device()),
+            outputs: collect(host.output_devices().map_err(err)?.collect(), host.default_output_device()),
+        })
+    })
+}
+
+/// The chosen device, else the default. A chosen device that is gone (unplugged) falls back
+/// to the default rather than leaving the round silent.
+fn pick_device(host: &cpal::Host, chosen: &str, input: bool) -> Option<cpal::Device> {
+    if !chosen.is_empty() {
+        let found = chosen.parse::<cpal::DeviceId>().ok().and_then(|id| host.device_by_id(&id));
+        match found {
+            Some(d) => return Some(d),
+            None => tracing::warn!(chosen, input, "chosen audio device not found; using the default"),
+        }
+    }
+    if input {
+        host.default_input_device()
+    } else {
+        host.default_output_device()
+    }
+}
+
 /// True for stream errors after which the stream never recovers (device unplugged or switched).
 fn fatal(e: &cpal::Error) -> bool {
     matches!(e.kind(), cpal::ErrorKind::StreamInvalidated | cpal::ErrorKind::DeviceNotAvailable)
@@ -258,6 +318,8 @@ pub struct Player {
     queue: Arc<Mutex<VecDeque<f32>>>,
     rate: AtomicU32,
     dead: Arc<AtomicBool>,
+    /// The `OUTPUT` choice the stream was built for.
+    built_for: Mutex<String>,
     pub level: Arc<Level>,
 }
 
@@ -268,19 +330,23 @@ impl Player {
             queue: Default::default(),
             rate: AtomicU32::new(0),
             dead: Arc::new(AtomicBool::new(true)),
+            built_for: Default::default(),
             level: Default::default(),
         };
         p.ensure()?;
         Ok(p)
     }
 
-    /// Opens the stream if it is missing or was invalidated.
+    /// Opens the stream if it is missing, was invalidated, or another speaker was chosen.
     fn ensure(&self) -> Result<()> {
-        if !self.dead.load(Ordering::SeqCst) {
+        let want = OUTPUT.lock().unwrap().clone();
+        if !self.dead.load(Ordering::SeqCst) && *self.built_for.lock().unwrap() == want {
             return Ok(());
         }
         let (queue, level, dead) = (self.queue.clone(), self.level.clone(), self.dead.clone());
-        let (stream, rate) = on_audio_thread(move || build_output(queue, level, dead))?;
+        let chosen = want.clone();
+        let (stream, rate) = on_audio_thread(move || build_output(&chosen, queue, level, dead))?;
+        *self.built_for.lock().unwrap() = want;
         // Samples queued for the old device were resampled for its rate.
         self.queue.lock().unwrap().clear();
         self.rate.store(rate, Ordering::SeqCst);
@@ -314,8 +380,8 @@ impl Player {
     }
 }
 
-fn build_output(queue: Arc<Mutex<VecDeque<f32>>>, lv: Arc<Level>, dead: Arc<AtomicBool>) -> Result<(cpal::Stream, u32)> {
-    let device = cpal::default_host().default_output_device().ok_or_else(|| err("no speaker found"))?;
+fn build_output(chosen: &str, queue: Arc<Mutex<VecDeque<f32>>>, lv: Arc<Level>, dead: Arc<AtomicBool>) -> Result<(cpal::Stream, u32)> {
+    let device = pick_device(&cpal::default_host(), chosen, false).ok_or_else(|| err("no speaker found"))?;
     let supported = device.default_output_config().map_err(err)?;
     let format = supported.sample_format();
     let config: cpal::StreamConfig = supported.into();
@@ -359,7 +425,7 @@ fn build_output(queue: Arc<Mutex<VecDeque<f32>>>, lv: Arc<Level>, dead: Arc<Atom
     }
     .map_err(err)?;
     stream.play().map_err(err)?;
-    tracing::info!(rate = config.sample_rate, channels, "speaker open");
+    tracing::info!(rate = config.sample_rate, channels, device = %device, "speaker open");
     Ok((stream, config.sample_rate))
 }
 
@@ -383,7 +449,8 @@ impl Mic {
     }
 
     fn build(tx: UnboundedSender<Vec<i16>>) -> Result<Self> {
-        let device = cpal::default_host().default_input_device().ok_or_else(|| err("no microphone found"))?;
+        let chosen = INPUT.lock().unwrap().clone();
+        let device = pick_device(&cpal::default_host(), &chosen, true).ok_or_else(|| err("no microphone found"))?;
         let supported = device.default_input_config().map_err(err)?;
         let format = supported.sample_format();
         let config: cpal::StreamConfig = supported.into();
@@ -427,7 +494,7 @@ impl Mic {
         }
         .map_err(err)?;
         stream.play().map_err(err)?;
-        tracing::info!(rate = config.sample_rate, channels, "mic open");
+        tracing::info!(rate = config.sample_rate, channels, device = %device, "mic open");
         Ok(Self { _stream: stream, level, dead })
     }
 }

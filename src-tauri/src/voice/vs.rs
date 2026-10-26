@@ -186,6 +186,7 @@ pub fn resolve_profile(saved: &str, profiles: &[Profile]) -> Result<Profile> {
 
 /// JSON body for `POST /v1/audio/speech`. The profile id makes VoiceStudio clone the
 /// profile's sample; seed and language are sent too so nothing is left to chance.
+/// Onsite is English only, whatever language the profile was made with.
 pub fn speech_body(text: &str, voice: &Profile, steps: u32, speed: f32) -> Value {
     let mut body = json!({
         "model": "omnivoice",
@@ -199,10 +200,7 @@ pub fn speech_body(text: &str, voice: &Profile, steps: u32, speed: f32) -> Value
     if let Some(seed) = voice.seed {
         body["seed"] = json!(seed);
     }
-    let lang = voice.language.trim();
-    if !lang.is_empty() && !lang.eq_ignore_ascii_case("auto") {
-        body["language"] = json!(lang);
-    }
+    body["language"] = json!("English");
     body
 }
 
@@ -447,7 +445,7 @@ mod tests {
         p.language = "Auto".into();
         let b = speech_body("Hi.", &p, 8, 1.0);
         assert!(b.get("seed").is_none());
-        assert!(b.get("language").is_none());
+        assert_eq!(b["language"], "English", "English only, even for an Auto profile");
     }
 
     #[test]

@@ -118,6 +118,10 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
     `session.started`, `status` (stage loading/ready), `partial {text}`; then `final` (`final_kind`
     utterance|summary). Send `{"type":"input_audio.end"}` to finish. Capabilities doc:
     `GET /v1/audio/capabilities`.
+  - English only: Parakeet v3 auto-detects among 25 languages and turned accented English into Spanish.
+    Onsite asks for v2 (English-only) and, if missing, installs it via `POST /models/install
+    {repo_id:"csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"}` (0.66 GB; progress in
+    `GET /models/install/status`). v3 is used only until that finishes. TTS always sends `language:"English"`.
   - STT stream runs VoiceStudio's *dictation* engine. Default here is `sherpa-whisper-tiny`: it drops
     audio after ~30 s and loops ("for the MQ for the MQ"). Onsite passes `&model=` (parakeet-tdt v2, else
     v3), cuts long answers into segments at short pauses, collapses repeats and fixes tech terms.

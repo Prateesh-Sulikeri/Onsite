@@ -1,5 +1,6 @@
 //! Voice turn-taking: speak the interviewer's sentences, then listen for the answer.
-//! Mic stays closed while the interviewer talks (no echo handling yet).
+//! Mic stays closed while the interviewer talks (no echo handling yet). Tapping the mic
+//! then interrupts: the rest of the reply is dropped and the mic opens.
 
 pub mod audio;
 pub mod stt;
@@ -29,6 +30,9 @@ pub struct VoiceSettings {
     pub speed: f32,
     /// Silence that ends an answer. 0 = I press Done.
     pub pause_ms: u32,
+    /// cpal device ids; "" = the Windows default.
+    pub input_device: String,
+    pub output_device: String,
     /// Set per round for panel interviewers; overrides `voice`. Never saved.
     #[serde(skip)]
     pub persona: Option<vs::PersonaVoice>,
@@ -43,6 +47,8 @@ impl Default for VoiceSettings {
             steps: 8,
             speed: 1.0,
             pause_ms: 3000,
+            input_device: String::new(),
+            output_device: String::new(),
             persona: None,
         }
     }
@@ -145,6 +151,10 @@ struct RoundVoice {
     task: tokio::task::JoinHandle<()>,
     /// Cleared on end; stops audio already being received from reaching the speaker.
     alive: Arc<AtomicBool>,
+    /// True while the interviewer's reply is being spoken (from first audio to turn end).
+    speaking: Arc<AtomicBool>,
+    /// The candidate cut in: drop the rest of this reply. Reset when the turn ends.
+    cut: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -200,6 +210,8 @@ impl Voice {
         let (task_ctl, task_muted, task_hold, task_answered) = (ctl.clone(), muted.clone(), hold.clone(), answered_at);
         let alive = Arc::new(AtomicBool::new(true));
         let task_alive = alive.clone();
+        let (speaking_flag, cut): (Arc<AtomicBool>, Arc<AtomicBool>) = Default::default();
+        let (task_speaking, task_cut) = (speaking_flag.clone(), cut.clone());
         let task = tokio::spawn(async move {
             // One concrete profile for the whole round, so every sentence is the same voice.
             let resolved = match &settings.persona {
@@ -243,6 +255,9 @@ impl Voice {
                 };
                 match cmd {
                     Cmd::Say(text) => {
+                        if task_cut.load(Ordering::SeqCst) {
+                            continue;
+                        }
                         // Merge short sentences with the next one if it comes soon. Order is kept:
                         // anything that doesn't fit waits in `pending` and goes next.
                         // One deadline per batch, so a chain of short lines can't add up.
@@ -269,20 +284,28 @@ impl Voice {
                         }
                         if !speaking {
                             speaking = true;
+                            task_speaking.store(true, Ordering::SeqCst);
                             emit(VoiceEvent::Speaking { active: true });
                         }
                         // Playback runs from the Player queue, so the next batch is generated
-                        // while this one plays.
-                        speak_into(&vs, &player, voice, &settings, &batch.0, &task_answered, &task_alive, &emit).await;
+                        // while this one plays. A cut-in abandons the call still generating.
+                        tokio::select! {
+                            _ = speak_into(&vs, &player, voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &emit) => {}
+                            _ = until_set(&task_cut) => {}
+                        }
                     }
                     Cmd::TurnDone { ended } => {
-                        while !player.is_idle() {
+                        while !player.is_idle() && !task_cut.load(Ordering::SeqCst) {
                             tokio::time::sleep(Duration::from_millis(50)).await;
                         }
-                        if speaking {
-                            speaking = false;
-                            emit(VoiceEvent::Speaking { active: false });
+                        if task_cut.swap(false, Ordering::SeqCst) {
+                            player.clear();
                         }
+                        // Always sent, even when nothing was spoken (a code-only reply, or TTS
+                        // failed), so the UI never waits for audio that isn't coming.
+                        speaking = false;
+                        task_speaking.store(false, Ordering::SeqCst);
+                        emit(VoiceEvent::Speaking { active: false });
                         awaiting_answer = !ended;
                         if should_listen(awaiting_answer, task_muted.load(Ordering::SeqCst)) {
                             awaiting_answer = !listen_once(&vs, &settings, &task_ctl, &task_hold, &task_answered, &emit).await;
@@ -293,13 +316,16 @@ impl Voice {
                             awaiting_answer = !listen_once(&vs, &settings, &task_ctl, &task_hold, &task_answered, &emit).await;
                         }
                     }
-                    Cmd::AnswerSent => awaiting_answer = false,
+                    Cmd::AnswerSent => {
+                        awaiting_answer = false;
+                        task_cut.store(false, Ordering::SeqCst);
+                    }
                 }
             }
             player.clear();
         });
 
-        *self.current.lock().unwrap() = Some(RoundVoice { round_id, tx, ctl, muted, hold, task, alive });
+        *self.current.lock().unwrap() = Some(RoundVoice { round_id, tx, ctl, muted, hold, task, alive, speaking: speaking_flag, cut });
         Ok(())
     }
 
@@ -338,6 +364,27 @@ impl Voice {
             } else {
                 let _ = r.tx.send(Cmd::Listen);
             }
+        }
+    }
+
+    /// The candidate tapped the mic while the interviewer was talking: stop the reply now.
+    /// The mic opens as soon as the interviewer's turn has ended.
+    pub fn interrupt(&self) {
+        if let Some(r) = self.current.lock().unwrap().as_ref().filter(|r| r.speaking.load(Ordering::SeqCst)) {
+            r.cut.store(true, Ordering::SeqCst);
+            if let Some(p) = self.player.lock().unwrap().as_ref() {
+                p.clear();
+            }
+        }
+    }
+
+    /// Another mic was picked: reopen the mic if it is waiting for an answer. What was heard
+    /// on the old mic is dropped, so the UI only calls this before speech starts.
+    pub fn relisten(&self) {
+        if let Some(r) = self.current.lock().unwrap().as_ref() {
+            r.hold.store(false, Ordering::SeqCst);
+            r.ctl.lock().unwrap().cancel.notify_one();
+            let _ = r.tx.send(Cmd::Listen);
         }
     }
 
@@ -394,6 +441,7 @@ async fn speak_into(
     text: &str,
     answered_at: &Mutex<Option<Instant>>,
     alive: &AtomicBool,
+    cut: &AtomicBool,
     emit: &impl Fn(VoiceEvent),
 ) {
     let mut rs = player.resampler_from(TTS_RATE);
@@ -401,7 +449,7 @@ async fn speak_into(
     let mut first_ms: Option<u64> = None;
     let res = vs
         .speak(text, voice, settings.steps, settings.speed, |pcm| {
-            if !alive.load(Ordering::SeqCst) {
+            if !alive.load(Ordering::SeqCst) || cut.load(Ordering::SeqCst) {
                 return;
             }
             if first_ms.is_none() {
@@ -419,6 +467,13 @@ async fn speak_into(
     if let Err(e) = res {
         tracing::warn!("tts failed: {e}");
         emit(VoiceEvent::Error { message: e.to_string() });
+    }
+}
+
+/// Resolves once `flag` is set. Polled, so a cut-in from an earlier turn can't leave a stale wake-up.
+async fn until_set(flag: &AtomicBool) {
+    while !flag.load(Ordering::SeqCst) {
+        tokio::time::sleep(Duration::from_millis(30)).await;
     }
 }
 

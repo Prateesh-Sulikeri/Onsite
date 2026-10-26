@@ -57,6 +57,7 @@ impl AppState {
     }
 
     pub fn save_settings(&self, s: &Settings) -> Result<()> {
+        voice::audio::set_devices(&s.voice.input_device, &s.voice.output_device);
         self.store.lock().unwrap().set_setting(SETTINGS_KEY, s)
     }
 
@@ -125,6 +126,7 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let settings = handle.state::<AppState>().settings().voice;
+                voice::audio::set_devices(&settings.input_device, &settings.output_device);
                 if settings.enabled {
                     commands::warm_voice(&settings).await;
                     // Build panel voices now, so a round never waits on one (~5-15 s each, once).
@@ -166,6 +168,9 @@ pub fn run() {
             commands::voice_finish,
             commands::voice_mute,
             commands::voice_cancel_listen,
+            commands::voice_interrupt,
+            commands::voice_set_devices,
+            commands::audio_devices,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Onsite");

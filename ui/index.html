@@ -172,9 +172,23 @@
           </div>
         </div>
 
-        <aside class="panel loop-card">
-          <h2>Your loop</h2>
-          <ol class="timeline" id="agenda"></ol>
+        <aside class="stack loop-card">
+          <div class="panel">
+            <h2>Your loop</h2>
+            <ol class="timeline" id="agenda"></ol>
+          </div>
+          <div class="panel" id="audioCheck">
+            <div class="panel-head"><h2>Check your audio</h2><span class="pill" id="acPill">Checking…</span></div>
+            <label class="field"><span>Microphone</span><select id="acMic"></select></label>
+            <label class="field" style="margin-top:12px"><span>Speaker</span><select id="acSpk"></select></label>
+            <div class="btn-row">
+              <button class="btn sm" id="acSpeak"><svg><use href="#i-speaker"/></svg>Test speaker</button>
+              <button class="btn sm" id="acListen"><svg><use href="#i-mic"/></svg>Test mic</button>
+            </div>
+            <div class="meter ac-meter" aria-hidden="true"><i id="acMeter"></i></div>
+            <p class="form-msg" id="acResult" role="status"></p>
+            <p class="muted ac-lang" id="acLang"></p>
+          </div>
         </aside>
       </div>
     </section>
@@ -236,6 +250,8 @@
           <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
           <label class="switch"><input type="checkbox" id="vEnabled"><span class="track"></span><span>Spoken interviews</span></label>
           <div class="form-grid">
+            <label class="field"><span>Microphone</span><select id="vMic"></select></label>
+            <label class="field"><span>Speaker</span><select id="vSpk"></select></label>
             <label class="field"><span>Interviewer voice</span><select id="vVoice"></select></label>
             <label class="field"><span>Voice quality</span>
               <select id="vSteps"><option value="8">Fast — about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best — slow</option></select></label>
@@ -250,6 +266,7 @@
             <div class="meter" aria-hidden="true"><i id="vMeter"></i></div>
           </div>
           <p class="form-msg" id="vResult" role="status"></p>
+          <p class="muted" id="vLang"></p>
         </div>
         <p class="form-msg save-msg" id="saveMsg" role="status">Changes save automatically.</p>
       </div>
@@ -276,6 +293,7 @@
           <div><h1 id="roomTitle"></h1><p id="roomSub"></p></div>
         </div>
         <div class="room-meta">
+          <label class="room-mic" title="Microphone"><svg><use href="#i-mic"/></svg><select id="roomMic" class="sm" aria-label="Microphone"></select></label>
           <span class="timer" id="timer"><i class="rec"></i><b id="timerText">00:00</b> <span id="timerLabel">remaining</span></span>
           <button class="btn ghost danger sm" id="termBtn" title="Stop now, no feedback, nothing saved">Terminate</button>
         </div>
