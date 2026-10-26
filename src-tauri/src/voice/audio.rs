@@ -42,6 +42,81 @@ impl Resampler {
     }
 }
 
+/// Windowed-sinc (Blackman) FIR low-pass. Keeps its history across chunks.
+#[derive(Debug, Clone)]
+pub struct LowPass {
+    taps: Vec<f32>,
+    /// Last `taps.len() - 1` input samples, followed by the current chunk while filtering.
+    buf: Vec<f32>,
+}
+
+impl LowPass {
+    /// `cutoff_hz` is the -6 dB point; `transition_hz` is the full pass-to-stop width.
+    pub fn new(rate: u32, cutoff_hz: f32, transition_hz: f32) -> Self {
+        // Blackman main lobe is about 5.5 * rate / N wide.
+        let n = ((5.5 * rate as f32 / transition_hz).ceil() as usize).clamp(15, 511) | 1;
+        let fc = cutoff_hz / rate as f32;
+        let mid = (n / 2) as f32;
+        let mut taps: Vec<f32> = (0..n)
+            .map(|i| {
+                let x = i as f32 - mid;
+                let sinc = if x == 0.0 { 2.0 * fc } else { (2.0 * std::f32::consts::PI * fc * x).sin() / (std::f32::consts::PI * x) };
+                let w = 2.0 * std::f32::consts::PI * i as f32 / (n - 1) as f32;
+                sinc * (0.42 - 0.5 * w.cos() + 0.08 * (2.0 * w).cos())
+            })
+            .collect();
+        let sum: f32 = taps.iter().sum();
+        taps.iter_mut().for_each(|t| *t /= sum);
+        Self { buf: vec![0.0; n - 1], taps }
+    }
+
+    pub fn len(&self) -> usize {
+        self.taps.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.taps.is_empty()
+    }
+
+    /// Filters `io` in place (delay of `len() / 2` samples).
+    pub fn process(&mut self, io: &mut [f32]) {
+        let keep = self.taps.len() - 1;
+        self.buf.extend_from_slice(io);
+        for (i, out) in io.iter_mut().enumerate() {
+            let win = &self.buf[i..i + self.taps.len()];
+            *out = win.iter().zip(&self.taps).map(|(a, b)| a * b).sum();
+        }
+        let drop = self.buf.len() - keep;
+        self.buf.drain(..drop);
+    }
+}
+
+/// Anti-aliased rate conversion: low-pass below the target Nyquist, then interpolate.
+/// Without the filter, 48 kHz -> 16 kHz folds 8-24 kHz noise and sibilants into the speech band.
+#[derive(Debug, Clone)]
+pub struct Downsampler {
+    lp: Option<LowPass>,
+    rs: Resampler,
+}
+
+impl Downsampler {
+    pub fn new(from: u32, to: u32) -> Self {
+        let lp = (from > to).then(|| {
+            let nyq = to as f32 / 2.0;
+            // Pass to ~0.75 * Nyquist, stop by ~1.1 * Nyquist, so nothing folds below ~6 kHz at 16 kHz out.
+            LowPass::new(from, nyq * 0.925, nyq * 0.35)
+        });
+        Self { lp, rs: Resampler::new(from, to) }
+    }
+
+    pub fn process(&mut self, input: &mut [f32]) -> Vec<f32> {
+        if let Some(lp) = self.lp.as_mut() {
+            lp.process(input);
+        }
+        self.rs.process(input)
+    }
+}
+
 pub fn i16_to_f32(s: &[i16]) -> Vec<f32> {
     s.iter().map(|&v| v as f32 / 32768.0).collect()
 }
@@ -82,6 +157,15 @@ impl Vad {
     /// `pause_ms == 0` never ends on silence (manual mode).
     pub fn new(frame_ms: u32, pause_ms: u32) -> Self {
         Self { frame_ms, pause_ms, noise: 0.004, loud_frames: 0, quiet_ms: 0, speaking: false }
+    }
+
+    pub fn is_speaking(&self) -> bool {
+        self.speaking
+    }
+
+    /// Milliseconds of quiet since the last loud frame while speaking.
+    pub fn quiet_ms(&self) -> u32 {
+        self.quiet_ms
     }
 
     pub fn threshold(&self) -> f32 {
@@ -220,12 +304,12 @@ impl Mic {
         let format = supported.sample_format();
         let config: cpal::StreamConfig = supported.into();
         let channels = config.channels as usize;
-        let mut rs = Resampler::new(config.sample_rate, MIC_RATE);
+        let mut rs = Downsampler::new(config.sample_rate, MIC_RATE);
         let level: Arc<Level> = Default::default();
         let lv = level.clone();
-        let mut handle = move |mono: Vec<f32>| {
+        let mut handle = move |mut mono: Vec<f32>| {
             lv.set(rms(&mono));
-            let _ = tx.send(f32_to_i16(&rs.process(&mono)));
+            let _ = tx.send(f32_to_i16(&rs.process(&mut mono)));
         };
         let on_err = |e: cpal::Error| tracing::warn!("mic stream: {e}");
         let stream = match format {
@@ -288,6 +372,61 @@ mod tests {
         assert_eq!(whole.len(), parts.len());
         assert!(whole.iter().zip(&parts).all(|(a, b)| (a - b).abs() < 1e-5));
         assert!(parts.windows(2).all(|w| w[1] >= w[0] - 1e-6), "not monotonic");
+    }
+
+    fn tone(rate: u32, hz: f32, secs: f32) -> Vec<f32> {
+        let n = (rate as f32 * secs) as usize;
+        (0..n).map(|i| 0.5 * (2.0 * std::f32::consts::PI * hz * i as f32 / rate as f32).sin()).collect()
+    }
+
+    /// RMS of a 48 kHz tone after conversion to 16 kHz in 10 ms chunks, skipping the warm-up.
+    fn rms_after(hz: f32, filtered: bool) -> f32 {
+        let input = tone(48_000, hz, 1.0);
+        let mut ds = Downsampler::new(48_000, 16_000);
+        let mut plain = Resampler::new(48_000, 16_000);
+        let mut out = Vec::new();
+        for c in input.chunks(480) {
+            let mut c = c.to_vec();
+            out.extend(if filtered { ds.process(&mut c) } else { plain.process(&c) });
+        }
+        rms(&out[1600..])
+    }
+
+    #[test]
+    fn downsampler_passes_speech_and_blocks_aliases() {
+        let full = 0.5 / 2f32.sqrt();
+        for hz in [300.0, 1000.0, 3000.0, 5000.0] {
+            let r = rms_after(hz, true);
+            assert!((r / full - 1.0).abs() < 0.05, "{hz} Hz passband: {r}");
+        }
+        for hz in [9_000.0, 12_000.0, 15_000.0, 20_000.0] {
+            let r = rms_after(hz, true);
+            assert!(r < full * 0.01, "{hz} Hz should be < -40 dB, got {r}");
+        }
+        // Without the filter a 12 kHz tone folds to 4 kHz at a large fraction of its level.
+        assert!(rms_after(12_000.0, false) > full * 0.2);
+    }
+
+    #[test]
+    fn lowpass_is_continuous_across_chunks() {
+        let x = tone(48_000, 2500.0, 0.05);
+        let mut a = LowPass::new(48_000, 7_400.0, 2_800.0);
+        let mut whole = x.clone();
+        a.process(&mut whole);
+        let mut b = LowPass::new(48_000, 7_400.0, 2_800.0);
+        let (mut p1, mut p2) = (x[..333].to_vec(), x[333..].to_vec());
+        b.process(&mut p1);
+        b.process(&mut p2);
+        p1.extend(p2);
+        assert!(whole.iter().zip(&p1).all(|(u, v)| (u - v).abs() < 1e-6));
+        assert!(a.len() % 2 == 1 && a.len() < 200, "taps {}", a.len());
+    }
+
+    #[test]
+    fn downsampler_is_identity_at_same_rate() {
+        let mut d = Downsampler::new(16_000, 16_000);
+        let mut x = vec![0.25; 160];
+        assert_eq!(d.process(&mut x), vec![0.25; 160]);
     }
 
     #[test]

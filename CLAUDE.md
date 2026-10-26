@@ -118,7 +118,18 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
     `session.started`, `status` (stage loading/ready), `partial {text}`; then `final` (`final_kind`
     utterance|summary). Send `{"type":"input_audio.end"}` to finish. Capabilities doc:
     `GET /v1/audio/capabilities`.
+  - STT stream runs VoiceStudio's *dictation* engine. Default here is `sherpa-whisper-tiny`: it drops
+    audio after ~30 s and loops ("for the MQ for the MQ"). Onsite passes `&model=` (parakeet-tdt v2, else
+    v3), cuts long answers into segments at short pauses, collapses repeats and fixes tech terms.
+    The stream takes no language or prompt. Batch `/v1/audio/transcriptions` honours both but reloads
+    large-v3 on every call (~8 s), so it is not used. Last-segment latency ~3.4 s on CPU Parakeet.
+  - Mic audio goes through a windowed-sinc low-pass before 48→16 kHz downsampling (aliasing hurt ASR).
   - `/ws/tts` is not used; the HTTP stream is simpler and documented in `/openapi.json`.
+  - `voice` must be a profile id. `"default"` gives a different random speaker on every call (this
+    made the interviewer change voice mid-reply). Design profiles clone a fixed sample rendered at
+    creation, so one profile id = one stable voice. Do not lock profiles: unlock deletes the seed.
+  - `/model/status` reports `loaded:false` even when speech works; only `loading` is meaningful.
+    VoiceStudio unloads after ~15 min idle; the next call takes ~10 s, so Onsite warms up at round start.
 
 ### audio/ — mic and speaker
 - cpal input at the device rate, resample to 16 kHz mono i16 for STT.

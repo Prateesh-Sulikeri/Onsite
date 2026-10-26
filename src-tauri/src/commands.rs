@@ -23,6 +23,11 @@ pub fn ui_log(level: String, message: String) {
 }
 
 #[tauri::command]
+pub fn get_panels(state: State<AppState>) -> Vec<crate::panels::PanelSummary> {
+    state.panels.list()
+}
+
+#[tauri::command]
 pub fn get_catalog(state: State<AppState>) -> Catalog {
     state.catalog.clone()
 }
@@ -152,14 +157,19 @@ pub fn voice_launch() -> Result<()> {
     Ok(())
 }
 
-/// Speaks a short line once so the first real reply skips VoiceStudio's warm-up.
+/// Speaks a short line once, in the interviewer's voice, so the first real reply skips
+/// VoiceStudio's warm-up (model load plus encoding the profile's reference sample).
 pub async fn warm_voice(settings: &VoiceSettings) {
     let vs = VoiceStudio::new(&settings.base_url);
     if vs.health().await.is_err() {
         return;
     }
+    let voice = match vs.resolve_voice(&settings.voice).await {
+        Ok(v) => v,
+        Err(e) => return tracing::warn!("VoiceStudio warm-up skipped: {e}"),
+    };
     let started = std::time::Instant::now();
-    match vs.speak("Okay.", &settings.voice, settings.steps, settings.speed, |_| {}).await {
+    match vs.speak("Okay, let's begin.", &voice, settings.steps, settings.speed, |_| {}).await {
         Ok(()) => tracing::info!(ms = started.elapsed().as_millis() as u64, "VoiceStudio warmed up"),
         Err(e) => tracing::warn!("VoiceStudio warm-up failed: {e}"),
     }
@@ -179,10 +189,14 @@ pub async fn voice_test_listen(app: AppHandle, settings: VoiceSettings) -> Resul
     let emit = move |ev: crate::voice::VoiceEvent| {
         let _ = app.emit("voice_test", &ev);
     };
+    use crate::voice::stt::ListenEnd;
     let listen = crate::voice::stt::listen(&vs, pause, &ctl, emit);
     match tokio::time::timeout(std::time::Duration::from_secs(30), listen).await {
-        Ok(Ok(crate::voice::stt::ListenEnd::Text { text, .. })) => Ok(text),
-        Ok(Ok(_)) | Err(_) => Err(AppError::Voice("I didn't hear anything. Check the mic and try again.".into())),
+        Ok(Ok(ListenEnd::Text { text, .. })) => Ok(text),
+        Ok(Ok(ListenEnd::Cancelled { heard })) if !heard.is_empty() => Ok(heard),
+        Ok(Ok(ListenEnd::Cancelled { .. } | ListenEnd::NoSpeech)) | Err(_) => {
+            Err(AppError::Voice("I didn't hear anything. Check the mic and try again.".into()))
+        }
         Ok(Err(e)) => Err(e),
     }
 }
