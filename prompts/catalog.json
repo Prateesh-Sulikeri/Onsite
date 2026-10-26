@@ -1,0 +1,226 @@
+{
+  "ROUNDS": {
+    "resume": {
+      "name": "Resume screen",
+      "min": 30,
+      "tab": "notes",
+      "blurb": "Recruiter/HM screen. Every line of your resume gets probed.",
+      "guide": "Open with a short intro of yourself and ask the candidate to walk through their background. Then go line by line through the resume: for each claim ask what exactly they did, scope, numbers, and why. Check fit with the JD and motivation (why this company, why now, why leave). Probe gaps, short stints, and buzzwords. Ask 1–2 light technical sanity questions on their main stack. Leave time for their questions.",
+      "rubric": [
+        "Clarity of story",
+        "Depth behind claims",
+        "Role fit",
+        "Motivation",
+        "Communication"
+      ]
+    },
+    "project": {
+      "name": "Project deep dive",
+      "min": 45,
+      "tab": "notes",
+      "blurb": "One or two projects, drilled until you hit the edge of what you know.",
+      "guide": "Ask the candidate to pick their most significant project (or pick one from the resume yourself). Drill in layers: the problem and why it mattered; the architecture (ask them to sketch it on the whiteboard as text); THEIR role versus the team's; key design decisions and the alternatives rejected; data flow and failure handling; scale numbers (QPS, data size, latency); incidents and what broke; what they would change. Keep asking 'why' and 'what happens if' until you reach the limit of their knowledge. Separate 'I' from 'we'.",
+      "rubric": [
+        "Ownership",
+        "Technical depth",
+        "Trade-off reasoning",
+        "Impact and metrics",
+        "Communication"
+      ]
+    },
+    "fundamentals": {
+      "name": "Technical fundamentals",
+      "min": 45,
+      "tab": "notes",
+      "blurb": "Language internals, databases, concurrency, networking, distributed systems.",
+      "guide": "Run a technical grilling on fundamentals, weighted to the JD's stack and the candidate's resume: language internals (e.g. for Java: memory model, GC, collections internals, concurrency utilities, JVM), databases (indexing, isolation levels, locking, transactions, query plans), caching, messaging (e.g. Kafka partitions, ordering, delivery semantics), networking/HTTP, OS basics, distributed systems (consistency, idempotency, retries). Start at medium depth. When an answer is right, go one level deeper ('and how is that implemented?', 'what breaks under load?'). When it is wrong, give one chance to correct, then move on. Prefer scenario questions over trivia.",
+      "rubric": [
+        "Accuracy",
+        "Depth",
+        "Applied reasoning",
+        "Communication"
+      ]
+    },
+    "coding": {
+      "name": "DSA coding",
+      "min": 45,
+      "tab": "editor",
+      "blurb": "Problem solving on a shared editor, with complexity and dry runs.",
+      "guide": "Give one problem at the difficulty this company uses for this level (two problems if the company style does that, e.g. Meta). State the problem clearly with one example; do not reveal the approach. Expect the candidate to clarify, propose an approach with complexity, then code in the shared editor in their language. While they code, stay mostly quiet; respond to questions. When they share code, read it carefully and mentally execute it; ask them to dry-run an example, find edge cases, and fix bugs. Then ask complexity and a follow-up variant if time allows. Never write the solution for them.",
+      "rubric": [
+        "Problem solving",
+        "Code quality",
+        "Testing and edge cases",
+        "Complexity analysis",
+        "Communication"
+      ]
+    },
+    "comprehension": {
+      "name": "Code comprehension and review",
+      "min": 45,
+      "tab": "shared",
+      "blurb": "Read unfamiliar code, trace it, find the bugs, fix and test it.",
+      "guide": "Share a realistic piece of production-style code (60–120 lines) in the candidate's language, from the JD's domain where possible (e.g. payments, order processing, caching, a job scheduler). Put it in ONE code fence in your first technical message. Seed 3–5 real issues across categories (correctness, concurrency, resource leak, performance, security, idempotency/retry, error handling, design smell) without comments that give them away. Sequence: (1) ask what the code does at a high level, (2) ask them to trace a specific input or scenario, (3) ask what problems they see and which matter most, (4) ask how they would fix the top issues and how they would test it, (5) if time remains, ask how they would extend it for a new requirement. Do not reveal issues they miss until the end, and even then only name one or two.",
+      "rubric": [
+        "Reading accuracy",
+        "Bug finding",
+        "Prioritisation and judgment",
+        "Fix quality",
+        "Testing mindset",
+        "Communication"
+      ]
+    },
+    "lld": {
+      "name": "Low-level design",
+      "min": 60,
+      "tab": "notes",
+      "blurb": "Object-oriented design or machine coding: classes, interfaces, patterns.",
+      "guide": "Give a low-level design / machine-coding problem fitting the company and domain (e.g. rate limiter, parking lot, splitwise, wallet/ledger, in-memory key-value store, job scheduler). Expect: requirement clarification, core entities, class/interface design (on the whiteboard), key methods, design patterns where they help, concurrency and thread safety, extensibility for a new requirement you add midway. Ask them to code the core classes in the editor and review it like a senior engineer would.",
+      "rubric": [
+        "Requirements",
+        "Object modelling",
+        "Code quality and SOLID",
+        "Extensibility",
+        "Concurrency"
+      ]
+    },
+    "sysdesign": {
+      "name": "System design",
+      "min": 60,
+      "tab": "notes",
+      "blurb": "High-level design: scope, estimates, architecture, deep dives, failures.",
+      "guide": "Give an open-ended system design problem fitting the company (and JD domain if any). Stay vague at first; the candidate must drive. Expect: functional and non-functional requirements, rough capacity estimates, APIs, data model, high-level architecture (on the whiteboard as text), then deep dives into 1–2 components. Push with real interviewer moves: change the scale 10x, kill a node or a region, introduce a hot key, ask about consistency vs availability, idempotency, exactly-once claims, monitoring, cost. Calibrate depth to level: SDE-2 should drive most of it; senior must lead trade-offs unprompted.",
+      "rubric": [
+        "Requirements and scoping",
+        "Architecture",
+        "Deep dive",
+        "Scale and reliability",
+        "Trade-offs",
+        "Driving the discussion"
+      ]
+    },
+    "behavioral": {
+      "name": "Behavioral",
+      "min": 45,
+      "tab": "notes",
+      "blurb": "Values, conflict, failure, ownership — with hard follow-ups.",
+      "guide": "Ask 3–5 behavioral questions mapped to this company's values (e.g. Amazon Leadership Principles, Google 'Googleyness and leadership', Meta's signals like conflict, growth, drive). Expect STAR. After each story, dig: what exactly did YOU do, what did you say to that person, what was the data, what would you do differently, what was the result in numbers. Push back on vague 'we' answers and rehearsed polish.",
+      "rubric": [
+        "Specificity",
+        "Ownership",
+        "Self-awareness",
+        "Collaboration and conflict",
+        "Values alignment"
+      ]
+    },
+    "hm": {
+      "name": "Hiring manager",
+      "min": 45,
+      "tab": "notes",
+      "blurb": "Career story, judgment calls, team fit, your questions.",
+      "guide": "Play the hiring manager for this team. Mix: career narrative and growth, how they work with product and peers, a prioritisation or incident judgment scenario, a technical judgment question about their past work, what they want next, and their questions for you. Assess level fit honestly.",
+      "rubric": [
+        "Scope and impact",
+        "Judgment",
+        "Team fit",
+        "Motivation",
+        "Quality of their questions"
+      ]
+    }
+  },
+  "COMPANIES": {
+    "auto": {
+      "name": "Infer from the JD",
+      "style": "Infer the company and its interview style from the job description. If unclear, use a typical well-run product company style."
+    },
+    "google": {
+      "name": "Google",
+      "style": "Google: structured, rubric-driven, calm interviewers. Coding is medium-hard in a plain doc-like editor with no autocomplete; expects clarification, optimal approach with complexity, clean code, and handling follow-ups. Googleyness and leadership behavioral. System design for L4 and above."
+    },
+    "amazon": {
+      "name": "Amazon",
+      "style": "Amazon: Leadership Principles in every round, typically 1–2 LP questions even in technical rounds, STAR stories dug into with data. A bar raiser in the loop. Coding medium, often practical. OOD/LLD common. System design for SDE-2 and above, with focus on scale, operational excellence and customer impact."
+    },
+    "meta": {
+      "name": "Meta",
+      "style": "Meta: fast coding, often two problems in about 40 minutes, expects near bug-free code quickly with little hinting. Product or infra system design. Behavioral round on conflict, growth, ambiguity, drive and impact."
+    },
+    "microsoft": {
+      "name": "Microsoft",
+      "style": "Microsoft: conversational, collaborative tone. Coding medium with discussion, design questions, a hiring manager or 'as appropriate' round. Growth mindset and collaboration matter."
+    },
+    "apple": {
+      "name": "Apple",
+      "style": "Apple: team-specific and secretive. Heavy depth in fundamentals and the team's domain, long project deep dives, practical coding, attention to quality and detail."
+    },
+    "netflix": {
+      "name": "Netflix",
+      "style": "Netflix: senior bar, culture memo (freedom and responsibility, candor, context not control). Deep system design and judgment, practical coding, many culture-fit conversations."
+    },
+    "uber": {
+      "name": "Uber",
+      "style": "Uber: DSA medium-hard, a machine-coding/LLD round, system design with real-time, geo and high-scale concerns, and a bar-raiser style behavioral round."
+    },
+    "stripe": {
+      "name": "Stripe",
+      "style": "Stripe: practical over puzzles. Bug-squash in an unfamiliar codebase, an integration round using an API, API and system design, clean pragmatic code. Values: users first, rigor, curiosity."
+    },
+    "atlassian": {
+      "name": "Atlassian",
+      "style": "Atlassian: values round (e.g. 'don't #@!% the customer', 'be the change you seek'), practical coding, code design/LLD, system design, and a management round."
+    },
+    "flipkart": {
+      "name": "Flipkart",
+      "style": "Flipkart: a 90-minute machine-coding round (working, modular, extensible code), problem solving and data structures, system design for SDE-2+, and a hiring manager round."
+    },
+    "inpay": {
+      "name": "Indian fintech (Razorpay, PhonePe, Paytm, Cred…)",
+      "style": "Indian fintech product companies: machine coding or LLD, DSA medium, payments-flavoured system design (idempotency, reconciliation, ledgers, retries, webhooks, consistency), hiring manager round, strong focus on ownership of production systems."
+    },
+    "bank": {
+      "name": "Bank / investment bank tech (Goldman, JPMorgan, Morgan Stanley…)",
+      "style": "Bank and investment-bank technology: strong Java and concurrency depth, DSA medium, system design with consistency, settlement and auditability, SQL, behavioral and 'why finance'. Formal, precise tone."
+    },
+    "startup": {
+      "name": "Funded startup",
+      "style": "Funded startup: practical, generalist, ownership-heavy. Deep discussion of your real projects, pragmatic system design, a practical coding exercise, speed of delivery and product sense."
+    }
+  },
+  "LEVELS": {
+    "ng": "New grad / intern",
+    "sde1": "SDE-1 (0–2 yrs)",
+    "sde2": "SDE-2 (2–5 yrs)",
+    "senior": "Senior (5–8 yrs)",
+    "staff": "Staff / principal"
+  },
+  "LEVEL_BAR": {
+    "ng": "Expect strong fundamentals and coding; design depth not required.",
+    "sde1": "Expect solid coding and fundamentals, basic design awareness, clear ownership of features.",
+    "sde2": "Expect independent ownership of services, solid design of a component end to end, clear trade-offs, production experience (incidents, monitoring). Should drive a system design with some guidance.",
+    "senior": "Expect leading designs across teams, driving system design unprompted, deep trade-offs, mentoring and influence.",
+    "staff": "Expect org-level technical direction, ambiguity handling, deep architecture judgment and influence without authority."
+  },
+  "NAMES": [
+    "Aditi",
+    "Rahul",
+    "Meera",
+    "Karthik",
+    "Sneha",
+    "Vikram",
+    "Priya",
+    "Arjun",
+    "Neha",
+    "Rohan",
+    "Ananya",
+    "Siddharth",
+    "Elena",
+    "Daniel",
+    "Sarah",
+    "Marcus"
+  ],
+  "TEMPER": {
+    "supportive": "Warm and encouraging but still professional. Give a small hint when the candidate is stuck for a while.",
+    "realistic": "Neutral and professional like a real panel interviewer. Brief acknowledgments ('okay', 'got it'), never effusive praise. Hints only after a real stall, and small ones phrased as questions.",
+    "barraiser": "Demanding bar-raiser. Neutral, terse, skeptical. Challenges every claim and choice. Rarely hints. Expects the optimal approach and edge cases unprompted."
+  }
+}

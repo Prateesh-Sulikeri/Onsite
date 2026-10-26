@@ -1,0 +1,143 @@
+{
+  "company": "Razorpay",
+  "jd": "Backend Development, SDE 2. Drive product and design discussions. Scale payment infrastructure to get every Indian to pay online. Shape REST APIs for developers worldwide. Contribute to open source. Strong product design sense. Experience in PHP, Python, Golang, Java or C++. Understand end-user requirements, formulate use cases and solutions. Good understanding of REST APIs and the web. Build a feature from scratch and drive it to completion.",
+  "level": "sde2",
+  "pitfalls": [
+    "Writing pseudo-code or an unfinished skeleton in machine coding instead of a working solution",
+    "Code that works but cannot absorb a new requirement without rewrites",
+    "Ignoring concurrency and duplicate operations (e.g. double withdrawal) in LLD",
+    "In HLD, staying at boxes-and-arrows level and missing fan-out, ordering, acknowledgements and failure handling",
+    "Not mentioning idempotency, retries and reconciliation in any money-related design",
+    "Picking SQL vs NoSQL without a reason",
+    "Vague 'we did' stories in the hiring manager round with no personal ownership or numbers",
+    "No good answer to 'why fintech / why Razorpay'"
+  ],
+  "preparedAt": "2026-10-26T08:25:00Z",
+  "process": [
+    {
+      "minutes": 45,
+      "name": "Problem solving (DSA)",
+      "questions": [
+        "Minimum number of meeting rooms for a list of intervals",
+        "Zigzag (spiral-row) traversal of a matrix",
+        "Detect a cycle in a linked list, then find where it starts",
+        "Intersection node of two linked lists",
+        "Array with numbers 1..n where all appear twice except one; find it (modifying the array is allowed)",
+        "Find the number that occurs exactly twice: once for a sorted array (binary search), once for unsorted (XOR)",
+        "Maximum sum subarray, then return the subarray itself",
+        "Implement an LRU cache; follow-up: LFU with smallest-key tie-break"
+      ],
+      "style": "Interviewer explains clearly with examples, accepts a brute force first, then expects you to improve it and code fast while talking. Follow-ups vary the constraints (sorted vs unsorted input, no extra space).",
+      "type": "coding",
+      "what": "Reported in some SDE-2 / Product Engineer-2 backend loops (others start directly with machine coding). One or two medium problems, explained with examples. Brute force first, then optimise, then code quickly while explaining."
+    },
+    {
+      "minutes": 90,
+      "name": "Machine coding (LLD)",
+      "questions": [
+        "Design and implement an ATM: card + PIN auth, balance enquiry, withdrawal, transaction status; handle insufficient balance, insufficient cash, blocked card, rollback, no duplicate transactions, locking",
+        "Implement a persistent pub-sub queue with guaranteed, in-order delivery of every message to all subscribers of a topic, with consumer offsets",
+        "Design an in-memory SQL-like database: tables, typed columns (int/string/bool), primary key or composite key, index on PK, insert/update/delete/select",
+        "Design an in-memory search engine for blog content: datasets, insert and delete documents, search with ordering options",
+        "Design a Git-like version control system: init, add <regex>, checkout -b, reset HEAD~n, status, with extensible code",
+        "Design a rating service for one user, then extend it to many users",
+        "Design a wallet system with transfers and transaction history",
+        "Implement a rate limiter using a sliding window",
+        "Build a load balancer as a REST app: add/remove backends, timeouts, health checks, forward all other routes"
+      ],
+      "style": "Interviewer gives the spec and mostly stays silent; they rarely help. They watch for working code first, then clean modular design, sensible use of interfaces and patterns, and handling of edge cases like duplicates, rollback and thread safety. Ends with 'how would you add X?'.",
+      "type": "lld",
+      "what": "The signature Razorpay round. A spec is given (sometimes as a sheet); you design classes and write compilable, working code on screen share in your language. Midway or at the end, a new requirement is added to test extensibility. Edge cases and concurrency are checked."
+    },
+    {
+      "minutes": 60,
+      "name": "System design (HLD)",
+      "questions": [
+        "Design a job scheduler that accepts a job file and a time or cron expression and runs it reliably",
+        "Design WhatsApp, including group messaging: fan-out strategy, ordering guarantees, large groups, delivery and read receipts, push vs pull",
+        "Design a quick-commerce app like Zepto",
+        "Design the LeetCode leaderboard",
+        "Design a config manager service used by internal and external services, with per-user configs, logging and monitoring",
+        "Design a retry mechanism for failed payments without charging twice",
+        "Design a real-time settlement and reconciliation system",
+        "Design a ledger service for a payments company",
+        "A user's payment timed out on their side but succeeded on the backend. What does your system do?",
+        "Follow-ups: What if Redis goes down? Why SQL or NoSQL here? How do you handle stale data? How do you test this design?"
+      ],
+      "style": "Interviewer lets you drive, then pushes hard into one or two areas. Expect 'what if X fails?' questions, a demand to justify database choices, questions on stale data, ordering and delivery guarantees, and 'how would you test this system?'. For anything involving money: idempotency keys, retries, reconciliation.",
+      "type": "sysdesign",
+      "what": "Open-ended high-level design. Requirements, APIs, data model, architecture, then deep dives. This is the round where most SDE-2 candidates are rejected."
+    },
+    {
+      "minutes": 45,
+      "name": "Hiring manager",
+      "questions": [
+        "Walk me through the most complex system you own today. What exactly did you build?",
+        "Tell me about a production incident you handled. What did you change afterwards?",
+        "Why fintech, and why Razorpay?",
+        "Tell me about a time you challenged a decision or the status quo",
+        "A time you took ownership of something nobody assigned to you",
+        "How do you decide between shipping fast and doing it properly, when money is involved?",
+        "What would you want to work on in your first six months here?"
+      ],
+      "style": "Conversational but probing. The manager digs into one or two projects on your resume until they understand your personal contribution, then checks values: customer impact, ownership without being told, transparency, and challenging the status quo.",
+      "type": "hm",
+      "what": "Past experience and resume deep dive, ownership and impact, how you handle incidents and disagreements, and fit with Razorpay's values. Often includes 'why fintech / why Razorpay'."
+    }
+  ],
+  "role": "SDE 2, backend",
+  "sources": [
+    {
+      "title": "Interview experience at @RazorPay SDE II (Feb 2026)",
+      "url": "https://interviewexperiences.in/experience/razorpay/interview-experience-at-razorpay-sde-ii"
+    },
+    {
+      "title": "razorpay | sde2 | interview experience (Apr 2025)",
+      "url": "https://interviewexperiences.in/experience/razorpay/razorpay-sde2-interview-experience"
+    },
+    {
+      "title": "Razorpay interview questions (37 reported)",
+      "url": "https://interviewexperiences.in/company/razorpay/interview-questions"
+    },
+    {
+      "title": "Razorpay interview experiences overview",
+      "url": "https://interviewexperiences.in/company/razorpay"
+    },
+    {
+      "title": "LeetCode Discuss: Razorpay SDE II",
+      "url": "https://leetcode.com/discuss/post/7544598/"
+    },
+    {
+      "title": "GeeksforGeeks: Razorpay SDE-2 (2–3 yrs)",
+      "url": "https://www.geeksforgeeks.org/interview-experiences/razorpay-interview-experience-for-sde2-2-3-years-experienced/"
+    },
+    {
+      "title": "Glassdoor: Razorpay SDE 2 interviews",
+      "url": "https://www.glassdoor.co.in/Interview/Razorpay-SDE-2-Interview-Questions-EI_IE1146550.0,8_KO9,14.htm"
+    },
+    {
+      "title": "Glassdoor: Razorpay interviews incl. May 2026 agentic coding round",
+      "url": "https://www.glassdoor.com.mx/Entrevista/Razorpay-Entrevista-E1146550-RVW93837380.htm"
+    },
+    {
+      "title": "TechPrep: Razorpay interview process 2026",
+      "url": "https://www.techprep.app/blog/razorpay-interview-process"
+    },
+    {
+      "title": "Razorpay blog: values-driven interviews",
+      "url": "https://razorpay.com/blog/beyond-resumes-setting-a-teams-through-values-driven-interviews/"
+    },
+    {
+      "title": "Razorpay job post (values list)",
+      "url": "https://job-boards.greenhouse.io/razorpaysoftwareprivatelimited/jobs/4684232005"
+    },
+    {
+      "title": "LeetCode Discuss: fintech system design interviews",
+      "url": "https://leetcode.com/discuss/post/8420715/fintech-system-design-interviews-are-dif-dgyj/"
+    }
+  ],
+  "style": "Interviewers explain the problem well, then mostly stay quiet and let you drive. Machine coding is judged on working code first, then readability, modularity, and extensibility; they add a new requirement late to test the design. HLD interviewers push on depth, not breadth: failure scenarios ('what if Redis goes down?'), database choice justification, stale data, ordering, fan-out, and testing. Payments thinking is valued: idempotency, retries, reconciliation, and money never moving twice. Tone is respectful and professional, not hostile.",
+  "summary": "Razorpay's SDE-2 backend loop (2024–2026 reports) is design-heavy and practical. Typical order: an online assessment or a short DSA round in some loops, then a machine coding / LLD round where you must produce working, compilable, extensible code in 60–90 minutes, then a high-level system design round, then a hiring manager round on past work and values. Some 2026 loops also add an 'agentic coding' round. Reported pass rate is low; the most common rejection point for SDE-2 is the HLD round.",
+  "values": "Customer First, Autonomy & Ownership, Agility with Integrity, Transparency, Challenging the status quo, Razorpay grows with Razors. Razorpay says its interview process is deliberately tied to these values.",
+  "id": "razorpay-sde-2-backend"
+}
