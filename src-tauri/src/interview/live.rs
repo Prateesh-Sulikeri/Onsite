@@ -2,7 +2,9 @@
 
 use super::report::{enough_to_review, metrics, report_prompt, round_summary, verdict_prompt, ReportInput};
 use super::{candidate_message, interviewer_prompt, opening_message, LoopSetup, PlannedRound, PromptTemplates, Workspace};
+use crate::bank::{Question, Test};
 use crate::brain::{prompts, run_once, ClaudeSession, SessionConfig, SessionEvent, Tools};
+use crate::runner::{self, Kind, Lang};
 use crate::error::{AppError, Result};
 use crate::store::Turn;
 use crate::AppState;
@@ -18,6 +20,12 @@ const REPLY_STALE: Duration = Duration::from_secs(120);
 
 pub struct ActiveRound {
     session: ClaudeSession,
+    /// The DSA problem for a coding round, from the local bank.
+    question: Option<Question>,
+    /// Full-size tests for Submit, built once per round.
+    stress: Option<Vec<Test>>,
+    /// Latest Run/Submit result, sent with the candidate's next message.
+    pending_run: Option<String>,
     cfg_prompt: String,
     model: String,
     minutes: u32,
@@ -59,6 +67,65 @@ pub struct RoundInfo {
     pub lang: String,
     /// The voice loop really started (VoiceStudio up and the speaker opened).
     pub voice: bool,
+    /// Coding rounds: the problem as the candidate sees it.
+    pub problem: Option<Value>,
+}
+
+/// Problem difficulty for a level, until there is a picker.
+fn difficulty_for(level: &str) -> &'static str {
+    match level {
+        "ng" => "Easy",
+        "senior" | "staff" => "Hard",
+        _ => "Medium",
+    }
+}
+
+/// What the candidate sees: no hidden tests, reference or interviewer hints.
+fn problem_view(q: &Question, lang: &str) -> Value {
+    let runner = Lang::from_name(lang);
+    json!({
+        "id": q.id,
+        "title": q.title,
+        "difficulty": q.difficulty,
+        "topics": q.topics,
+        "statement": q.statement,
+        "constraints": q.constraints,
+        "examples": q.examples().map(|t| json!({
+            "input": q.input_text(&t.args),
+            "output": t.expected,
+            "explanation": t.explanation,
+        })).collect::<Vec<_>>(),
+        "hidden": q.tests.iter().filter(|t| !t.example).count(),
+        "runnable": runner.is_some(),
+        "starter": runner.map(|l| runner::starter(q, l)).unwrap_or_default(),
+    })
+}
+
+/// Added to the interviewer's system prompt for a coding round.
+fn problem_block(q: &Question) -> String {
+    let examples = q
+        .examples()
+        .map(|t| format!("- Input: {} → Output: {}", q.input_text(&t.args), t.expected))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "\n\nTHE PROBLEM FOR THIS ROUND (this replaces choosing one yourself): {title} ({difficulty}).\n\
+         The candidate already sees it in a Problem tab with the full statement, examples and constraints. \
+         Introduce it in one or two spoken sentences and point them to the Problem tab. Do not read it out in full or paste it.\n\
+         Statement:\n{statement}\nExamples:\n{examples}\nConstraints:\n{constraints}\n\
+         Optimal: time {time}, space {space}.\n\
+         Hints, one at a time and only if they are stuck: {hints}\nFollow-ups if time allows: {follow}\n\
+         They can Run their code on the examples or Submit it against hidden and full-size tests on their own machine. \
+         A [Code run] block in their message is the real result of that. React to it like an interviewer watching their screen.",
+        title = q.title,
+        difficulty = q.difficulty,
+        statement = q.statement,
+        constraints = q.constraints.join("\n"),
+        time = q.time,
+        space = q.space,
+        hints = q.hints.join(" | "),
+        follow = q.follow_ups.join(" | "),
+    )
 }
 
 pub fn create_loop(state: &AppState, setup: &LoopSetup) -> Result<i64> {
@@ -87,7 +154,17 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         interviewer: prompts::load(&state.prompts_dir, "interviewer.md")?,
         persona_block: prompts::load(&state.prompts_dir, "persona_block.md").unwrap_or_default(),
     };
-    let system_prompt = interviewer_prompt(&templates, cat, &state.panels, &setup, index);
+    let mut system_prompt = interviewer_prompt(&templates, cat, &state.panels, &setup, index);
+    let question = (plan.key == "coding")
+        .then(|| {
+            let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            state.bank.pick(difficulty_for(&setup.level), &[], &setup.company, &Default::default(), seed).cloned()
+        })
+        .flatten();
+    if let Some(q) = &question {
+        tracing::info!(id = %q.id, difficulty = %q.difficulty, "coding question");
+        system_prompt.push_str(&problem_block(q));
+    }
     let mut settings = state.settings();
     // A panel interviewer always speaks in their own voice, at their own pace.
     if let Some(p) = state.panels.persona(&setup.panel, &plan.key) {
@@ -149,6 +226,9 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         round_id,
         ActiveRound {
             session,
+            question: question.clone(),
+            stress: None,
+            pending_run: None,
             cfg_prompt: system_prompt,
             model: settings.interviewer_model,
             minutes: plan.minutes,
@@ -164,6 +244,7 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         count: setup.rounds.len(),
         company: setup.company_name(cat),
         level: cat.levels[&setup.level].clone(),
+        problem: question.as_ref().map(|q| problem_view(q, &setup.lang)),
         lang: setup.lang,
         plan,
         voice,
@@ -215,9 +296,12 @@ pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, ws: Works
     *r.log.workspace.lock().unwrap() = ws.clone();
     let elapsed = r.log.elapsed_min();
     let prev_ws = r.last_ws.clone();
-    let Some((content, shared)) = candidate_message(&text, &ws, &mut r.last_ws, force, &r.lang, elapsed, r.minutes) else {
+    let Some((mut content, shared)) = candidate_message(&text, &ws, &mut r.last_ws, force, &r.lang, elapsed, r.minutes) else {
         return Ok(None);
     };
+    if let Some(run) = r.pending_run.take() {
+        content.push_str(&format!("\n[Code run] {run}"));
+    }
 
     let mut sent = if r.session.is_alive() { r.session.send(&content).await } else { Err(AppError::Claude("not running".into())) };
     if sent.is_err() {
@@ -261,6 +345,40 @@ pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, ws: Works
     r.log.persist(&state, None);
     state.voice.answer_sent(round_id);
     Ok(Some(turn))
+}
+
+/// Runs the candidate's code: `submit` = every test plus a full-size one, else the examples.
+pub async fn run_code(app: &AppHandle, round_id: i64, code: String, submit: bool) -> Result<runner::Report> {
+    let state = app.state::<AppState>();
+    let (q, lang, stress) = {
+        let rounds = state.rounds.lock().await;
+        let r = rounds.get(&round_id).ok_or_else(|| AppError::NotFound("This round is not running.".into()))?;
+        let q = r.question.clone().ok_or_else(|| AppError::Invalid("This round has no problem to run.".into()))?;
+        (q, r.lang.clone(), r.stress.clone())
+    };
+    let lang = Lang::from_name(&lang).ok_or_else(|| AppError::Invalid(format!("Running {lang} isn't supported yet. Use Java, Python, C++ or JavaScript.")))?;
+    // Built outside the lock: the generator can take a few seconds.
+    let stress = match (submit, stress) {
+        (true, None) => {
+            let s = runner::stress_tests(&q, 1).await;
+            if let Some(r) = state.rounds.lock().await.get_mut(&round_id) {
+                r.stress = Some(s.clone());
+            }
+            s
+        }
+        (_, s) => s.unwrap_or_default(),
+    };
+    let mut tests: Vec<(&Test, Kind)> = q.tests.iter().filter(|t| submit || t.example).map(|t| (t, if t.example { Kind::Example } else { Kind::Hidden })).collect();
+    if submit {
+        tests.extend(stress.iter().map(|t| (t, Kind::Stress)));
+    }
+    let report = runner::run(&q, lang, &code, &tests).await?;
+    let summary = report.summary(if submit { "Submit" } else { "Run" });
+    tracing::info!(round_id, submit, status = ?report.status, passed = report.passed, total = report.total, "code run");
+    if let Some(r) = state.rounds.lock().await.get_mut(&round_id) {
+        r.pending_run = Some(summary);
+    }
+    Ok(report)
 }
 
 /// Returned by `send_answer` while the interviewer is still replying.

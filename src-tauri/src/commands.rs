@@ -114,6 +114,12 @@ pub async fn loop_verdict(app: AppHandle, loop_id: i64) -> Result<Value> {
     live::loop_verdict(&app, loop_id).await
 }
 
+/// Run (examples) or Submit (all tests) for the current coding round.
+#[tauri::command]
+pub async fn run_code(app: AppHandle, round_id: i64, code: String, submit: bool) -> Result<crate::runner::Report> {
+    live::run_code(&app, round_id, code, submit).await
+}
+
 /// Deletes a finished round with its transcript and feedback.
 #[tauri::command]
 pub async fn delete_round(state: State<'_, AppState>, round_id: i64) -> Result<()> {

@@ -399,3 +399,33 @@ code{font-family:var(--mono); font-size:.9em; background:var(--code-bg); padding
 .dlg .field{margin-top:16px}
 .btn.danger-fill{background:var(--bad); border-color:var(--bad); color:#fff}
 .btn.danger-fill:hover{background:var(--bad); filter:brightness(1.08)}
+
+/* ---------- coding round: problem tab + runner ---------- */
+.room-body.coding{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
+.room-body.coding .rail{display:none}
+.pane.problem{overflow:auto}
+.prob{padding:18px 20px 28px; font-size:14px; line-height:1.6; max-width:760px}
+.prob h2{display:flex; align-items:center; gap:10px; font-size:19px; margin-bottom:12px}
+.prob h3{font-size:14px; margin:18px 0 6px}
+.prob .prob-text p{margin:0 0 10px}
+.prob code{font:12.5px var(--mono); background:var(--surface-2); padding:1px 5px; border-radius:5px}
+.prob pre.ex{font:13px/1.6 var(--mono); background:var(--code-bg); border-left:3px solid var(--line-2); padding:10px 12px; border-radius:8px; white-space:pre-wrap}
+.prob .cons{padding-left:18px} .prob .cons li{margin:4px 0}
+.prob-foot{margin-top:14px; font-size:12.5px}
+.diff{font-size:12px; font-weight:650; padding:2px 9px; border-radius:99px}
+.diff.d-easy{color:var(--ok); background:var(--ok-soft)} .diff.d-medium{color:var(--warn); background:var(--warn-soft)} .diff.d-hard{color:var(--bad); background:var(--bad-soft)}
+.run-btns{display:inline-flex; gap:6px; margin-left:auto}
+.run-btns + .btn{margin-left:0}
+.run-out{max-height:42%; overflow:auto; border-top:1px solid var(--line); padding:10px 12px; font-size:13px}
+.run-head{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px}
+.run-head.ok b{color:var(--ok)} .run-head.bad b, .run-head.bad{color:var(--bad)}
+.run-head .muted{font-size:12px; margin-left:auto}
+.case{border:1px solid var(--line); border-radius:9px; margin:6px 0; padding:6px 10px}
+.case summary{cursor:pointer; display:flex; align-items:center; gap:8px; font-weight:600}
+.case summary .muted{margin-left:auto; font-weight:400; font-size:12px}
+.case .dot{width:8px; height:8px; border-radius:50%; background:var(--ok)} .case.fail .dot{background:var(--bad)}
+.case dl{display:grid; grid-template-columns:72px minmax(0,1fr); gap:6px 10px; margin:8px 0 2px}
+.case dt{color:var(--muted); font-size:12px} .case dd{margin:0; overflow-wrap:anywhere}
+.case code, .case pre, .run-err{font:12.5px/1.5 var(--mono); white-space:pre-wrap; margin:0}
+.run-err{color:var(--bad)}
+.run-btns .btn{margin-left:0}

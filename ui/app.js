@@ -273,6 +273,7 @@ async function openRoom(index){
   $("#sharedDot").hidden = true;
   applyVoiceUi();
   if (!voiceOn && SETTINGS && SETTINGS.voice.enabled) toast("VoiceStudio isn’t running, so this round is typed. Start it in Settings.", "err");
+  showProblem(null);
   renderShared(); selectTab(CAT.ROUNDS[k].tab === "shared" ? "editor" : CAT.ROUNDS[k].tab);
   buildWaves();
   setPhase("thinking");
@@ -288,6 +289,7 @@ async function openRoom(index){
     }
     s.roundId = info.round_id;
     s.minutes = info.plan.minutes;
+    if (info.problem) showProblem(info.problem);
     // Rust decides whether voice really started (VoiceStudio health, audio device). Trust it when it says.
     if (typeof info.voice === "boolean" && info.voice !== s.voiceOn){
       s.voiceOn = info.voice; applyVoiceUi();
@@ -625,6 +627,65 @@ $("#answer").addEventListener("input", () => {
 });
 
 $("#endBtn").onclick = () => endRound();
+
+/* ---------------- coding problem + runner ---------------- */
+const STATUS_TEXT = {accepted: "Accepted", wrong_answer: "Wrong answer", runtime_error: "Runtime error", time_limit: "Time limit exceeded", compile_error: "Compile error"};
+function showProblem(p){
+  const on = !!p;
+  if (session) session.problem = p;
+  $("#problemTab").hidden = !on;
+  $(".room-body").classList.toggle("coding", on);
+  $("#runBtns").hidden = !(on && p.runnable);
+  $("#runOut").hidden = true; $("#runOut").innerHTML = "";
+  $("#edHint").hidden = on;
+  if (!on){ $("#probBody").innerHTML = ""; return; }
+  const ex = p.examples.map((e, i) => `<h3>Example ${i+1}</h3><pre class="ex"><b>Input:</b> ${esc(e.input)}\n<b>Output:</b> ${esc(JSON.stringify(e.output))}${e.explanation ? `\n<b>Explanation:</b> ${esc(e.explanation)}` : ""}</pre>`).join("");
+  $("#probBody").innerHTML = `
+    <h2>${esc(p.title)} <span class="diff d-${esc(p.difficulty.toLowerCase())}">${esc(p.difficulty)}</span></h2>
+    <div class="prob-text">${md(p.statement)}</div>
+    ${ex}
+    <h3>Constraints</h3><ul class="cons">${p.constraints.map(c => `<li><code>${esc(c)}</code></li>`).join("")}</ul>
+    <p class="muted prob-foot">${p.hidden} hidden tests${p.runnable ? " plus one full-size test run on Submit" : ""}. ${p.topics.length ? "Topics: " + esc(p.topics.join(", ")) : ""}</p>
+    ${p.runnable ? "" : `<p class="form-msg err">Run isn’t available for ${esc(loop.setup.lang)} yet. Use Java, Python, C++ or JavaScript to run tests.</p>`}`;
+  if (p.starter && !$("#code").value.trim()){ $("#code").value = p.starter; updateGutter(); }
+  selectTab("problem");
+}
+async function runCode(submit){
+  const s = session; if (!s || s.roundId === null || s.running) return;
+  s.running = true;
+  const btns = [$("#runBtn"), $("#submitBtn")]; btns.forEach(b => b.disabled = true);
+  const out = $("#runOut"); out.hidden = false;
+  out.innerHTML = `<div class="run-head"><span class="muted">${submit ? "Submitting… compiling and running every test." : "Running the examples…"}</span></div>`;
+  try{
+    const r = await api.invoke("run_code", {roundId: s.roundId, code: $("#code").value, submit});
+    if (session === s) out.innerHTML = runHtml(r, submit);
+  }catch(e){
+    if (session === s) out.innerHTML = `<div class="run-head bad">${esc(errText(e))}</div>`;
+  }finally{
+    s.running = false; btns.forEach(b => b.disabled = false);
+  }
+}
+function runHtml(r, submit){
+  const ok = r.status === "accepted";
+  const head = `<div class="run-head ${ok ? "ok" : "bad"}"><b>${STATUS_TEXT[r.status] || r.status}</b>
+    ${r.status === "compile_error" ? "" : `<span>${r.passed} / ${r.total} passed${ok ? ` · slowest ${Math.round(r.max_ms)} ms` : ""}</span>`}
+    <span class="muted">${submit ? "Submit" : "Run"} · the interviewer sees this with your next message</span></div>`;
+  if (r.status === "compile_error") return head + `<pre class="run-err">${esc(r.compile_error || "")}</pre>`;
+  // Examples always; hidden and large tests only when they fail (as on LeetCode).
+  const shown = r.cases.filter(c => !c.skipped && (c.kind === "example" || !c.passed));
+  const label = c => c.kind === "example" ? "Example" : c.kind === "stress" ? "Large test" : "Hidden test";
+  const firstBad = shown.findIndex(c => !c.passed);
+  return head + shown.map((c, i) => `
+    <details class="case ${c.passed ? "pass" : "fail"}" ${i === firstBad ? "open" : ""}>
+      <summary><i class="dot"></i>${label(c)} ${c.kind === "example" ? r.cases.indexOf(c) + 1 : ""}${c.ms != null ? `<span class="muted">${c.ms < 1 ? "<1" : Math.round(c.ms)} ms</span>` : ""}</summary>
+      <dl><dt>Input</dt><dd><code>${esc(c.input)}</code></dd>
+      <dt>Expected</dt><dd><code>${esc(JSON.stringify(c.expected))}</code></dd>
+      ${c.error ? `<dt>Error</dt><dd><pre class="run-err">${esc(c.error)}</pre></dd>` : `<dt>Output</dt><dd><code>${esc(JSON.stringify(c.got))}</code></dd>`}
+      ${c.stdout ? `<dt>Stdout</dt><dd><pre>${esc(c.stdout)}</pre></dd>` : ""}</dl>
+    </details>`).join("");
+}
+$("#runBtn").onclick = () => runCode(false);
+$("#submitBtn").onclick = () => runCode(true);
 
 /* Terminate: typed confirmation, then stop with no feedback and delete the round. */
 const TERM_WORD = "terminate";

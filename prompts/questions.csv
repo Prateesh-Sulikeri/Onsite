@@ -1,0 +1,303 @@
+id,title,difficulty,levels,topics,companies,function,params,returns,compare,statement,constraints,tests,hints,time,space,follow_ups,reference,stress
+two-sum,Two Sum,Easy,ng;sde1,array;hash-map,amazon;google;meta,twoSum,nums: int[]; target: int,int[],any_order,"Given an integer array `nums` and an integer `target`, return the **indices** of the two numbers that add up to `target`.
+
+Each input has exactly one solution, and you may not use the same element twice. Return the answer in any order.","2 <= nums.length <= 10^4
+-10^9 <= nums[i] <= 10^9
+-10^9 <= target <= 10^9
+Exactly one valid answer exists.","[{""args"":[[2,7,11,15],9],""expected"":[0,1],""example"":true,""explanation"":""nums[0] + nums[1] = 2 + 7 = 9, so return [0, 1].""},{""args"":[[3,2,4],6],""expected"":[1,2],""example"":true,""explanation"":""nums[1] + nums[2] = 2 + 4 = 6.""},{""args"":[[3,3],6],""expected"":[0,1],""example"":true},{""args"":[[-1,-2,-3,-4,-5],-8],""expected"":[2,4]},{""args"":[[0,4,3,0],0],""expected"":[0,3]},{""args"":[[1000000000,-999999995,7],5],""expected"":[0,1]}]","A brute force checks every pair in O(n^2).
+For each number, what other value do you need? Can you look it up in O(1)?",O(n),O(n),"What if the array is sorted? Can you do it in O(1) extra space?
+What if there can be many valid pairs and you must return all of them?","class Solution:
+    def twoSum(self, nums, target):
+        seen = {}
+        for i, x in enumerate(nums):
+            if target - x in seen:
+                return [seen[target - x], i]
+            seen[x] = i","def gen(rng):
+    n = 10000
+    nums = rng.sample(range(-10**9, 10**9), n)
+    i, j = rng.sample(range(n), 2)
+    return [nums, nums[i] + nums[j]]"
+valid-parentheses,Valid Parentheses,Easy,ng;sde1,stack;string,amazon;microsoft,isValid,s: string,bool,exact,"Given a string `s` made only of the characters `'('`, `')'`, `'{'`, `'}'`, `'['` and `']'`, decide whether it is valid.
+
+A string is valid when every opening bracket is closed by the same type of bracket, brackets close in the correct order, and every closing bracket has a matching opening bracket.","1 <= s.length <= 10^4
+s contains only '()[]{}'.","[{""args"":[""()""],""expected"":true,""example"":true},{""args"":[""()[]{}""],""expected"":true,""example"":true},{""args"":[""(]""],""expected"":false,""example"":true,""explanation"":""The '(' is closed by a ']'.""},{""args"":[""([])""],""expected"":true,""example"":true},{""args"":[""(""],""expected"":false},{""args"":[""]""],""expected"":false},{""args"":[""([)]""],""expected"":false},{""args"":[""{[]}""],""expected"":true},{""args"":[""((((((((((""],""expected"":false}]","Track the brackets that are still open.
+The most recent open bracket must be closed first.",O(n),O(n),How would you report the index of the first error?,"class Solution:
+    def isValid(self, s):
+        st = []
+        pair = {')': '(', ']': '[', '}': '{'}
+        for c in s:
+            if c in pair:
+                if not st or st.pop() != pair[c]:
+                    return False
+            else:
+                st.append(c)
+        return not st","def gen(rng):
+    n = 10000
+    s = ''.join(rng.choice('([{') for _ in range(n // 2))
+    close = {'(': ')', '[': ']', '{': '}'}
+    return [s + ''.join(close[c] for c in reversed(s))]"
+best-time-to-buy-and-sell-stock,Best Time to Buy and Sell Stock,Easy,ng;sde1,array;greedy,amazon;meta;bank,maxProfit,prices: int[],int,exact,"You are given an array `prices` where `prices[i]` is the price of a stock on day `i`.
+
+Choose one day to buy and a later day to sell to maximise your profit. Return the maximum profit you can make. If no profit is possible, return `0`.","1 <= prices.length <= 10^5
+0 <= prices[i] <= 10^4","[{""args"":[[7,1,5,3,6,4]],""expected"":5,""example"":true,""explanation"":""Buy on day 1 (price 1) and sell on day 4 (price 6): profit 6 - 1 = 5.""},{""args"":[[7,6,4,3,1]],""expected"":0,""example"":true,""explanation"":""Prices only fall, so no trade makes a profit.""},{""args"":[[1]],""expected"":0},{""args"":[[2,4,1]],""expected"":2},{""args"":[[3,3,3]],""expected"":0},{""args"":[[1,2]],""expected"":1}]","For each day as a selling day, what is the best buying day before it?",O(n),O(1),"What if you may make as many trades as you like?
+What if each trade has a fee?","class Solution:
+    def maxProfit(self, prices):
+        lo, best = 10**9, 0
+        for p in prices:
+            lo = min(lo, p)
+            best = max(best, p - lo)
+        return best","def gen(rng):
+    return [[rng.randint(0, 10**4) for _ in range(10**5)]]"
+binary-search,Binary Search,Easy,ng;sde1,binary-search;array,,search,nums: int[]; target: int,int,exact,"Given an array of distinct integers `nums` sorted in ascending order and an integer `target`, return the index of `target` in `nums`, or `-1` if it is not there.
+
+Your solution must run in O(log n) time.","1 <= nums.length <= 10^4
+-10^4 < nums[i], target < 10^4
+All values in nums are distinct and sorted ascending.","[{""args"":[[-1,0,3,5,9,12],9],""expected"":4,""example"":true,""explanation"":""9 is at index 4.""},{""args"":[[-1,0,3,5,9,12],2],""expected"":-1,""example"":true,""explanation"":""2 is not in nums.""},{""args"":[[5],5],""expected"":0},{""args"":[[5],-5],""expected"":-1},{""args"":[[1,3],3],""expected"":1},{""args"":[[1,3],1],""expected"":0},{""args"":[[1,3],2],""expected"":-1}]",Compare target with the middle element and discard half of the range.,O(log n),O(1),Return the first index where target could be inserted to keep the array sorted.,"class Solution:
+    def search(self, nums, target):
+        lo, hi = 0, len(nums) - 1
+        while lo <= hi:
+            m = (lo + hi) // 2
+            if nums[m] == target: return m
+            if nums[m] < target: lo = m + 1
+            else: hi = m - 1
+        return -1","def gen(rng):
+    nums = sorted(rng.sample(range(-9999, 10000), 10000))
+    return [nums, rng.choice([nums[rng.randrange(10000)], 10**4 - 1 if nums[-1] != 9999 else -9999])]"
+valid-anagram,Valid Anagram,Easy,ng;sde1,hash-map;string;sorting,,isAnagram,s: string; t: string,bool,exact,"Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.
+
+An anagram uses exactly the same letters, the same number of times, in any order.","1 <= s.length, t.length <= 5 * 10^4
+s and t contain lowercase English letters only.","[{""args"":[""anagram"",""nagaram""],""expected"":true,""example"":true},{""args"":[""rat"",""car""],""expected"":false,""example"":true},{""args"":[""a"",""a""],""expected"":true},{""args"":[""a"",""b""],""expected"":false},{""args"":[""ab"",""a""],""expected"":false},{""args"":[""aacc"",""ccac""],""expected"":false}]",Count each letter.,O(n),O(1) (26 letters),What if the strings contain any Unicode characters?,"class Solution:
+    def isAnagram(self, s, t):
+        from collections import Counter
+        return Counter(s) == Counter(t)","def gen(rng):
+    s = ''.join(rng.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(50000))
+    t = list(s); rng.shuffle(t)
+    if rng.random() < 0.5: t[0] = 'a' if t[0] != 'a' else 'b'
+    return [s, ''.join(t)]"
+longest-substring-without-repeating-characters,Longest Substring Without Repeating Characters,Medium,sde1;sde2,sliding-window;hash-map;string,amazon;google;microsoft,lengthOfLongestSubstring,s: string,int,exact,"Given a string `s`, return the length of the longest **substring** that contains no repeated characters.
+
+A substring is a contiguous run of characters within the string.","0 <= s.length <= 5 * 10^4
+s contains English letters, digits, symbols and spaces.","[{""args"":[""abcabcbb""],""expected"":3,""example"":true,""explanation"":""The answer is \""abc\"", with length 3.""},{""args"":[""bbbbb""],""expected"":1,""example"":true,""explanation"":""The answer is \""b\"", with length 1.""},{""args"":[""pwwkew""],""expected"":3,""example"":true,""explanation"":""The answer is \""wke\"". \""pwke\"" is a subsequence, not a substring.""},{""args"":[""""],""expected"":0},{""args"":["" ""],""expected"":1},{""args"":[""dvdf""],""expected"":3},{""args"":[""abba""],""expected"":2},{""args"":[""tmmzuxt""],""expected"":5}]","Keep a window with no repeats and grow it to the right.
+When a repeat enters, where must the left edge jump to?",O(n),"O(min(n, alphabet))",Allow at most k distinct characters instead.,"class Solution:
+    def lengthOfLongestSubstring(self, s):
+        last, lo, best = {}, 0, 0
+        for i, c in enumerate(s):
+            if c in last and last[c] >= lo:
+                lo = last[c] + 1
+            last[c] = i
+            best = max(best, i - lo + 1)
+        return best","def gen(rng):
+    import string
+    alpha = string.ascii_letters + string.digits + ' !?'
+    return [''.join(rng.choice(alpha) for _ in range(50000))]"
+group-anagrams,Group Anagrams,Medium,sde1;sde2,hash-map;string;sorting,amazon;meta,groupAnagrams,strs: string[],list<list<string>>,nested_any_order,"Given an array of strings `strs`, group the anagrams together. You can return the groups in any order, and the words inside a group in any order.
+
+Two words are anagrams when they use exactly the same letters the same number of times.","1 <= strs.length <= 10^4
+0 <= strs[i].length <= 100
+strs[i] contains lowercase English letters only.","[{""args"":[[""eat"",""tea"",""tan"",""ate"",""nat"",""bat""]],""expected"":[[""eat"",""tea"",""ate""],[""tan"",""nat""],[""bat""]],""example"":true,""explanation"":""\""bat\"" has no anagram here. \""nat\"" and \""tan\"" are anagrams. \""ate\"", \""eat\"" and \""tea\"" are anagrams.""},{""args"":[[""""]],""expected"":[[""""]],""example"":true},{""args"":[[""a""]],""expected"":[[""a""]],""example"":true},{""args"":[["""",""""]],""expected"":[["""",""""]]},{""args"":[[""ab"",""ba"",""abc"",""cab"",""bca"",""x""]],""expected"":[[""ab"",""ba""],[""abc"",""cab"",""bca""],[""x""]]}]",Anagrams share a canonical key. What could that key be?,"O(n * k log k), or O(n * k) with letter counts",O(n * k),Can you avoid sorting each word?,"class Solution:
+    def groupAnagrams(self, strs):
+        g = {}
+        for w in strs:
+            g.setdefault(''.join(sorted(w)), []).append(w)
+        return list(g.values())","def gen(rng):
+    base = [''.join(rng.choice('abcde') for _ in range(rng.randint(0, 12))) for _ in range(500)]
+    out = []
+    for _ in range(10000):
+        w = list(rng.choice(base)); rng.shuffle(w); out.append(''.join(w))
+    return [out]"
+3sum,3Sum,Medium,sde1;sde2,array;two-pointers;sorting,meta;amazon;google,threeSum,nums: int[],list<list<int>>,nested_any_order,"Given an integer array `nums`, return all the triplets `[nums[i], nums[j], nums[k]]` where `i`, `j` and `k` are different indices and `nums[i] + nums[j] + nums[k] == 0`.
+
+The answer must not contain duplicate triplets. The triplets and the numbers inside them can be in any order.","3 <= nums.length <= 3000
+-10^5 <= nums[i] <= 10^5","[{""args"":[[-1,0,1,2,-1,-4]],""expected"":[[-1,-1,2],[-1,0,1]],""example"":true,""explanation"":""The distinct triplets that sum to 0 are [-1,-1,2] and [-1,0,1].""},{""args"":[[0,1,1]],""expected"":[],""example"":true,""explanation"":""No triplet sums to 0.""},{""args"":[[0,0,0]],""expected"":[[0,0,0]],""example"":true},{""args"":[[-2,0,1,1,2]],""expected"":[[-2,0,2],[-2,1,1]]},{""args"":[[1,2,-2,-1]],""expected"":[]},{""args"":[[-4,-2,-2,-2,0,1,2,2,2,3,3,4,4,6,6]],""expected"":[[-4,-2,6],[-4,0,4],[-4,1,3],[-4,2,2],[-2,-2,4],[-2,0,2]]}]","Sort first.
+Fix one number, then find pairs for the rest with two pointers.
+Skip equal neighbours to avoid duplicates.",O(n^2),O(1) besides the output,Return the count of triplets with sum below a target.,"class Solution:
+    def threeSum(self, nums):
+        nums = sorted(nums); out = []
+        for i in range(len(nums) - 2):
+            if i and nums[i] == nums[i - 1]: continue
+            lo, hi = i + 1, len(nums) - 1
+            while lo < hi:
+                s = nums[i] + nums[lo] + nums[hi]
+                if s < 0: lo += 1
+                elif s > 0: hi -= 1
+                else:
+                    out.append([nums[i], nums[lo], nums[hi]])
+                    while lo < hi and nums[lo] == nums[lo + 1]: lo += 1
+                    lo += 1; hi -= 1
+        return out","def gen(rng):
+    return [[rng.randint(-1000, 1000) for _ in range(3000)]]"
+merge-intervals,Merge Intervals,Medium,sde1;sde2;senior,array;sorting;intervals,google;meta;stripe,merge,intervals: int[][],int[][],any_order,"Given an array of `intervals` where `intervals[i] = [start_i, end_i]`, merge every overlapping interval and return the intervals that cover all the input, with no overlaps.
+
+Intervals that touch, like `[1,4]` and `[4,5]`, count as overlapping.","1 <= intervals.length <= 10^4
+intervals[i].length == 2
+0 <= start_i <= end_i <= 10^4","[{""args"":[[[1,3],[2,6],[8,10],[15,18]]],""expected"":[[1,6],[8,10],[15,18]],""example"":true,""explanation"":""[1,3] and [2,6] overlap, so they become [1,6].""},{""args"":[[[1,4],[4,5]]],""expected"":[[1,5]],""example"":true,""explanation"":""[1,4] and [4,5] touch, so they merge.""},{""args"":[[[1,4]]],""expected"":[[1,4]]},{""args"":[[[1,4],[0,4]]],""expected"":[[0,4]]},{""args"":[[[1,4],[2,3]]],""expected"":[[1,4]]},{""args"":[[[5,6],[1,2],[3,4]]],""expected"":[[1,2],[3,4],[5,6]]}]",Sort by start. Then each interval either extends the last merged one or starts a new one.,O(n log n),O(n),Intervals arrive one at a time; keep the merged set up to date.,"class Solution:
+    def merge(self, intervals):
+        out = []
+        for s, e in sorted(intervals):
+            if out and s <= out[-1][1]: out[-1][1] = max(out[-1][1], e)
+            else: out.append([s, e])
+        return out","def gen(rng):
+    iv = []
+    for _ in range(10000):
+        s = rng.randint(0, 10000); iv.append([s, min(10000, s + rng.randint(0, 3))])
+    return [iv]"
+number-of-islands,Number of Islands,Medium,sde1;sde2,graph;bfs;dfs;matrix,amazon;google;microsoft,numIslands,grid: char[][],int,exact,"Given an `m x n` grid of characters where `'1'` is land and `'0'` is water, return the number of islands.
+
+An island is land connected horizontally or vertically, surrounded by water. Assume the edges of the grid are all water.","m == grid.length
+n == grid[i].length
+1 <= m, n <= 300
+grid[i][j] is '0' or '1'.","[{""args"":[[[""1"",""1"",""1"",""1"",""0""],[""1"",""1"",""0"",""1"",""0""],[""1"",""1"",""0"",""0"",""0""],[""0"",""0"",""0"",""0"",""0""]]],""expected"":1,""example"":true},{""args"":[[[""1"",""1"",""0"",""0"",""0""],[""1"",""1"",""0"",""0"",""0""],[""0"",""0"",""1"",""0"",""0""],[""0"",""0"",""0"",""1"",""1""]]],""expected"":3,""example"":true},{""args"":[[[""0""]]],""expected"":0},{""args"":[[[""1""]]],""expected"":1},{""args"":[[[""1"",""0"",""1""],[""0"",""1"",""0""],[""1"",""0"",""1""]]],""expected"":5}]","Each time you find unvisited land, you found a new island. Mark everything connected to it.",O(m * n),O(m * n) worst case for the stack or queue,Land is added one cell at a time; report the island count after each addition.,"class Solution:
+    def numIslands(self, grid):
+        m, n = len(grid), len(grid[0]); seen = [[False] * n for _ in range(m)]; c = 0
+        for i in range(m):
+            for j in range(n):
+                if grid[i][j] == '1' and not seen[i][j]:
+                    c += 1; st = [(i, j)]; seen[i][j] = True
+                    while st:
+                        a, b = st.pop()
+                        for x, y in ((a+1,b),(a-1,b),(a,b+1),(a,b-1)):
+                            if 0 <= x < m and 0 <= y < n and grid[x][y] == '1' and not seen[x][y]:
+                                seen[x][y] = True; st.append((x, y))
+        return c","def gen(rng):
+    # One long snake island: deep recursion breaks naive DFS without a big stack.
+    g = [['0'] * 300 for _ in range(300)]
+    for i in range(0, 300, 2):
+        for j in range(300): g[i][j] = '1'
+        if i + 1 < 300: g[i + 1][299 if (i // 2) % 2 == 0 else 0] = '1'
+    return [g]"
+top-k-frequent-elements,Top K Frequent Elements,Medium,sde1;sde2,hash-map;heap;bucket-sort,amazon;meta,topKFrequent,nums: int[]; k: int,int[],any_order,"Given an integer array `nums` and an integer `k`, return the `k` most frequent elements. You may return them in any order.","1 <= nums.length <= 10^5
+-10^4 <= nums[i] <= 10^4
+k is between 1 and the number of distinct elements.
+The answer is unique.","[{""args"":[[1,1,1,2,2,3],2],""expected"":[1,2],""example"":true},{""args"":[[1],1],""expected"":[1],""example"":true},{""args"":[[4,4,4,5,5,6,6,6,6],1],""expected"":[6]},{""args"":[[-1,-1,2],2],""expected"":[-1,2]}]","Count first. Then you need the k largest counts, which a heap or buckets give you without a full sort.","O(n log k) with a heap, O(n) with buckets",O(n),The numbers arrive as a stream.,"class Solution:
+    def topKFrequent(self, nums, k):
+        from collections import Counter
+        return [x for x, _ in Counter(nums).most_common(k)]","def gen(rng):
+    vals = rng.sample(range(-10**4, 10**4), 200)
+    nums = []
+    for r, v in enumerate(vals): nums += [v] * (r + 1)
+    nums += [rng.choice(vals[:50]) for _ in range(10**5 - len(nums))] if len(nums) < 10**5 else []
+    from collections import Counter
+    c = sorted(Counter(nums).values(), reverse=True)
+    k = next((i for i in range(10, 1, -1) if c[i - 1] != c[i]), 1)
+    return [nums, k]"
+product-of-array-except-self,Product of Array Except Self,Medium,sde1;sde2,array;prefix-sum,amazon;meta;microsoft,productExceptSelf,nums: int[],int[],exact,"Given an integer array `nums`, return an array `answer` where `answer[i]` is the product of every element of `nums` except `nums[i]`.
+
+Every such product fits in a 32-bit integer. Do it in O(n) time **without using division**.","2 <= nums.length <= 10^5
+-30 <= nums[i] <= 30
+Every prefix and suffix product fits in a 32-bit integer.","[{""args"":[[1,2,3,4]],""expected"":[24,12,8,6],""example"":true},{""args"":[[-1,1,0,-3,3]],""expected"":[0,0,9,0,0],""example"":true},{""args"":[[0,0]],""expected"":[0,0]},{""args"":[[2,3]],""expected"":[3,2]},{""args"":[[0,4,0]],""expected"":[0,0,0]},{""args"":[[5,0,2]],""expected"":[0,10,0]}]",answer[i] = (product of everything left of i) * (product of everything right of i).,O(n),O(1) besides the output,What changes if division were allowed? What about zeros?,"class Solution:
+    def productExceptSelf(self, nums):
+        n = len(nums); out = [1] * n; p = 1
+        for i in range(n): out[i] = p; p *= nums[i]
+        p = 1
+        for i in range(n - 1, -1, -1): out[i] *= p; p *= nums[i]
+        return out","def gen(rng):
+    nums = [rng.choice([1, -1]) for _ in range(10**5)]
+    for i in rng.sample(range(10**5), 20): nums[i] = rng.choice([2, -2, 3])
+    return [nums]"
+coin-change,Coin Change,Medium,sde1;sde2;senior,dynamic-programming;bfs,amazon;google;bank,coinChange,coins: int[]; amount: int,int,exact,"You are given coins of different denominations in `coins` and a total `amount` of money.
+
+Return the fewest coins needed to make up exactly `amount`. If no combination of coins can make it, return `-1`. You have an unlimited number of each coin.","1 <= coins.length <= 12
+1 <= coins[i] <= 2^31 - 1
+0 <= amount <= 10^4","[{""args"":[[1,2,5],11],""expected"":3,""example"":true,""explanation"":""11 = 5 + 5 + 1.""},{""args"":[[2],3],""expected"":-1,""example"":true,""explanation"":""3 can't be made from 2s.""},{""args"":[[1],0],""expected"":0,""example"":true},{""args"":[[186,419,83,408],6249],""expected"":20},{""args"":[[2,5,10,1],27],""expected"":4},{""args"":[[3,7],1],""expected"":-1},{""args"":[[2147483647],2],""expected"":-1}]",Greedy fails for some coin sets. Build up the answer for every amount from 0 to amount.,O(amount * coins),O(amount),Count the number of distinct ways to make the amount instead.,"class Solution:
+    def coinChange(self, coins, amount):
+        INF = amount + 1; dp = [0] + [INF] * amount
+        for a in range(1, amount + 1):
+            for c in coins:
+                if c <= a and dp[a - c] + 1 < dp[a]: dp[a] = dp[a - c] + 1
+        return -1 if dp[amount] == INF else dp[amount]","def gen(rng):
+    return [rng.sample(range(1, 500), 12), 10**4]"
+search-in-rotated-sorted-array,Search in Rotated Sorted Array,Medium,sde1;sde2,binary-search;array,meta;microsoft;amazon,search,nums: int[]; target: int,int,exact,"An array of distinct integers sorted ascending was rotated at an unknown pivot, so `[0,1,2,4,5,6,7]` might now be `[4,5,6,7,0,1,2]`.
+
+Given the rotated array `nums` and an integer `target`, return the index of `target`, or `-1` if it is not in `nums`. Your solution must run in O(log n) time.","1 <= nums.length <= 5000
+-10^4 <= nums[i], target <= 10^4
+All values are distinct.
+nums is an ascending array, possibly rotated.","[{""args"":[[4,5,6,7,0,1,2],0],""expected"":4,""example"":true},{""args"":[[4,5,6,7,0,1,2],3],""expected"":-1,""example"":true},{""args"":[[1],0],""expected"":-1,""example"":true},{""args"":[[1],1],""expected"":0},{""args"":[[3,1],1],""expected"":1},{""args"":[[5,1,3],5],""expected"":0},{""args"":[[1,3,5],5],""expected"":2},{""args"":[[6,7,1,2,3,4,5],6],""expected"":0}]","At any midpoint, one half is sorted. Is the target inside that sorted half?",O(log n),O(1),What if the array can contain duplicates?,"class Solution:
+    def search(self, nums, target):
+        try: return nums.index(target)
+        except ValueError: return -1","def gen(rng):
+    a = sorted(rng.sample(range(-10**4, 10**4), 5000)); r = rng.randrange(5000)
+    a = a[r:] + a[:r]
+    return [a, rng.choice(a)]"
+daily-temperatures,Daily Temperatures,Medium,sde1;sde2,stack;monotonic-stack;array,meta;amazon,dailyTemperatures,temperatures: int[],int[],exact,"Given an array `temperatures` of daily temperatures, return an array `answer` where `answer[i]` is the number of days you have to wait after day `i` for a warmer temperature.
+
+If no warmer day comes later, `answer[i]` is `0`.","1 <= temperatures.length <= 10^5
+30 <= temperatures[i] <= 100","[{""args"":[[73,74,75,71,69,72,76,73]],""expected"":[1,1,4,2,1,1,0,0],""example"":true},{""args"":[[30,40,50,60]],""expected"":[1,1,1,0],""example"":true},{""args"":[[30,60,90]],""expected"":[1,1,0],""example"":true},{""args"":[[100]],""expected"":[0]},{""args"":[[50,50,50]],""expected"":[0,0,0]},{""args"":[[90,80,70,100]],""expected"":[3,2,1,0]}]",Keep the days that are still waiting for a warmer day. Which order do they get answered in?,O(n),O(n),Return the warmer temperature itself instead of the wait.,"class Solution:
+    def dailyTemperatures(self, t):
+        out = [0] * len(t); st = []
+        for i, x in enumerate(t):
+            while st and t[st[-1]] < x:
+                j = st.pop(); out[j] = i - j
+            st.append(i)
+        return out","def gen(rng):
+    # Falling then one hot day: O(n^2) scans time out here.
+    n = 10**5
+    return [[100 - (i * 70 // n) for i in range(n - 1)] + [100]]"
+trapping-rain-water,Trapping Rain Water,Hard,sde2;senior;staff,two-pointers;stack;array,google;amazon;meta,trap,height: int[],int,exact,"Given `n` non-negative integers that describe an elevation map where every bar has width 1, compute how much water the map traps after it rains.","n == height.length
+1 <= n <= 2 * 10^4
+0 <= height[i] <= 10^5","[{""args"":[[0,1,0,2,1,0,1,3,2,1,2,1]],""expected"":6,""example"":true,""explanation"":""6 units of water are trapped between the bars.""},{""args"":[[4,2,0,3,2,5]],""expected"":9,""example"":true},{""args"":[[0]],""expected"":0},{""args"":[[5,4,3,2,1]],""expected"":0},{""args"":[[2,0,2]],""expected"":2},{""args"":[[3,0,0,2,0,4]],""expected"":10}]","Water above bar i = min(tallest bar to its left, tallest to its right) - height[i].
+Can two pointers find those maxima without extra arrays?",O(n),O(1),The 2D version: water trapped on a height grid.,"class Solution:
+    def trap(self, h):
+        l, r = 0, len(h) - 1; lm = rm = w = 0
+        while l < r:
+            if h[l] < h[r]:
+                lm = max(lm, h[l]); w += lm - h[l]; l += 1
+            else:
+                rm = max(rm, h[r]); w += rm - h[r]; r -= 1
+        return w","def gen(rng):
+    return [[rng.randint(0, 10**5) for _ in range(2 * 10**4)]]"
+median-of-two-sorted-arrays,Median of Two Sorted Arrays,Hard,senior;staff,binary-search;divide-and-conquer,google;amazon,findMedianSortedArrays,nums1: int[]; nums2: int[],double,float,"Given two sorted arrays `nums1` and `nums2` of sizes `m` and `n`, return the median of the two arrays combined.
+
+The overall run time should be O(log (m + n)).","0 <= m, n <= 1000
+1 <= m + n <= 2000
+-10^6 <= nums1[i], nums2[i] <= 10^6","[{""args"":[[1,3],[2]],""expected"":2.0,""example"":true,""explanation"":""The merged array is [1,2,3]; the median is 2.""},{""args"":[[1,2],[3,4]],""expected"":2.5,""example"":true,""explanation"":""The merged array is [1,2,3,4]; the median is (2 + 3) / 2 = 2.5.""},{""args"":[[],[1]],""expected"":1.0},{""args"":[[2],[]],""expected"":2.0},{""args"":[[1,1],[1,1]],""expected"":1.0},{""args"":[[1,2,3,4,5],[6,7,8,9,10,11]],""expected"":6.0}]","Partition both arrays so the left halves together hold half the elements, and every left element is <= every right element.
+Binary search the partition point in the shorter array.","O(log min(m, n))",O(1),Find the k-th smallest element of the two arrays.,"class Solution:
+    def findMedianSortedArrays(self, a, b):
+        c = sorted(a + b); n = len(c)
+        return float(c[n // 2]) if n % 2 else (c[n // 2 - 1] + c[n // 2]) / 2","def gen(rng):
+    return [sorted(rng.randint(-10**6, 10**6) for _ in range(1000)), sorted(rng.randint(-10**6, 10**6) for _ in range(999))]"
+sliding-window-maximum,Sliding Window Maximum,Hard,sde2;senior;staff,sliding-window;monotonic-queue;heap,amazon;google,maxSlidingWindow,nums: int[]; k: int,int[],exact,"You are given an integer array `nums` and a window of size `k` that moves from the far left of the array to the far right, one position at a time. You can only see the `k` numbers inside the window.
+
+Return the maximum of each window position.","1 <= nums.length <= 10^5
+-10^4 <= nums[i] <= 10^4
+1 <= k <= nums.length","[{""args"":[[1,3,-1,-3,5,3,6,7],3],""expected"":[3,3,5,5,6,7],""example"":true,""explanation"":""Windows: [1 3 -1] max 3, [3 -1 -3] max 3, [-1 -3 5] max 5, [-3 5 3] max 5, [5 3 6] max 6, [3 6 7] max 7.""},{""args"":[[1],1],""expected"":[1],""example"":true},{""args"":[[9,8,7,6,5],2],""expected"":[9,8,7,6]},{""args"":[[1,2,3,4],4],""expected"":[4]},{""args"":[[4,-2],1],""expected"":[4,-2]}]",Keep indices in a deque whose values are decreasing. The front is always the window's maximum.,O(n),O(k),Return the median of each window instead.,"class Solution:
+    def maxSlidingWindow(self, nums, k):
+        from collections import deque
+        d = deque(); out = []
+        for i, x in enumerate(nums):
+            while d and nums[d[-1]] <= x: d.pop()
+            d.append(i)
+            if d[0] <= i - k: d.popleft()
+            if i >= k - 1: out.append(nums[d[0]])
+        return out","def gen(rng):
+    n = 10**5
+    return [[n - i for i in range(n)], 5 * 10**4]"
+minimum-window-substring,Minimum Window Substring,Hard,sde2;senior;staff,sliding-window;hash-map;string,meta;google;uber,minWindow,s: string; t: string,string,exact,"Given strings `s` and `t`, return the shortest substring of `s` that contains every character of `t`, duplicates included. If there is no such substring, return the empty string `""""`.
+
+The test cases are built so that the answer is unique.","1 <= s.length, t.length <= 10^5
+s and t contain upper and lower case English letters.","[{""args"":[""ADOBECODEBANC"",""ABC""],""expected"":""BANC"",""example"":true,""explanation"":""\""BANC\"" contains 'A', 'B' and 'C' and is the shortest such substring.""},{""args"":[""a"",""a""],""expected"":""a"",""example"":true},{""args"":[""a"",""aa""],""expected"":"""",""example"":true,""explanation"":""t needs two 'a's but s has only one.""},{""args"":[""ab"",""b""],""expected"":""b""},{""args"":[""bba"",""ab""],""expected"":""ba""},{""args"":[""aaflslflsldkalskaaa"",""aaa""],""expected"":""aaa""}]","Expand the right edge until the window has everything, then shrink the left edge as far as you can.",O(|s| + |t|),O(alphabet),Characters of t must appear in order (a subsequence).,"class Solution:
+    def minWindow(self, s, t):
+        from collections import Counter
+        need = Counter(t); miss = len(t); lo = 0; best = (0, 10**9)
+        for hi, c in enumerate(s, 1):
+            if need[c] > 0: miss -= 1
+            need[c] -= 1
+            if miss == 0:
+                while need[s[lo]] < 0: need[s[lo]] += 1; lo += 1
+                if hi - lo < best[1] - best[0]: best = (lo, hi)
+                need[s[lo]] += 1; miss += 1; lo += 1
+        return '' if best[1] == 10**9 else s[best[0]:best[1]]","def gen(rng):
+    n = 10**5
+    s = ['a'] * n; s[n // 3] = 'B'; s[2 * n // 3] = 'C'
+    return [''.join(s), 'BC']"
+largest-rectangle-in-histogram,Largest Rectangle in Histogram,Hard,senior;staff,stack;monotonic-stack;array,google;amazon,largestRectangleArea,heights: int[],int,exact,"Given an array `heights` where each value is the height of a bar of width 1 in a histogram, return the area of the largest rectangle that fits inside the histogram.","1 <= heights.length <= 10^5
+0 <= heights[i] <= 10^4","[{""args"":[[2,1,5,6,2,3]],""expected"":10,""example"":true,""explanation"":""The largest rectangle covers the bars of height 5 and 6: area 5 * 2 = 10.""},{""args"":[[2,4]],""expected"":4,""example"":true},{""args"":[[0]],""expected"":0},{""args"":[[1,1,1,1]],""expected"":4},{""args"":[[6,2,5,4,5,1,6]],""expected"":12},{""args"":[[2,1,2]],""expected"":3}]","For each bar, how far can a rectangle of its height stretch left and right?
+A stack of increasing heights tells you when a bar's rectangle ends.",O(n),O(n),Largest rectangle of 1s in a binary matrix.,"class Solution:
+    def largestRectangleArea(self, h):
+        st = []; best = 0
+        for i, x in enumerate(h + [0]):
+            start = i
+            while st and st[-1][1] >= x:
+                j, y = st.pop(); best = max(best, y * (i - j)); start = j
+            st.append((start, x))
+        return best","def gen(rng):
+    return [list(range(1, 10**5 + 1))]"

@@ -1,9 +1,11 @@
+pub mod bank;
 pub mod brain;
 pub mod catalog;
 mod commands;
 pub mod error;
 pub mod interview;
 pub mod panels;
+pub mod runner;
 pub mod store;
 pub mod voice;
 
@@ -45,6 +47,7 @@ pub struct AppState {
     pub panels: panels::Panels,
     pub prompts_dir: PathBuf,
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
+    pub bank: bank::Bank,
     pub voice: voice::Voice,
 }
 
@@ -113,6 +116,7 @@ pub fn run() {
                 store: Arc::new(Mutex::new(Store::open(&db)?)),
                 catalog,
                 panels: panels::Panels::load(&prompts_dir),
+                bank: bank::Bank::load(&prompts_dir),
                 prompts_dir,
                 rounds: Default::default(),
                 voice: Default::default(),
@@ -154,6 +158,7 @@ pub fn run() {
             commands::loop_verdict,
             commands::history,
             commands::delete_round,
+            commands::run_code,
             commands::voice_status,
             commands::voice_launch,
             commands::voice_test_speak,

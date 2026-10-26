@@ -308,13 +308,20 @@
 
         <div class="work">
           <div class="tabs" role="tablist">
+            <button class="tab" role="tab" data-tab="problem" aria-selected="false" id="problemTab" hidden><svg><use href="#i-bulb"/></svg>Problem</button>
             <button class="tab" role="tab" data-tab="editor" aria-selected="true"><svg><use href="#i-code"/></svg>Editor</button>
             <button class="tab" role="tab" data-tab="notes" aria-selected="false"><svg><use href="#i-pen"/></svg>Whiteboard</button>
             <button class="tab" role="tab" data-tab="shared" aria-selected="false"><svg><use href="#i-user"/></svg>From interviewer<i class="tab-dot" id="sharedDot" hidden></i></button>
           </div>
+          <div class="pane problem" data-pane="problem" hidden>
+            <div class="prob" id="probBody"></div>
+          </div>
           <div class="pane" data-pane="editor">
-            <div class="pane-bar"><span class="lang-tag" id="edLang"></span><span class="muted">The interviewer sees this when you send.</span><button class="btn ghost sm" id="sendWork">Share now</button></div>
+            <div class="pane-bar"><span class="lang-tag" id="edLang"></span><span class="muted" id="edHint">The interviewer sees this when you send.</span>
+              <span class="run-btns" id="runBtns" hidden><button class="btn sm" id="runBtn"><svg><use href="#i-play"/></svg>Run</button><button class="btn primary sm" id="submitBtn">Submit</button></span>
+              <button class="btn ghost sm" id="sendWork">Share now</button></div>
             <div class="editor"><div class="gutter" id="gutter">1</div><textarea id="code" spellcheck="false" aria-label="Code editor"></textarea></div>
+            <div class="run-out" id="runOut" hidden></div>
           </div>
           <div class="pane" data-pane="notes" hidden>
             <div class="pane-bar"><span class="muted">Design notes, diagrams as text, scratch work.</span><button class="btn ghost sm" id="sendWork2">Share now</button></div>
