@@ -130,6 +130,14 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
     creation, so one profile id = one stable voice. Do not lock profiles: unlock deletes the seed.
   - `/model/status` reports `loaded:false` even when speech works; only `loading` is meaningful.
     VoiceStudio unloads after ~15 min idle; the next call takes ~10 s, so Onsite warms up at round start.
+  - Persona design profiles: pass `ref_text` on `POST /profiles` and VoiceStudio renders that line as the
+    sample (ours ~10.5 s; the default line gave ~3.8 s and voices drifted, e.g. Neha going male). If the
+    engine isn't loaded, the profile is saved with *no* sample and speech falls back to instruct-only:
+    a new speaker per call. Onsite rebuilds persona profiles lacking a sample or our current line.
+  - VoiceStudio permanently *demotes* a sherpa dictation model after one session where it decoded
+    nothing (`prefs.json` `dictation.silent_models`), then serves whisper-tiny even when `&model=` asks
+    for Parakeet. Not exposed in the API; choosing the model via `POST /dictation/prefs` clears it.
+    Onsite does that at round start and restores the owner's own pick.
 
 ### audio/ — mic and speaker
 - cpal input at the device rate, resample to 16 kHz mono i16 for STT.

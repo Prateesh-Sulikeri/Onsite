@@ -308,12 +308,49 @@ async fn choose_model(vs: &VoiceStudio) -> Option<String> {
         }
     };
     let pick = pick_model(&models);
+    if let Some(m) = &pick {
+        undemote(vs, m).await;
+    }
     match &pick {
         Some(m) => tracing::info!(model = %m, "STT model"),
         None => tracing::warn!("no Parakeet dictation model installed; using VoiceStudio's default (often Whisper Tiny)"),
     }
     *MODEL.lock().unwrap() = Some(pick.clone());
     pick
+}
+
+/// Forget the cached pick, so the next answer probes (and un-demotes) again. Called per round.
+pub fn reset_model_choice() {
+    *MODEL.lock().unwrap() = None;
+}
+
+/// VoiceStudio demotes a sherpa model for good after one session where it decoded nothing
+/// (a known Parakeet glitch), and then silently serves Whisper Tiny instead of the model we
+/// ask for. Choosing a model in its dictation prefs clears the demotion, so we choose ours,
+/// then put the owner's own choice back.
+async fn undemote(vs: &VoiceStudio, model: &str) {
+    let url = format!("{}/dictation/prefs", http_base(vs));
+    let key = std::env::var("OMNIVOICE_API_KEY").ok().filter(|k| !k.is_empty());
+    let client = reqwest::Client::new();
+    let req = |m: reqwest::Method| {
+        let r = client.request(m, &url).timeout(Duration::from_secs(3));
+        match &key {
+            Some(k) => r.bearer_auth(k),
+            None => r,
+        }
+    };
+    let own = match req(reqwest::Method::GET).send().await {
+        Ok(r) => r.json::<Value>().await.ok().and_then(|v| v["model_id"].as_str().map(str::to_string)),
+        Err(e) => {
+            tracing::warn!("dictation prefs: {e}");
+            return;
+        }
+    };
+    for m in std::iter::once(model.to_string()).chain(own.filter(|o| o != model)) {
+        if let Err(e) = req(reqwest::Method::POST).json(&serde_json::json!({ "model_id": m })).send().await.and_then(|r| r.error_for_status()) {
+            tracing::warn!(model = %m, "dictation prefs: {e}");
+        }
+    }
 }
 
 // ---------- streaming ----------

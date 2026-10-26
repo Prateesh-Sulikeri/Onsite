@@ -163,6 +163,7 @@ impl Voice {
     /// Starts the voice loop for a round. Speech follows `say`/`turn_done` calls.
     pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings) -> Result<()> {
         self.end();
+        stt::reset_model_choice();
         let player = self.player()?;
         let vs = VoiceStudio::new(&settings.base_url);
         let (tx, mut rx) = unbounded_channel::<Cmd>();

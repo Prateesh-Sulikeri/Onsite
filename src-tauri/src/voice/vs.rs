@@ -25,6 +25,8 @@ pub struct Profile {
     pub kind: String,
     #[serde(default)]
     pub ref_audio_path: String,
+    #[serde(default)]
+    pub ref_text: String,
 }
 
 /// A panel interviewer's voice, created in VoiceStudio on first use.
@@ -37,6 +39,17 @@ pub struct PersonaVoice {
 
 pub fn persona_profile_name(person: &str) -> String {
     format!("Onsite · {person}")
+}
+
+/// Line VoiceStudio renders as a persona's identity sample. About 10 s: the default line
+/// gave a ~4 s clip, too short to hold the speaker, and long replies drifted to other voices.
+pub const PERSONA_SAMPLE: &str = "Hi, thanks for joining today. We'll start with a quick introduction, \
+and then move on to the main problem. Take your time, think out loud, and ask me anything that is unclear.";
+
+/// A persona profile is usable only when its sample was rendered from our current line.
+/// Without a sample, VoiceStudio falls back to instruct-only design: a new speaker every call.
+pub fn persona_profile_ok(p: &Profile) -> bool {
+    !p.ref_audio_path.trim().is_empty() && p.ref_text == PERSONA_SAMPLE
 }
 
 /// The voice to use: the saved profile id, else the first profile. Never VoiceStudio's
@@ -130,19 +143,42 @@ impl VoiceStudio {
         resolve_profile(saved, &self.profiles().await?)
     }
 
-    /// The panel interviewer's own voice: the profile named after them, created once from
-    /// their voice-design tags. A design profile clones one fixed sample, so the same
-    /// person sounds the same in every session.
+    /// The panel interviewer's own voice: the profile named after them, created from their
+    /// voice-design tags. A design profile clones one fixed sample, so the same person sounds
+    /// the same in every session. Profiles with no sample, or the old short one, are rebuilt.
     pub async fn persona_voice(&self, p: &PersonaVoice) -> Result<Profile> {
         let name = persona_profile_name(&p.name);
-        if let Some(found) = self.profiles().await?.into_iter().find(|x| x.name == name) {
-            return Ok(found);
+        for old in self.profiles().await?.into_iter().filter(|x| x.name == name) {
+            if persona_profile_ok(&old) {
+                return Ok(old);
+            }
+            tracing::info!(id = %old.id, %name, "rebuilding interviewer voice (missing or short sample)");
+            self.delete_profile(&old.id).await?;
         }
+        let made = self.create_persona(&name, p).await?;
+        if persona_profile_ok(&made) {
+            return Ok(made);
+        }
+        // VoiceStudio saves a design profile without its sample when the engine isn't loaded.
+        // Load it with one throwaway line, then render the sample again.
+        tracing::info!(%name, "voice sample pending; warming VoiceStudio and retrying");
+        let _ = self.speak("Okay.", &made, 8, 1.0, |_| {}).await;
+        self.delete_profile(&made.id).await?;
+        let made = self.create_persona(&name, p).await?;
+        if !persona_profile_ok(&made) {
+            self.delete_profile(&made.id).await?;
+            return Err(err("create voice", format!("{name} has no voice sample yet. Try again in a minute.")));
+        }
+        Ok(made)
+    }
+
+    async fn create_persona(&self, name: &str, p: &PersonaVoice) -> Result<Profile> {
         let form = reqwest::multipart::Form::new()
-            .text("name", name.clone())
+            .text("name", name.to_string())
             .text("kind", "design")
             .text("instruct", p.instruct.clone())
             .text("language", "English")
+            .text("ref_text", PERSONA_SAMPLE)
             .text("vd_states", p.states.to_string());
         let r = self
             .req(reqwest::Method::POST, "/profiles")
@@ -156,8 +192,19 @@ impl VoiceStudio {
             let detail = r.text().await.unwrap_or_default();
             return Err(err("create voice", format!("{status} {}", detail.chars().take(200).collect::<String>())));
         }
-        tracing::info!(%name, instruct = %p.instruct, "created interviewer voice");
-        self.profiles().await?.into_iter().find(|x| x.name == name).ok_or_else(|| err("create voice", "profile not listed after creation"))
+        let made = self.profiles().await?.into_iter().find(|x| x.name == name).ok_or_else(|| err("create voice", "profile not listed after creation"))?;
+        tracing::info!(%name, id = %made.id, instruct = %p.instruct, sample = !made.ref_audio_path.is_empty(), "created interviewer voice");
+        Ok(made)
+    }
+
+    async fn delete_profile(&self, id: &str) -> Result<()> {
+        self.req(reqwest::Method::DELETE, &format!("/profiles/{id}"))
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await
+            .and_then(|r| r.error_for_status())
+            .map_err(|e| err("delete voice", e))?;
+        Ok(())
     }
 
     /// Streams raw 24 kHz mono PCM16 to `on_pcm` as it arrives. No fallback engine or voice:
@@ -268,6 +315,16 @@ mod tests {
         assert_eq!(ps[0].kind, "design");
         let none: Vec<Profile> = serde_json::from_str(r#"[{"id":"x","name":"y","seed":null}]"#).unwrap();
         assert_eq!(none[0].seed, None);
+    }
+
+    #[test]
+    fn persona_profile_needs_current_sample() {
+        let mut p = prof("n");
+        assert!(!persona_profile_ok(&p), "no sample: instruct-only, random speaker");
+        p.ref_audio_path = "n.wav".into();
+        assert!(!persona_profile_ok(&p), "old default sample is too short");
+        p.ref_text = PERSONA_SAMPLE.into();
+        assert!(persona_profile_ok(&p));
     }
 
     #[test]
