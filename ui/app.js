@@ -648,7 +648,7 @@ $("#wrapReport").onclick = () => endRound();
 async function endRound(){
   const s = session;
   if (!s) return;
-  if (!s.closed && !confirm("End this round and get your feedback?")) return;
+  if (!s.closed && !confirm("End this round? You can get feedback afterwards.")) return;
   const pending = leaveRound();
   if (s.roundId === null){ nav("interviews"); return; }
   nav("report");
@@ -797,17 +797,42 @@ async function openReport(roundId, live){
   if (!rep){
     const st = answerStats(round);
     if (st.answers < MIN_ANSWERS || st.words < MIN_WORDS){ renderNothing(round, live, st); return; }
-    $("#repBody").innerHTML = `<div class="stack"><div class="panel" role="status"><h2>Writing your feedback…</h2><p class="muted" style="margin-top:6px">The panel is reviewing the transcript. This takes 20–90 seconds.</p></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
-    try{ rep = await api.invoke("generate_report", {roundId}); }
-    catch(e){
-      if (stale()) return;
-      if (NOT_ENOUGH.test(errText(e))) renderNothing(round, live, st, errText(e));
-      else renderReportError(errText(e), () => openReport(roundId, live));
-      return;
-    }
-    if (stale()) return;
+    renderUnreviewed(round, live, st, seq);
+    return;
   }
   renderReport(round, rep, live);
+}
+/* Feedback is written only when asked for: it costs a model call and the round may have been practice. */
+function renderUnreviewed(round, live, st, seq){
+  const {inLoop, hasNext} = loopButtons(round, live);
+  $("#repBody").innerHTML = `
+    <div class="empty-state panel">
+      <span class="empty-ic">${icon("check")}</span>
+      <h2>Round saved</h2>
+      <p class="muted">You gave ${st.answers} answers, ${st.words} words in all. Get written feedback now or come back to it later from Feedback.</p>
+      <div class="btn-row">
+        <button class="btn primary" id="getFeedback">${icon("sparkle")}Get feedback</button>
+        ${hasNext ? `<button class="btn" id="nextRound">Next: ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+        ${inLoop ? `<button class="btn ghost" id="retake">${icon("refresh")}Retake this round</button>` : ""}
+        <button class="btn ghost" data-nav="${inLoop ? "interviews" : "feedback"}">${icon("back")}Back</button>
+      </div>
+    </div>`;
+  bindStart("#retake", round.idx);
+  bindStart("#nextRound", round.idx + 1);
+  $("#getFeedback").onclick = () => writeFeedback(round, live, st, seq);
+}
+async function writeFeedback(round, live, st, seq){
+  const stale = () => seq !== reportSeq || $("#view-report").hidden;
+  $("#repBody").innerHTML = `<div class="stack"><div class="panel" role="status"><h2>Writing your feedback…</h2><p class="muted" style="margin-top:6px">The panel is reviewing the transcript. This takes 20–90 seconds.</p></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
+  let rep;
+  try{ rep = await api.invoke("generate_report", {roundId: round.id}); }
+  catch(e){
+    if (stale()) return;
+    if (NOT_ENOUGH.test(errText(e))) renderNothing(round, live, st, errText(e));
+    else renderReportError(errText(e), () => writeFeedback(round, live, st, seq));
+    return;
+  }
+  if (!stale()) renderReport(round, rep, live);
 }
 function renderReportError(message, retry){
   $("#repBody").innerHTML = `<div class="panel"><h2>Feedback didn’t come through</h2><p class="form-msg err" role="alert">${esc(message)}</p><div class="btn-row"><button class="btn primary" id="repRetry">${icon("refresh")}Try again</button><button class="btn ghost" data-nav="feedback">Back to feedback</button></div></div>`;
