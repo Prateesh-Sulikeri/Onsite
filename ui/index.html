@@ -256,6 +256,19 @@
     </section>
 
     <!-- ============ CALL ROOM ============ -->
+    <dialog class="dlg" id="termDlg" aria-labelledby="termTitle">
+      <form method="dialog" id="termForm">
+        <h2 id="termTitle">Terminate this interview?</h2>
+        <p class="muted">The interviewer stops now. You get no feedback, and the round and its transcript are deleted.</p>
+        <label class="field"><span>Type <b>terminate</b> to confirm</span>
+          <input type="text" id="termInput" autocomplete="off" spellcheck="false"></label>
+        <div class="btn-row">
+          <button class="btn primary danger-fill" id="termGo" value="go" disabled>Terminate</button>
+          <button class="btn ghost" value="cancel" formnovalidate>Keep going</button>
+        </div>
+      </form>
+    </dialog>
+
     <section class="view room" id="view-room" hidden>
       <header class="room-head">
         <div class="room-title">
@@ -264,6 +277,7 @@
         </div>
         <div class="room-meta">
           <span class="timer" id="timer"><i class="rec"></i><b id="timerText">00:00</b> <span id="timerLabel">remaining</span></span>
+          <button class="btn ghost danger sm" id="termBtn" title="Stop now, no feedback, nothing saved">Terminate</button>
         </div>
       </header>
 

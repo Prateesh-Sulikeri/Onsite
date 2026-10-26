@@ -390,3 +390,12 @@ code{font-family:var(--mono); font-size:.9em; background:var(--code-bg); padding
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important}
 }
+
+/* ---------- terminate dialog ---------- */
+.room-meta{display:flex; align-items:center; gap:10px}
+.dlg{max-width:440px; width:calc(100% - 32px); padding:24px; border:1px solid var(--line-2); border-radius:16px; background:var(--surface); color:var(--ink)}
+.dlg::backdrop{background:oklch(0 0 0 / .55)}
+.dlg h2{margin-bottom:8px}
+.dlg .field{margin-top:16px}
+.btn.danger-fill{background:var(--bad); border-color:var(--bad); color:#fff}
+.btn.danger-fill:hover{background:var(--bad); filter:brightness(1.08)}

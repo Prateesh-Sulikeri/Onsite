@@ -625,6 +625,25 @@ $("#answer").addEventListener("input", () => {
 });
 
 $("#endBtn").onclick = () => endRound();
+
+/* Terminate: typed confirmation, then stop with no feedback and delete the round. */
+const TERM_WORD = "terminate";
+$("#termBtn").onclick = () => {
+  if (!session) return;
+  $("#termInput").value = ""; $("#termGo").disabled = true; $("#termDlg").returnValue = "";
+  $("#termDlg").showModal(); $("#termInput").focus();
+};
+$("#termInput").oninput = e => $("#termGo").disabled = e.target.value.trim().toLowerCase() !== TERM_WORD;
+$("#termDlg").addEventListener("close", async () => {
+  if ($("#termDlg").returnValue !== "go" || $("#termInput").value.trim().toLowerCase() !== TERM_WORD) return;
+  const s = session; if (!s) return;
+  await leaveRound();
+  if (s.roundId !== null){
+    await api.invoke("delete_round", {roundId: s.roundId}).catch(e => toast(errText(e), "err"));
+  }
+  toast("Interview terminated.");
+  nav("interviews");
+});
 $("#wrapReport").onclick = () => endRound();
 async function endRound(){
   const s = session;
