@@ -16,6 +16,23 @@ pub struct Metrics {
     pub code_shares: usize,
 }
 
+/// Below this the report would be guesswork, so we don't ask Claude for one.
+const MIN_ANSWERS: usize = 2;
+const MIN_WORDS: usize = 40;
+
+/// True when the candidate said enough (at least 2 answers and 40 words) to review.
+/// Workspace-only turns have no text and don't count.
+pub fn enough_to_review(turns: &[Turn]) -> bool {
+    let answers: Vec<usize> = turns
+        .iter()
+        .filter(|t| t.who == "me")
+        .map(|t| t.text.trim())
+        .filter(|t| !t.is_empty() && *t != "(shared workspace)")
+        .map(|t| t.split_whitespace().count())
+        .collect();
+    answers.len() >= MIN_ANSWERS && answers.iter().sum::<usize>() >= MIN_WORDS
+}
+
 pub fn metrics(turns: &[Turn], actual_minutes: f64) -> Metrics {
     let words: Vec<usize> = turns
         .iter()
@@ -91,7 +108,10 @@ pub fn round_summary(name: &str, rep: &Value) -> String {
         .as_array()
         .map(|a| {
             a.iter()
-                .map(|d| format!("{} {}/4", d["name"].as_str().unwrap_or("?"), d["score"].as_i64().unwrap_or(0)))
+                .map(|d| {
+                    let score = d["score"].as_i64().map_or_else(|| "not assessed".to_string(), |n| format!("{n}/4"));
+                    format!("{} {score}", d["name"].as_str().unwrap_or("?"))
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         })
@@ -155,6 +175,26 @@ mod tests {
         );
         assert!(!p.contains("{{"));
         assert!(p.contains("Final editor (Java):\nint x;\n\nFinal whiteboard:\n(empty)"));
+    }
+
+    #[test]
+    fn review_needs_two_answers_and_forty_words() {
+        let words = |n: usize| vec!["w"; n].join(" ");
+        assert!(!enough_to_review(&[]));
+        assert!(!enough_to_review(&[turn("iv", &words(100), false), turn("me", "Hi", false)]));
+        // One long answer is still one answer.
+        assert!(!enough_to_review(&[turn("me", &words(80), false)]));
+        // Two answers, 39 words.
+        assert!(!enough_to_review(&[turn("me", &words(20), false), turn("me", &words(19), false)]));
+        // Workspace-only turns and the UI placeholder don't count.
+        assert!(!enough_to_review(&[turn("me", &words(40), false), turn("me", "", true), turn("me", "(shared workspace)", true)]));
+        assert!(enough_to_review(&[turn("me", &words(20), false), turn("me", &words(20), true)]));
+    }
+
+    #[test]
+    fn summary_line_with_unassessed_dimension() {
+        let rep = json!({"decision":"Lean hire","overall":55,"headline":"Short.","dimensions":[{"name":"Depth","score":null},{"name":"Clarity","score":3}],"held_back":[]});
+        assert_eq!(round_summary("Resume", &rep), "Resume: Lean hire, 55/100. Short. Dimensions: Depth not assessed, Clarity 3/4. Gaps: ");
     }
 
     #[test]

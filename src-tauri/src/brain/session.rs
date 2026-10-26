@@ -5,6 +5,7 @@ use super::splitter::{Piece, SentenceSplitter, END_MARKER};
 use super::stream::{parse_line, StreamEvent};
 use crate::error::{AppError, Result};
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -36,7 +37,8 @@ pub enum SessionEvent {
 #[derive(Default)]
 struct Shared {
     session_id: Mutex<Option<String>>,
-    turn_started: Mutex<Option<Instant>>,
+    /// One entry per sent turn still waiting for its `result`. Claude answers queued turns in order.
+    pending: Mutex<VecDeque<Instant>>,
     stderr_tail: Mutex<Vec<String>>,
     alive: AtomicBool,
     closing: AtomicBool,
@@ -82,7 +84,7 @@ impl ClaudeSession {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 tracing::warn!(round_id, "claude stderr: {line}");
-                let mut tail = sh.stderr_tail.lock().unwrap();
+                let mut tail = lock(&sh.stderr_tail);
                 tail.push(line);
                 if tail.len() > 20 {
                     tail.remove(0);
@@ -96,7 +98,13 @@ impl ClaudeSession {
     }
 
     pub fn session_id(&self) -> Option<String> {
-        self.shared.session_id.lock().unwrap().clone()
+        lock(&self.shared.session_id).clone()
+    }
+
+    /// True while a sent turn has no reply yet. A turn older than `stale` no longer counts,
+    /// so a hung reply can't lock the candidate out.
+    pub fn busy(&self, stale: Duration) -> bool {
+        self.is_alive() && lock(&self.shared.pending).front().is_some_and(|t| t.elapsed() < stale)
     }
 
     pub fn is_alive(&self) -> bool {
@@ -108,10 +116,25 @@ impl ClaudeSession {
         let stdin = self.stdin.as_mut().ok_or_else(|| AppError::Claude("session is closed".into()))?;
         let mut line = serde_json::to_string(&user_message(text))?;
         line.push('\n');
-        *self.shared.turn_started.lock().unwrap() = Some(Instant::now());
-        stdin.write_all(line.as_bytes()).await?;
-        stdin.flush().await?;
+        // Queued before the write so a fast reply always finds its start time.
+        lock(&self.shared.pending).push_back(Instant::now());
+        let res = async {
+            stdin.write_all(line.as_bytes()).await?;
+            stdin.flush().await
+        }
+        .await;
+        if let Err(e) = res {
+            lock(&self.shared.pending).pop_back();
+            tracing::warn!("writing to claude failed: {e}");
+            return Err(AppError::Claude("the interviewer process is gone".into()));
+        }
         Ok(())
+    }
+
+    /// Kills the process without reporting it as a crash (used when replacing a dead session).
+    pub fn discard(mut self) {
+        self.shared.closing.store(true, Ordering::SeqCst);
+        let _ = self.child.start_kill();
     }
 
     /// Closes stdin so claude exits cleanly; kills it after a timeout.
@@ -122,6 +145,22 @@ impl ClaudeSession {
             let _ = self.child.kill().await;
         }
         let _ = tokio::time::timeout(Duration::from_secs(2), &mut self.reader).await;
+    }
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Short, plain text for the UI. The full stderr is in the log.
+fn crash_message(last_stderr: Option<&str>) -> String {
+    let base = "The interviewer disconnected. Answer again to reconnect.";
+    match last_stderr.map(str::trim).filter(|l| !l.is_empty()) {
+        Some(l) => {
+            let l: String = l.chars().take(160).collect();
+            format!("{base} ({l})")
+        }
+        None => base.to_string(),
     }
 }
 
@@ -137,7 +176,7 @@ pub fn clean_final(text: &str) -> (String, bool) {
 
 async fn read_loop(
     round_id: i64,
-    stdout: tokio::process::ChildStdout,
+    stdout: impl tokio::io::AsyncRead + Unpin,
     shared: Arc<Shared>,
     tx: UnboundedSender<SessionEvent>,
 ) {
@@ -151,12 +190,16 @@ async fn read_loop(
                 continue;
             }
         };
-        let started = *shared.turn_started.lock().unwrap();
         for ev in events {
             if let StreamEvent::Init { session_id, .. } | StreamEvent::Result { session_id, .. } = &ev {
                 if !session_id.is_empty() {
-                    *shared.session_id.lock().unwrap() = Some(session_id.clone());
+                    *lock(&shared.session_id) = Some(session_id.clone());
                 }
+            }
+            let is_result = matches!(ev, StreamEvent::Result { .. });
+            let started = lock(&shared.pending).front().copied();
+            if is_result {
+                lock(&shared.pending).pop_front();
             }
             for out in turn.apply(round_id, ev, started) {
                 let _ = tx.send(out);
@@ -164,10 +207,13 @@ async fn read_loop(
         }
     }
     shared.alive.store(false, Ordering::SeqCst);
+    lock(&shared.pending).clear();
     if !shared.closing.load(Ordering::SeqCst) {
-        let tail = shared.stderr_tail.lock().unwrap().join("\n");
-        let message = if tail.is_empty() { "Claude Code stopped unexpectedly.".to_string() } else { tail };
-        let _ = tx.send(SessionEvent::Error { round_id, message, recoverable: true });
+        // Give the stderr reader a moment to catch the last line (e.g. a login error).
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let last = lock(&shared.stderr_tail).last().cloned();
+        tracing::warn!(round_id, ?last, "claude exited mid-round");
+        let _ = tx.send(SessionEvent::Error { round_id, message: crash_message(last.as_deref()), recoverable: true });
     }
     let _ = tx.send(SessionEvent::Exited { round_id });
 }
@@ -263,6 +309,42 @@ mod tests {
                 SessionEvent::Sentence { round_id: 1, text: "Ready?".into() }
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn queued_turns_each_get_their_own_start_and_crash_is_reported() {
+        let r = |t: &str| format!(r#"{{"type":"result","subtype":"success","result":"{t}","session_id":"s"}}"#);
+        let input = format!("{}\n{}\n", r("Apple."), r("Banana."));
+        let shared = Arc::new(Shared::default());
+        shared.alive.store(true, Ordering::SeqCst);
+        let t0 = Instant::now() - Duration::from_secs(5);
+        lock(&shared.pending).extend([t0, Instant::now()]);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        read_loop(1, input.as_bytes(), shared.clone(), tx).await;
+        let mut done = Vec::new();
+        let mut tail = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            match ev {
+                SessionEvent::TurnDone { text, total_ms, .. } => done.push((text, total_ms)),
+                SessionEvent::Error { .. } | SessionEvent::Exited { .. } => tail.push(ev),
+                _ => {}
+            }
+        }
+        assert_eq!(done.len(), 2);
+        assert!(done[0].1 >= 5000, "first turn timed from its own send");
+        assert!(done[1].1 < 5000, "second turn timed from its own send");
+        assert!(lock(&shared.pending).is_empty());
+        assert!(!shared.alive.load(Ordering::SeqCst));
+        assert!(matches!(tail[..], [SessionEvent::Error { recoverable: true, .. }, SessionEvent::Exited { .. }]));
+    }
+
+    #[test]
+    fn crash_message_is_short_and_plain() {
+        assert_eq!(crash_message(None), "The interviewer disconnected. Answer again to reconnect.");
+        assert_eq!(crash_message(Some("  ")), "The interviewer disconnected. Answer again to reconnect.");
+        let long = "x".repeat(500);
+        let m = crash_message(Some(&long));
+        assert!(m.starts_with("The interviewer disconnected.") && m.len() < 240);
     }
 
     #[test]
