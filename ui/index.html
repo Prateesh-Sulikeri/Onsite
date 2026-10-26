@@ -121,6 +121,10 @@
                   <option value="barraiser">Bar-raiser — hard, rarely hints</option>
                 </select>
               </label>
+              <label class="field span-2"><span>Interviewers</span>
+                <select id="panel"><option value="">Mixed — a different interviewer each round</option></select>
+                <small class="muted" id="panelPeople"></small>
+              </label>
               <label class="field"><span>Level</span><select id="level"></select></label>
               <label class="field"><span>Coding language</span>
                 <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select>
@@ -133,19 +137,19 @@
             </div>
 
             <div class="drops">
-              <div class="drop" id="dropResume" tabindex="0">
+              <div class="drop" id="dropResume">
                 <svg class="drop-ic"><use href="#i-upload"/></svg>
-                <div class="drop-tx"><b>Resume <small>(optional)</small></b><span id="resumeMsg">Drop a .txt or .md file, or <u>choose a file</u>, or <u data-paste="resume">paste text</u></span></div>
+                <div class="drop-tx"><b>Resume <small>(optional)</small></b><span id="resumeMsg">Drop a .txt or .md file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
                 <input type="file" id="resumeFile" accept=".txt,.md" hidden>
               </div>
-              <div class="drop" id="dropJd" tabindex="0">
+              <div class="drop" id="dropJd">
                 <svg class="drop-ic"><use href="#i-upload"/></svg>
-                <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <u>Choose a file</u> or <u data-paste="jd">paste text</u></span></div>
+                <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <button type="button" class="linkbtn" data-choose>Choose a file</button> or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
                 <input type="file" id="jdFile" accept=".txt,.md" hidden>
               </div>
             </div>
-            <textarea id="resume" class="paste" rows="6" placeholder="Resume text" hidden></textarea>
-            <textarea id="jd" class="paste" rows="5" placeholder="Job description text" hidden></textarea>
+            <textarea id="resume" class="paste" rows="6" placeholder="Resume text" aria-label="Resume text" hidden></textarea>
+            <textarea id="jd" class="paste" rows="5" placeholder="Job description text" aria-label="Job description text" hidden></textarea>
 
             <label class="field" style="margin-top:18px"><span>Anything else the panel should know? <small class="muted">(optional)</small></span>
               <textarea id="extra" rows="2" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea>
@@ -230,7 +234,7 @@
           <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
           <label class="switch"><input type="checkbox" id="vEnabled"><span class="track"></span><span>Spoken interviews</span></label>
           <div class="form-grid">
-            <label class="field"><span>Interviewer voice</span><select id="vVoice"><option value="">VoiceStudio default</option></select></label>
+            <label class="field"><span>Interviewer voice</span><select id="vVoice"></select></label>
             <label class="field"><span>Voice quality</span>
               <select id="vSteps"><option value="8">Fast — about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best — slow</option></select></label>
             <label class="field"><span>Speaking speed</span>
@@ -245,7 +249,7 @@
           </div>
           <p class="form-msg" id="vResult" role="status"></p>
         </div>
-        <div class="btn-row"><button class="btn primary" id="saveSettings">Save settings</button><span class="form-msg" id="saveMsg" role="status"></span></div>
+        <p class="form-msg save-msg" id="saveMsg" role="status">Changes save automatically.</p>
       </div>
     </section>
 
@@ -263,22 +267,23 @@
 
       <div class="room-body">
         <div class="convo">
-          <div class="transcript" id="transcript" aria-live="polite"></div>
+          <div class="transcript" id="transcript" role="log" aria-label="Conversation"></div>
           <div class="closed-note" id="wrapBanner" hidden>
             <span>The interviewer has closed the round.</span>
             <button class="btn primary sm" id="wrapReport">Get my feedback<svg><use href="#i-arrow"/></svg></button>
           </div>
+          <p class="compose-hint" id="composeHint" role="status" hidden></p>
           <div class="composer">
             <textarea id="answer" rows="1" placeholder="Type instead…" aria-label="Type your answer"></textarea>
             <button class="icon-btn" id="sendBtn" aria-label="Send"><svg><use href="#i-send"/></svg></button>
           </div>
           <div class="controls">
-            <button class="btn ctrl" id="muteBtn"><svg><use href="#i-mic-off"/></svg><span>Mute</span></button>
+            <button class="btn ctrl" id="muteBtn" aria-pressed="false"><svg><use href="#i-mic-off"/></svg><span>Mute</span></button>
             <div class="orb-wrap">
               <div class="wave" id="waveL" aria-hidden="true"></div>
               <button class="orb" id="orb" aria-label="Microphone"><svg><use href="#i-mic"/></svg></button>
               <div class="wave" id="waveR" aria-hidden="true"></div>
-              <div class="orb-label" id="orbLabel">Connecting…</div>
+              <div class="orb-label" id="orbLabel" aria-live="polite">Connecting…</div>
             </div>
             <button class="btn ctrl danger" id="endBtn"><i class="stop"></i><span>End interview</span></button>
           </div>
@@ -326,6 +331,7 @@
 </div>
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="sr-only" id="srLive" aria-live="polite"></div>
 
 <script src="ipc.js"></script>
 <script src="app.js"></script>

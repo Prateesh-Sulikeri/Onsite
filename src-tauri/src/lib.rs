@@ -3,6 +3,7 @@ pub mod catalog;
 mod commands;
 pub mod error;
 pub mod interview;
+pub mod panels;
 pub mod store;
 pub mod voice;
 
@@ -41,6 +42,7 @@ impl Default for Settings {
 pub struct AppState {
     pub store: Arc<Mutex<Store>>,
     pub catalog: Catalog,
+    pub panels: panels::Panels,
     pub prompts_dir: PathBuf,
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
     pub voice: voice::Voice,
@@ -58,8 +60,13 @@ impl AppState {
     /// The saved location, or auto-detect once and remember it.
     pub async fn claude_location(&self) -> Result<ClaudeLocation> {
         let mut s = self.settings();
-        if let Some(loc) = s.claude.clone() {
-            return Ok(loc);
+        match s.claude.clone() {
+            // A saved .exe that has since moved or been uninstalled: detect again.
+            Some(ClaudeLocation::Windows { exe }) if !exe.is_file() => {
+                tracing::warn!(exe = %exe.display(), "saved Claude Code path is gone; detecting again");
+            }
+            Some(loc) => return Ok(loc),
+            None => {}
         }
         let loc = brain::locate::detect().await.ok_or(AppError::ClaudeNotFound)?;
         tracing::info!(location = %loc.describe(), "detected Claude Code");
@@ -105,6 +112,7 @@ pub fn run() {
             app.manage(AppState {
                 store: Arc::new(Mutex::new(Store::open(&db)?)),
                 catalog,
+                panels: panels::Panels::load(&prompts_dir),
                 prompts_dir,
                 rounds: Default::default(),
                 voice: Default::default(),
@@ -121,6 +129,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_catalog,
+            commands::get_panels,
             commands::ui_log,
             commands::get_settings,
             commands::save_settings,

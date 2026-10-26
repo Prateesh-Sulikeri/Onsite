@@ -6,6 +6,7 @@ pub mod report;
 use crate::brain::prompts::{render, Vars};
 use crate::catalog::Catalog;
 use crate::error::{AppError, Result};
+use crate::panels::{Panels, DEFAULT_FAMILY};
 use serde::{Deserialize, Serialize};
 
 const RESUME_MAX: usize = 12_000;
@@ -30,6 +31,9 @@ pub struct LoopSetup {
     /// Overrides every round's length (e.g. a 10-minute practice round).
     #[serde(default)]
     pub minutes: Option<u32>,
+    /// Interviewer panel id from panels.json; "" = one-off personas from the catalog.
+    #[serde(default)]
+    pub panel: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -37,12 +41,18 @@ pub struct PlannedRound {
     pub key: String,
     pub name: String,
     pub persona: String,
+    /// Panel interviewer id and role, when the loop uses a panel.
+    pub persona_id: Option<String>,
+    pub persona_role: Option<String>,
     pub minutes: u32,
     pub tab: String,
 }
 
 impl LoopSetup {
-    pub fn validate(&self, cat: &Catalog) -> Result<()> {
+    pub fn validate(&self, cat: &Catalog, panels: &Panels) -> Result<()> {
+        if !self.panel.is_empty() && !panels.contains(&self.panel) {
+            return Err(AppError::Invalid("Unknown interviewer panel.".into()));
+        }
         if self.rounds.is_empty() {
             return Err(AppError::Invalid("Pick at least one round.".into()));
         }
@@ -65,17 +75,20 @@ impl LoopSetup {
     pub fn company_name(&self, cat: &Catalog) -> String {
         match self.company.as_str() {
             "auto" => "Inferred from JD".into(),
-            k => cat.companies[k].name.clone(),
+            k => cat.companies.get(k).map_or_else(|| k.to_string(), |c| c.name.clone()),
         }
     }
 
-    pub fn plan(&self, cat: &Catalog, idx: usize) -> PlannedRound {
+    pub fn plan(&self, cat: &Catalog, panels: &Panels, idx: usize) -> PlannedRound {
         let k = &self.rounds[idx];
         let r = &cat.rounds[k];
+        let p = panels.persona(&self.panel, k);
         PlannedRound {
             key: k.clone(),
             name: r.name.clone(),
-            persona: cat.persona(idx).to_string(),
+            persona: p.as_ref().map_or_else(|| cat.persona(idx).to_string(), |p| p.first_name.clone()),
+            persona_id: p.as_ref().map(|p| p.id.clone()),
+            persona_role: p.map(|p| p.role),
             minutes: self.minutes.unwrap_or(r.min),
             tab: r.tab.clone(),
         }
@@ -98,13 +111,30 @@ fn or_default(s: &str, max: usize, fallback: &str) -> String {
     if t.is_empty() { fallback.to_string() } else { clip(t, max).to_string() }
 }
 
-pub fn interviewer_prompt(template: &str, cat: &Catalog, setup: &LoopSetup, idx: usize) -> String {
-    let plan = setup.plan(cat, idx);
+/// Templates the interviewer prompt is built from.
+pub struct PromptTemplates {
+    pub interviewer: String,
+    pub persona_block: String,
+}
+
+pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, setup: &LoopSetup, idx: usize) -> String {
+    let plan = setup.plan(cat, panels, idx);
+    // A panel persona is a fixed person; otherwise a generic engineer with a rotating name.
+    let (persona, persona_role, persona_block) = match panels.persona_vars(&setup.panel, &plan.key, DEFAULT_FAMILY) {
+        Some(vars) => (
+            vars["name"].clone(),
+            vars["role"].clone(),
+            format!("\nYOUR PERSONA (keep it identical every session):\n{}\n", render(&t.persona_block, &vars)),
+        ),
+        None => (plan.persona.clone(), "a senior software engineer".to_string(), String::new()),
+    };
     let round = &cat.rounds[&plan.key];
     let company = &cat.companies[&setup.company];
     let company_line = if setup.company == "auto" { String::new() } else { format!(" at {}", company.name) };
     let vars: Vars = [
-        ("persona", plan.persona.clone()),
+        ("persona", persona),
+        ("persona_role", persona_role),
+        ("persona_block", persona_block),
         ("company_line", company_line),
         ("round_name", plan.name.clone()),
         ("round_minutes", plan.minutes.to_string()),
@@ -122,7 +152,7 @@ pub fn interviewer_prompt(template: &str, cat: &Catalog, setup: &LoopSetup, idx:
         ("candidate_notes", or_default(&setup.notes, 4_000, "(none)")),
     ]
     .into();
-    render(template, &vars)
+    render(&t.interviewer, &vars)
 }
 
 pub fn opening_message(minutes: u32) -> String {
@@ -172,9 +202,11 @@ mod tests {
     use super::*;
     use std::path::Path;
 
-    fn fixtures() -> (Catalog, String) {
+    fn fixtures() -> (Catalog, PromptTemplates, Panels) {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts");
-        (Catalog::load(&dir).unwrap(), crate::brain::prompts::load(&dir, "interviewer.md").unwrap())
+        let load = |n| crate::brain::prompts::load(&dir, n).unwrap();
+        let t = PromptTemplates { interviewer: load("interviewer.md"), persona_block: load("persona_block.md") };
+        (Catalog::load(&dir).unwrap(), t, Panels::load(&dir))
     }
 
     fn setup() -> LoopSetup {
@@ -188,15 +220,16 @@ mod tests {
             jd: "Backend, payments".into(),
             notes: String::new(),
             minutes: Some(10),
+            panel: String::new(),
         }
     }
 
     #[test]
     fn renders_full_prompt_without_placeholders() {
-        let (cat, tpl) = fixtures();
+        let (cat, tpl, panels) = fixtures();
         let s = setup();
-        s.validate(&cat).unwrap();
-        let p = interviewer_prompt(&tpl, &cat, &s, 1);
+        s.validate(&cat, &panels).unwrap();
+        let p = interviewer_prompt(&tpl, &cat, &panels, &s, 1);
         assert!(!p.contains("{{"), "unrendered placeholder in:\n{p}");
         assert!(p.contains("a senior software engineer at Google, conducting"));
         assert!(p.contains("ROUND: DSA coding (10 minutes). Round 2 of 2"));
@@ -207,12 +240,30 @@ mod tests {
 
     #[test]
     fn auto_company_has_no_at_line_and_bad_setup_fails() {
-        let (cat, tpl) = fixtures();
+        let (cat, tpl, panels) = fixtures();
         let mut s = setup();
         s.company = "auto".into();
-        assert!(interviewer_prompt(&tpl, &cat, &s, 0).contains("a senior software engineer, conducting"));
+        assert!(interviewer_prompt(&tpl, &cat, &panels, &s, 0).contains("a senior software engineer, conducting"));
         s.rounds.push("nope".into());
-        assert!(s.validate(&cat).is_err());
+        assert!(s.validate(&cat, &panels).is_err());
+    }
+
+    #[test]
+    fn panel_round_uses_its_owner_persona() {
+        let (cat, tpl, panels) = fixtures();
+        let mut s = setup();
+        s.panel = "indian_techies".into();
+        s.validate(&cat, &panels).unwrap();
+        let plan = s.plan(&cat, &panels, 1);
+        assert_eq!((plan.persona.as_str(), plan.persona_id.as_deref()), ("Karthik", Some("karthik_reddy")));
+        let p = interviewer_prompt(&tpl, &cat, &panels, &s, 1);
+        assert!(!p.contains("{{"), "unrendered placeholder in:\n{p}");
+        assert!(p.contains("You are Karthik Reddy, Senior Technical Interviewer at Google"));
+        assert!(p.contains("YOUR PERSONA"));
+        // Same inputs, same prompt: the persona is stable across sessions.
+        assert_eq!(p, interviewer_prompt(&tpl, &cat, &panels, &s, 1));
+        s.panel = "nope".into();
+        assert!(s.validate(&cat, &panels).is_err());
     }
 
     #[test]
