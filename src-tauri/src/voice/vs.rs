@@ -68,6 +68,8 @@ pub fn persona_profile_ok(p: &Profile, instruct: &str) -> bool {
 }
 
 /// One persona build at a time: the startup prebuild and a round starting must not both create one.
+/// Held only while building. A round whose voice already exists never waits on it: one start
+/// waited 45 s for Neha while the prebuild rendered 12 takes for Arjun.
 static BUILD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// When VoiceStudio last produced speech for us. Its weights unload after ~15 min idle.
@@ -155,6 +157,16 @@ pub fn pitch_range(instruct: &str) -> (f32, f32) {
 pub fn sample_ok(s: &SampleScore, instruct: &str) -> bool {
     let (lo, hi) = pitch_range(instruct);
     (0.45..=0.9).contains(&s.voiced) && s.zcr < 1250.0 && s.floor < 0.004 && (lo..=hi).contains(&s.f0)
+}
+
+/// How far a take is from passing [`sample_ok`] (0 = passes). Used to keep the best take when
+/// none passes, so a hard spec doesn't re-render every take on each start and end with no voice.
+pub fn sample_penalty(s: &SampleScore, instruct: &str) -> f32 {
+    let (lo, hi) = pitch_range(instruct);
+    let over = |v: f32, max: f32| if v > max { (v - max) / max } else { 0.0 };
+    let voiced = if s.voiced < 0.45 { (0.45 - s.voiced) / 0.45 } else { over(s.voiced, 0.9) * 9.0 };
+    let pitch = if s.f0 <= 0.0 { 1.0 } else if s.f0 < lo { (lo - s.f0) / lo } else { over(s.f0, hi) };
+    voiced + over(s.zcr.min(1e6), 1250.0) + over(s.floor, 0.004) + pitch
 }
 
 /// 16-bit mono WAV at the TTS rate.
@@ -272,8 +284,11 @@ impl VoiceStudio {
     /// sample we render from their voice-design tags and check (clean, right pitch). Cloning one
     /// fixed sample keeps the same person sounding the same in every session.
     pub async fn persona_voice(&self, p: &PersonaVoice) -> Result<Profile> {
-        let _one = BUILD.lock().await;
         let name = persona_profile_name(&p.name);
+        if let Some(ok) = self.profiles().await?.into_iter().find(|x| x.name == name && persona_profile_ok(x, &p.instruct)) {
+            return Ok(ok);
+        }
+        let _one = BUILD.lock().await;
         for old in self.profiles().await?.into_iter().filter(|x| x.name == name) {
             if persona_profile_ok(&old, &p.instruct) {
                 return Ok(old);
@@ -285,8 +300,10 @@ impl VoiceStudio {
         self.create_clone(&name, seed, &pcm, &persona_tag(&p.instruct)).await
     }
 
-    /// Renders the sample line until one take passes [`sample_ok`].
+    /// Renders the sample line until one take passes [`sample_ok`]; if none does, the take
+    /// closest to passing.
     async fn render_persona_sample(&self, name: &str, instruct: &str) -> Result<(i64, Vec<i16>)> {
+        let mut best: Option<(f32, i64, Vec<i16>)> = None;
         for &(seed, steps) in SAMPLE_TRIES {
             let body = json!({
                 "model": "omnivoice",
@@ -315,8 +332,14 @@ impl VoiceStudio {
             if ok {
                 return Ok((seed, pcm));
             }
+            let penalty = sample_penalty(&score, instruct);
+            if best.as_ref().is_none_or(|(b, ..)| penalty < *b) {
+                best = Some((penalty, seed, pcm));
+            }
         }
-        Err(err("create voice", format!("no clean voice sample for {name} after {} tries", SAMPLE_TRIES.len())))
+        let (penalty, seed, pcm) = best.ok_or_else(|| err("create voice", format!("no voice sample for {name}")))?;
+        tracing::warn!(%name, seed, penalty, "no take passed every check; using the closest one");
+        Ok((seed, pcm))
     }
 
     async fn create_clone(&self, name: &str, seed: i64, pcm: &[i16], tag: &str) -> Result<Profile> {
@@ -533,6 +556,25 @@ mod tests {
         assert!(s.zcr > 3000.0, "{s:?}");
         assert!(!sample_ok(&s, "female"));
         assert!(!sample_ok(&score_sample(&vec![0; 48_000]), "female"), "silence");
+    }
+
+    #[test]
+    fn penalty_is_zero_only_for_passing_takes() {
+        let spec = "male, middle-aged, moderate pitch, indian accent";
+        let good = SampleScore { voiced: 0.6, zcr: 950.0, f0: 120.0, floor: 0.0005 };
+        assert!(sample_ok(&good, spec));
+        assert_eq!(sample_penalty(&good, spec), 0.0);
+        // Arjun's takes from the log: near misses rank above wrecks.
+        let near = SampleScore { voiced: 0.58, zcr: 891.0, f0: 250.0, floor: 0.0005 };
+        let wreck = SampleScore { voiced: 0.04, zcr: 4112.0, f0: 0.0, floor: 0.0005 };
+        let hum = SampleScore { voiced: 0.95, zcr: 228.0, f0: 120.0, floor: 0.017 };
+        for bad in [near, wreck, hum] {
+            assert!(!sample_ok(&bad, spec));
+            assert!(sample_penalty(&bad, spec) > 0.0, "{bad:?}");
+        }
+        assert!(sample_penalty(&near, spec) < sample_penalty(&wreck, spec));
+        assert!(sample_penalty(&near, spec) < sample_penalty(&hum, spec));
+        assert!(sample_penalty(&SampleScore { zcr: f32::MAX, ..good }, spec).is_finite());
     }
 
     #[test]
