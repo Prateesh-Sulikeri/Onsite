@@ -737,8 +737,17 @@ function bindRows(sel){ $$(sel + " .row-item").forEach(b => b.onclick = () => op
 async function renderHistory(){
   let h = [];
   try{ h = await api.invoke("history"); }catch(e){ toast(errText(e), "err"); }
-  $("#history").innerHTML = h.length ? h.map(rowHtml).join("") : `<div class="none">Your finished rounds and their feedback appear here.</div>`;
+  $("#history").innerHTML = h.length
+    ? h.map(x => `<div class="row-wrap">${rowHtml(x)}<button class="btn ghost danger sm row-del" data-del="${x.round_id}" aria-label="Delete ${esc(x.name)}" title="Delete">${icon("trash")}</button></div>`).join("")
+    : `<div class="none">Your finished rounds and their feedback appear here.</div>`;
   bindRows("#history");
+  $$("#history .row-del").forEach(b => b.onclick = async () => { if (await deleteRound(Number(b.dataset.del))) renderHistory(); });
+}
+/* Deletes a round with its transcript and feedback. True when it was deleted. */
+async function deleteRound(roundId){
+  if (!confirm("Delete this round and its feedback? This can’t be undone.")) return false;
+  try{ await api.invoke("delete_round", {roundId}); toast("Deleted."); return true; }
+  catch(e){ toast(errText(e), "err"); return false; }
 }
 
 /* Same bar as Rust's generate_report: at least 2 real answers and 40 words. */
@@ -754,6 +763,9 @@ async function openReport(roundId, live){
   const seq = ++reportSeq;
   const stale = () => seq !== reportSeq || $("#view-report").hidden;
   nav("report");
+  const del = $("#repDelete");
+  del.hidden = !!live;
+  del.onclick = async () => { if (await deleteRound(roundId)) nav("feedback"); };
   $("#repBody").innerHTML = `<div class="stack"><div class="skeleton" style="height:120px"></div></div>`;
   let round;
   try{ round = await api.invoke("get_round", {roundId}); }

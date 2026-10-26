@@ -218,6 +218,20 @@ impl Store {
         })
     }
 
+    /// Deletes a round and its feedback. The loop stays (a live loop may start its next round),
+    /// but its verdict is cleared because it was judged on the deleted round too.
+    pub fn delete_round(&self, round_id: i64) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let loop_id: Option<i64> = tx.query_row("SELECT loop_id FROM rounds WHERE id = ?1", [round_id], |r| r.get(0)).optional()?;
+        tx.execute("DELETE FROM reports WHERE round_id = ?1", [round_id])?;
+        tx.execute("DELETE FROM rounds WHERE id = ?1", [round_id])?;
+        if let Some(l) = loop_id {
+            tx.execute("UPDATE loops SET verdict = NULL WHERE id = ?1", [l])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn history(&self, limit: i64) -> Result<Vec<HistoryItem>> {
         let mut st = self.conn.prepare(
             "SELECT r.id, r.loop_id, r.name, l.config, r.started_at, r.ended_at, rep.data
@@ -280,6 +294,14 @@ mod tests {
         assert_eq!((h[0].overall, h[0].decision.as_deref(), h[0].company.as_str()), (Some(64), Some("Hire"), "Google"));
         assert_eq!(s.report(id).unwrap().unwrap().1, "raw2");
         assert_eq!(s.loop_round_ids(loop_id).unwrap(), vec![id]);
+
+        s.set_loop_verdict(loop_id, &json!({"decision": "Hire"})).unwrap();
+        s.delete_round(id).unwrap();
+        assert!(s.history(10).unwrap().is_empty());
+        assert!(s.report(id).unwrap().is_none());
+        assert!(s.round(id).is_err());
+        assert_eq!(s.loop_verdict(loop_id).unwrap(), None);
+        s.delete_round(id).unwrap(); // already gone: no error
     }
 
     #[test]

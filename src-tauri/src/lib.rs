@@ -144,6 +144,7 @@ pub fn run() {
             commands::get_round,
             commands::loop_verdict,
             commands::history,
+            commands::delete_round,
             commands::voice_status,
             commands::voice_launch,
             commands::voice_test_speak,

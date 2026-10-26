@@ -114,6 +114,15 @@ pub async fn loop_verdict(app: AppHandle, loop_id: i64) -> Result<Value> {
     live::loop_verdict(&app, loop_id).await
 }
 
+/// Deletes a finished round with its transcript and feedback.
+#[tauri::command]
+pub async fn delete_round(state: State<'_, AppState>, round_id: i64) -> Result<()> {
+    if state.rounds.lock().await.contains_key(&round_id) {
+        return Err(AppError::Invalid("This round is still running. End it first.".into()));
+    }
+    state.store.lock().unwrap().delete_round(round_id)
+}
+
 #[tauri::command]
 pub fn history(state: State<AppState>) -> Result<Vec<HistoryItem>> {
     state.store.lock().unwrap().history(100)
