@@ -114,6 +114,18 @@ pub async fn loop_verdict(app: AppHandle, loop_id: i64) -> Result<Value> {
     live::loop_verdict(&app, loop_id).await
 }
 
+/// Feedback for the whole interview: reviews every round still missing feedback, then the verdict.
+#[tauri::command]
+pub async fn loop_feedback(app: AppHandle, loop_id: i64) -> Result<live::LoopFeedback> {
+    live::loop_feedback(&app, loop_id).await
+}
+
+/// The saved interview feedback, without writing anything.
+#[tauri::command]
+pub fn get_loop_feedback(state: State<AppState>, loop_id: i64) -> Result<live::LoopFeedback> {
+    live::loop_feedback_saved(&state, loop_id)
+}
+
 /// Run (examples) or Submit (all tests) for the current coding round.
 #[tauri::command]
 pub async fn run_code(app: AppHandle, round_id: i64, code: String, submit: bool) -> Result<crate::runner::Report> {

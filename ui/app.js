@@ -823,16 +823,28 @@ $("#code").addEventListener("keydown", e => {
 const decClass = d => /no hire/i.test(d) ? "d-no" : /lean/i.test(d) ? "d-lean" : "d-hire";
 const scoreClass = n => n >= 70 ? "hi" : n >= 50 ? "mid" : "lo";
 function rowHtml(x){
-  return `<button class="row-item" data-round-id="${x.round_id}"><span class="row-ic">${esc((x.company || x.name || "?")[0])}</span><span class="row-tx"><b>${esc(x.name)}</b><span>${esc(shortName(x.company))} · ${esc(new Date(x.started_at).toLocaleDateString())}${x.decision ? " · " + esc(x.decision) : ""}</span></span>${x.overall != null ? `<span class="score ${scoreClass(x.overall)}">${x.overall}</span>` : `<span class="pill">No feedback yet</span>`}</button>`;
+  return `<button class="row-item" data-round-id="${x.round_id}" data-loop-id="${x.loop_id}"><span class="row-ic">${esc((x.company || x.name || "?")[0])}</span><span class="row-tx"><b>${esc(x.name)}</b><span>${esc(shortName(x.company))} · ${esc(new Date(x.started_at).toLocaleDateString())}${x.decision ? " · " + esc(x.decision) : ""}</span></span>${x.overall != null ? `<span class="score ${scoreClass(x.overall)}">${x.overall}</span>` : `<span class="pill">No feedback yet</span>`}</button>`;
 }
-function bindRows(sel){ $$(sel + " .row-item").forEach(b => b.onclick = () => openReport(Number(b.dataset.roundId), false)); }
+function bindRows(sel){ $$(sel + " .row-item[data-round-id]").forEach(b => b.onclick = () => openInterview(Number(b.dataset.loopId), {focus: Number(b.dataset.roundId)})); }
+/* One block per interview (loop), newest first, with its rounds in order. */
 async function renderHistory(){
   let h = [];
   try{ h = await api.invoke("history"); }catch(e){ toast(errText(e), "err"); }
-  $("#history").innerHTML = h.length
-    ? h.map(x => `<div class="row-wrap">${rowHtml(x)}<button class="btn ghost danger sm row-del" data-del="${x.round_id}" aria-label="Delete ${esc(x.name)}" title="Delete">${icon("trash")}</button></div>`).join("")
+  const loops = [];
+  h.forEach(x => { let g = loops.find(l => l.id === x.loop_id); if (!g) loops.push(g = {id: x.loop_id, rows: []}); g.rows.push(x); });
+  $("#history").innerHTML = loops.length
+    ? loops.map(g => {
+        const rows = g.rows.slice().reverse();
+        const sc = rows.filter(x => x.overall != null);
+        const avg = sc.length ? Math.round(sc.reduce((a, x) => a + x.overall, 0) / sc.length) : null;
+        return `<div class="loop-group">
+          <button class="loop-head" data-loop="${g.id}"><span class="row-tx"><b>${esc(shortName(rows[0].company))} interview</b><span>${esc(new Date(rows[0].started_at).toLocaleDateString())} · ${rows.length} round${rows.length === 1 ? "" : "s"}</span></span>${avg != null ? `<span class="score ${scoreClass(avg)}" title="Average score">${avg}</span>` : ""}<span class="loop-open">Interview feedback${icon("arrow")}</span></button>
+          ${rows.map(x => `<div class="row-wrap">${rowHtml(x)}<button class="btn ghost danger sm row-del" data-del="${x.round_id}" aria-label="Delete ${esc(x.name)}" title="Delete">${icon("trash")}</button></div>`).join("")}
+        </div>`;
+      }).join("")
     : `<div class="none">Your finished rounds and their feedback appear here.</div>`;
   bindRows("#history");
+  $$("#history .loop-head").forEach(b => b.onclick = () => openInterview(Number(b.dataset.loop)));
   $$("#history .row-del").forEach(b => b.onclick = async () => { if (await deleteRound(Number(b.dataset.del))) renderHistory(); });
 }
 /* Deletes a round with its transcript and feedback. True when it was deleted. */
@@ -882,16 +894,17 @@ function renderUnreviewed(round, live, st, seq){
     <div class="empty-state panel">
       <span class="empty-ic">${icon("check")}</span>
       <h2>Round saved</h2>
-      <p class="muted">You gave ${st.answers} answers, ${st.words} words in all. Get written feedback now or come back to it later from Feedback.</p>
+      <p class="muted">You gave ${st.answers} answers, ${st.words} words in all. ${hasNext ? "Go on to the next round, or stop here and get feedback on every round so far in one go." : "Get feedback on the whole interview: every round plus the committee decision, on one page."}</p>
       <div class="btn-row">
-        <button class="btn primary" id="getFeedback">${icon("sparkle")}Get feedback</button>
-        ${hasNext ? `<button class="btn" id="nextRound">Next: ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+        ${hasNext ? `<button class="btn primary" id="nextRound">Next: ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+        <button class="btn ${hasNext ? "" : "primary"}" id="loopFb">${icon("sparkle")}${hasNext ? "Finish and get interview feedback" : "Get interview feedback"}</button>
         ${inLoop ? `<button class="btn ghost" id="retake">${icon("refresh")}Retake this round</button>` : ""}
-        <button class="btn ghost" data-nav="${inLoop ? "interviews" : "feedback"}">${icon("back")}Back</button>
+        <button class="btn ghost" id="getFeedback">Feedback on this round only</button>
       </div>
     </div>`;
   bindStart("#retake", round.idx);
   bindStart("#nextRound", round.idx + 1);
+  $("#loopFb").onclick = () => openInterview(round.loop_id, {generate: true});
   $("#getFeedback").onclick = () => writeFeedback(round, live, st, seq);
 }
 async function writeFeedback(round, live, st, seq){
@@ -933,11 +946,13 @@ function renderNothing(round, live, st, detail){
       <div class="btn-row">
         ${inLoop ? `<button class="btn primary" id="retake">${icon("refresh")}Retake this round</button>` : ""}
         ${hasNext ? `<button class="btn" id="nextRound">Skip to ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+        ${inLoop && round.idx > 0 ? `<button class="btn" id="loopFb">${icon("sparkle")}Get interview feedback</button>` : ""}
         <button class="btn ${inLoop ? "ghost" : "primary"}" data-nav="${inLoop ? "interviews" : "feedback"}">${icon("back")}Back</button>
       </div>
     </div>`;
   bindStart("#retake", round.idx);
   bindStart("#nextRound", round.idx + 1);
+  const lb = $("#loopFb"); if (lb) lb.onclick = () => openInterview(round.loop_id, {generate: true});
 }
 
 function dimHtml(d){
@@ -949,7 +964,9 @@ function dimHtml(d){
   return `<div class="dim"><div class="dim-top">${esc(d.name)}<span>${sc} / 4</span></div><div class="bar" role="img" aria-label="${sc} out of 4"><i style="width:${sc*25}%"></i></div><p>${esc(ev)}</p></div>`;
 }
 
-function renderReport(round, r, live){
+/* One round's feedback. `actions` goes under the headline. The transcript toggle uses data
+   attributes, so several rounds can sit on one page. */
+function reportHtml(round, r, actions = ""){
   const has = r.overall != null && Number.isFinite(Number(r.overall));
   const n = has ? Number(r.overall) : 0;
   const ringC = !has ? "var(--surface-3)" : n >= 70 ? "var(--ok)" : n >= 50 ? "var(--warn)" : "var(--bad)";
@@ -957,9 +974,8 @@ function renderReport(round, r, live){
   const li = a => (a||[]).map(x => `<li>${esc(x)}</li>`).join("");
   const moments = (r.moments||[]).map(m => `<div class="moment"><div class="q">${esc(m.question)}</div><div class="said">You said: ${esc(m.said)}</div><div class="better"><b>Stronger answer:</b> ${esc(m.better)}</div></div>`).join("");
   const met = r.metrics || {};
-  const {inLoop, hasNext, isLast} = loopButtons(round, live);
   const section = (title, body) => body ? `<div class="panel"><h2>${title}</h2>${body}</div>` : "";
-  $("#repBody").innerHTML = `
+  return `
     <div class="stack">
       <div class="panel rep-head">
         <div class="ring" style="--v:${n}; --ring-c:${ringC}" role="img" aria-label="${has ? `Score ${n} of 100` : "No score"}"><div><div><b>${has ? n : "—"}</b><small>of 100</small></div></div></div>
@@ -967,15 +983,12 @@ function renderReport(round, r, live){
           <span class="decision ${decClass(r.decision||"")}">${esc(r.decision||"—")}</span><span class="muted">${esc(r.level_signal||"")}</span>
           <h2>${esc(r.headline||"")}</h2>
           <div class="btn-row">
-            ${hasNext ? `<button class="btn primary" id="nextRound">Next round: ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
-            ${isLast ? `<button class="btn primary" id="verdictBtn">${icon("scale")}Get the hiring committee verdict</button>` : ""}
-            ${inLoop ? `<button class="btn" id="retake">${icon("refresh")}Retake this round</button>` : ""}
-            <button class="btn ghost" id="showTx" aria-expanded="false" aria-controls="txPanel">Show transcript</button>
+            ${actions}
+            <button class="btn ghost" data-show-tx="${round.id}" aria-expanded="false">Show transcript</button>
           </div>
         </div>
       </div>
       ${r.fix_first ? `<div class="fix"><span class="fix-ic">${icon("bulb")}</span><div><b>Fix this first</b>${esc(r.fix_first)}</div></div>` : ""}
-      <div id="verdict"></div>
       ${section("Rubric", dims && `<div class="dims">${dims}</div>`)}
       <div class="cols">
         <div class="panel"><h2>What went well</h2><ul class="list">${li(r.went_well) || "<li class='muted'>Nothing stood out yet.</li>"}</ul></div>
@@ -991,27 +1004,101 @@ function renderReport(round, r, live){
           <div class="metric"><b>${met.code_shares ?? 0}</b><span>workspace shares</span></div>
         </div></div>
       </div>
-      <div class="panel" id="txPanel" hidden><h2>Transcript</h2><div class="transcript" style="padding:0; overflow:visible">${(round.transcript||[]).map(m => `<div class="msg ${m.who==="me"?"me":"iv"}"><span class="av" aria-hidden="true">${m.who==="me" ? "Y" : esc(round.persona[0])}</span><div class="body"><div class="from">${m.who==="me" ? "You" : esc(round.persona)}</div><div class="bubble">${md(String(m.text||"(shared workspace)").replace(/\[\[END\]\]/g, ""))}</div></div></div>`).join("")}</div></div>
+      <div class="panel" data-tx="${round.id}" hidden><h2>Transcript</h2>${transcriptHtml(round)}</div>
     </div>`;
+}
+function transcriptHtml(round){
+  return `<div class="transcript" style="padding:0; overflow:visible">${(round.transcript||[]).map(m => `<div class="msg ${m.who==="me"?"me":"iv"}"><span class="av" aria-hidden="true">${m.who==="me" ? "Y" : esc(round.persona[0])}</span><div class="body"><div class="from">${m.who==="me" ? "You" : esc(round.persona)}</div><div class="bubble">${md(String(m.text||"(shared workspace)").replace(/\[\[END\]\]/g, ""))}</div></div></div>`).join("")}</div>`;
+}
+function bindTranscripts(root){
+  root.querySelectorAll("[data-show-tx]").forEach(b => b.onclick = () => {
+    const p = root.querySelector(`[data-tx="${b.dataset.showTx}"]`);
+    p.hidden = !p.hidden; b.textContent = p.hidden ? "Show transcript" : "Hide transcript"; b.setAttribute("aria-expanded", String(!p.hidden));
+  });
+}
+function renderReport(round, r, live){
+  const {inLoop, hasNext} = loopButtons(round, live);
+  const actions = `
+    ${hasNext ? `<button class="btn primary" id="nextRound">Next round: ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+    ${inLoop && loop.count > 1 ? `<button class="btn ${hasNext ? "" : "primary"}" id="loopFb">${icon("scale")}${hasNext ? "Finish and get interview feedback" : "Get interview feedback"}</button>` : ""}
+    ${inLoop ? `<button class="btn" id="retake">${icon("refresh")}Retake this round</button>` : ""}`;
+  $("#repBody").innerHTML = reportHtml(round, r, actions);
+  bindTranscripts($("#repBody"));
   bindStart("#nextRound", round.idx + 1);
   bindStart("#retake", round.idx);
-  const vb = $("#verdictBtn"); if (vb) vb.onclick = () => loopVerdict(round.loop_id, vb);
-  $("#showTx").onclick = () => { const p = $("#txPanel"), b = $("#showTx"); p.hidden = !p.hidden; b.textContent = p.hidden ? "Show transcript" : "Hide transcript"; b.setAttribute("aria-expanded", String(!p.hidden)); };
+  const lb = $("#loopFb"); if (lb) lb.onclick = () => openInterview(round.loop_id, {generate: true});
 }
 
-async function loopVerdict(loopId, btn){
-  const el = $("#verdict");
-  btn.disabled = true; btn.classList.add("is-busy");
-  el.innerHTML = `<div class="panel" role="status"><h2>The hiring committee is deliberating…</h2><div class="skeleton" style="height:80px; margin-top:12px"></div></div>`;
-  try{
-    const v = await api.invoke("loop_verdict", {loopId});
-    el.innerHTML = `<div class="panel"><div class="panel-head"><h2>Committee decision</h2><span class="decision ${decClass(v.decision||"")}">${esc(v.decision)}</span></div><p>${esc(v.rationale)}</p><div class="cols" style="margin-top:14px"><div><b>Strongest signal</b><p class="muted">${esc(v.strongest_signal)}</p></div><div><b>Biggest risk</b><p class="muted">${esc(v.biggest_risk)}</p></div></div><h3 style="margin:16px 0 8px">Two-week plan</h3><ul class="list">${(v.plan||[]).map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>`;
-    btn.hidden = true;
-  }catch(e){
-    el.innerHTML = `<div class="panel"><p class="form-msg err" role="alert">${esc(errText(e))}</p></div>`;
-    btn.disabled = false;
+/* ---------------- interview feedback (the whole loop on one page) ---------------- */
+let interviewSeq = 0, loopFbUnlisten = null, progressLoop = null;
+async function openInterview(loopId, {generate = false, focus = null} = {}){
+  const seq = ++interviewSeq; reportSeq++;
+  const stale = () => seq !== interviewSeq || $("#view-report").hidden;
+  nav("report");
+  $("#repDelete").hidden = true;
+  $("#repTitle").textContent = "Interview feedback"; $("#repSub").textContent = "";
+  $("#repBody").innerHTML = `<div class="stack"><div class="skeleton" style="height:120px"></div></div>`;
+  let fb;
+  try{ fb = await api.invoke("get_loop_feedback", {loopId}); }
+  catch(e){ if (!stale()) renderReportError(errText(e), () => openInterview(loopId, {generate, focus})); return; }
+  if (stale()) return;
+  if (generate && fb.rounds.some(needsReview)){
+    renderInterviewProgress(fb, {done: 0, total: fb.rounds.filter(needsReview).length, stage: "rounds"});
+    progressLoop = loopId;
+    if (!loopFbUnlisten) loopFbUnlisten = await api.listen("loop_feedback", ev => {
+      if (ev.loop_id === progressLoop) renderInterviewProgress(null, ev);
+    });
+    try{ fb = await api.invoke("loop_feedback", {loopId}); }
+    catch(e){ if (!stale()) renderReportError(errText(e), () => openInterview(loopId, {generate: true, focus})); return; }
+    if (stale()) return;
+  } else if (generate && !fb.verdict && fb.rounds.filter(r => r.report).length >= 2){
+    renderInterviewProgress(fb, {done: 0, total: 0, stage: "verdict"});
+    try{ fb = await api.invoke("loop_feedback", {loopId}); }catch(e){ toast(errText(e), "err"); }
+    if (stale()) return;
   }
-  finally{ btn.classList.remove("is-busy"); }
+  renderInterview(fb, focus);
+}
+const needsReview = r => !r.report && !NOT_ENOUGH.test(r.missing || "");
+function renderInterviewProgress(fb, ev){
+  if (fb){
+    $("#repBody").innerHTML = `<div class="stack"><div class="panel" role="status" id="ifProgress"><h2 id="ifStage"></h2><p class="muted" style="margin-top:6px">Rounds are reviewed in parallel. This takes one to three minutes. You can leave this page; feedback is saved as it’s written.</p><div class="meter ac-meter" aria-hidden="true"><i id="ifBar"></i></div></div><div class="skeleton" style="height:220px"></div></div>`;
+  }
+  const st = $("#ifStage"); if (!st) return;
+  st.textContent = ev.stage === "verdict" ? "The hiring committee is deciding…" : `Reviewing your rounds… ${ev.done} of ${ev.total} done`;
+  const pct = ev.stage === "verdict" ? 92 : ev.total ? Math.max(8, ev.done / ev.total * 85) : 8;
+  $("#ifBar").style.width = `${pct}%`;
+}
+function renderInterview(fb, focus){
+  const rounds = fb.rounds;
+  const first = rounds[0] && rounds[0].round;
+  $("#repSub").textContent = [shortName(fb.company), fb.level, first ? new Date(first.started_at).toLocaleDateString() : "", `${rounds.length} round${rounds.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+  const scored = rounds.filter(r => r.report && Number.isFinite(Number(r.report.overall)));
+  const avg = scored.length ? Math.round(scored.reduce((a, r) => a + Number(r.report.overall), 0) / scored.length) : null;
+  const pending = rounds.filter(needsReview);
+  const v = fb.verdict;
+  const verdict = v ? `<div class="panel"><div class="panel-head"><h2>Committee decision</h2><span class="decision ${decClass(v.decision||"")}">${esc(v.decision)}</span></div><p>${esc(v.rationale)}</p><div class="cols" style="margin-top:14px"><div><b>Strongest signal</b><p class="muted">${esc(v.strongest_signal)}</p></div><div><b>Biggest risk</b><p class="muted">${esc(v.biggest_risk)}</p></div></div><h3 style="margin:16px 0 8px">Two-week plan</h3><ul class="list">${(v.plan||[]).map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>`
+    : scored.length >= 2 ? "" : rounds.length > 1 ? `<div class="panel"><p class="muted">The committee decision needs feedback on at least two rounds.</p></div>` : "";
+  const overview = `<div class="panel"><div class="panel-head"><h2>Rounds</h2>${avg != null ? `<span class="score ${scoreClass(avg)}" title="Average score">${avg}</span>` : ""}</div><div class="rows">${rounds.map((r, i) => `
+      <a class="row-item" href="#rf-${r.round.id}"><span class="row-ic">${i + 1}</span><span class="row-tx"><b>${esc(r.round.name)}</b><span>With ${esc(r.round.persona)}${r.report && r.report.decision ? " · " + esc(r.report.decision) : ""}</span></span>${r.report && r.report.overall != null ? `<span class="score ${scoreClass(r.report.overall)}">${r.report.overall}</span>` : `<span class="pill">${NOT_ENOUGH.test(r.missing || "") ? "Too short to review" : "No feedback yet"}</span>`}</a>`).join("")}</div>
+      ${pending.length ? `<div class="btn-row"><button class="btn primary" id="ifGenerate">${icon("sparkle")}Get feedback for ${pending.length === 1 ? "the missing round" : `all ${pending.length} rounds`}</button></div>` : ""}
+    </div>`;
+  const sections = rounds.map((r, i) => `
+    <section class="rf" id="rf-${r.round.id}">
+      <h2 class="rf-head"><span class="row-ic">${i + 1}</span>${esc(r.round.name)}<small class="muted">with ${esc(r.round.persona)}</small></h2>
+      ${r.report ? reportHtml(r.round, r.report, `<button class="btn ghost" data-del-round="${r.round.id}">${icon("trash")}Delete round</button>`)
+        : `<div class="panel"><p class="muted">${esc(r.missing || "No feedback yet.")}</p><div class="btn-row"><button class="btn ghost" data-show-tx="${r.round.id}" aria-expanded="false">Show transcript</button><button class="btn ghost" data-del-round="${r.round.id}">${icon("trash")}Delete round</button></div></div><div class="panel" data-tx="${r.round.id}" hidden><h2>Transcript</h2>${transcriptHtml(r.round)}</div>`}
+    </section>`).join("");
+  const live = loop && loop.id === fb.loop_id;
+  // Retakes add rows with the same idx, so the next round follows the highest one played.
+  const next = live ? Math.max(-1, ...rounds.map(r => r.round.idx)) + 1 : -1;
+  const nextBtn = live && next < loop.count ? `<div class="btn-row"><button class="btn primary" id="ifNext">Next round: ${esc(CAT.ROUNDS[loop.setup.rounds[next]].name)}${icon("arrow")}</button></div>` : "";
+  $("#repBody").innerHTML = `<div class="stack">${verdict}${overview}${nextBtn}${sections}</div>`;
+  bindTranscripts($("#repBody"));
+  bindStart("#ifNext", next);
+  const g = $("#ifGenerate"); if (g) g.onclick = () => openInterview(fb.loop_id, {generate: true});
+  $$("#repBody [data-del-round]").forEach(b => b.onclick = async () => { if (await deleteRound(Number(b.dataset.delRound))) openInterview(fb.loop_id); });
+  $$("#repBody a.row-item").forEach(a => a.onclick = e => { e.preventDefault(); const t = $(a.getAttribute("href")); if (t) t.scrollIntoView({behavior: calm.matches ? "auto" : "smooth"}); });
+  if (focus){ const t = $(`#rf-${focus}`); if (t) t.scrollIntoView(); }
 }
 
 /* ---------------- settings ---------------- */

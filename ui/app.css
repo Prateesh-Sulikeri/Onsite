@@ -202,6 +202,17 @@ textarea{resize:vertical; line-height:1.5}
 .row-tx span{font-size:12.5px; color:var(--muted)}
 .score{font:700 20px/1 var(--font-display); font-variant-numeric:tabular-nums}
 .score.hi{color:var(--ok)} .score.mid{color:var(--warn)} .score.lo{color:var(--bad)}
+.loop-group{border:1px solid var(--line); border-radius:var(--r-lg); padding:6px 8px; background:var(--surface)}
+.loop-group + .loop-group{margin-top:14px}
+.loop-head{display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:14px; align-items:center; width:100%; padding:12px 10px; border:0; border-bottom:1px solid var(--line); background:none; border-radius:var(--r); text-align:left}
+.loop-head:hover{background:var(--surface-2)}
+.loop-open{display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:var(--accent-text)}
+.loop-open svg{width:14px; height:14px}
+.rf{scroll-margin-top:16px}
+.rf-head{display:flex; align-items:center; gap:10px; font-size:19px; margin:12px 0 10px}
+.rf-head .row-ic{width:30px; height:30px; font-size:14px; border-radius:9px}
+.rf-head small{font-size:13px; font-weight:500}
+a.row-item{color:inherit; text-decoration:none}
 .rows .none{color:var(--muted); padding:12px 4px}
 .row-wrap{display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:4px}
 .row-wrap + .row-wrap{border-top:1px solid var(--line)}

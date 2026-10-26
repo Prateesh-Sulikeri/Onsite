@@ -490,3 +490,105 @@ pub async fn loop_verdict(app: &AppHandle, loop_id: i64) -> Result<Value> {
     state.store.lock().unwrap().set_loop_verdict(loop_id, &verdict)?;
     Ok(verdict)
 }
+
+/// One round on the interview feedback page.
+#[derive(Debug, Clone, Serialize)]
+pub struct RoundFeedback {
+    pub round: crate::store::RoundRow,
+    pub report: Option<Value>,
+    /// Why there is no report: too little said, or the model call failed.
+    pub missing: Option<String>,
+}
+
+/// The whole interview: committee verdict plus each round's feedback.
+#[derive(Debug, Clone, Serialize)]
+pub struct LoopFeedback {
+    pub loop_id: i64,
+    pub company: String,
+    pub level: String,
+    pub verdict: Option<Value>,
+    pub rounds: Vec<RoundFeedback>,
+}
+
+/// Progress for the UI while the whole interview is reviewed.
+#[derive(Debug, Clone, Serialize)]
+struct LoopProgress {
+    loop_id: i64,
+    done: usize,
+    total: usize,
+    stage: &'static str,
+}
+
+/// Rounds reviewed at once. Each is one headless Claude call (20-90 s).
+const PARALLEL_REPORTS: usize = 3;
+
+/// What is saved for a loop. Writes nothing.
+pub fn loop_feedback_saved(state: &AppState, loop_id: i64) -> Result<LoopFeedback> {
+    let setup = load_setup(state, loop_id)?;
+    let cat = &state.catalog;
+    let store = state.store.lock().unwrap();
+    let mut rounds = Vec::new();
+    for id in store.loop_round_ids(loop_id)? {
+        let round = store.round(id)?;
+        let report = store.report(id)?.and_then(|(data, _)| data);
+        let missing = match (&report, enough_to_review(&round.transcript)) {
+            (Some(_), _) => None,
+            (None, false) => Some(NOT_ENOUGH.to_string()),
+            (None, true) => Some("No feedback yet.".to_string()),
+        };
+        rounds.push(RoundFeedback { round, report, missing });
+    }
+    Ok(LoopFeedback {
+        loop_id,
+        company: setup.company_name(cat),
+        level: cat.levels.get(&setup.level).cloned().unwrap_or(setup.level.clone()),
+        verdict: store.loop_verdict(loop_id)?,
+        rounds,
+    })
+}
+
+/// Reviews every round that has enough to judge and no feedback yet, then writes the
+/// committee verdict once two or more rounds have feedback. One call for the whole interview.
+pub async fn loop_feedback(app: &AppHandle, loop_id: i64) -> Result<LoopFeedback> {
+    use futures_util::StreamExt;
+    let state = app.state::<AppState>();
+    let todo: Vec<i64> = loop_feedback_saved(&state, loop_id)?
+        .rounds
+        .iter()
+        .filter(|r| r.report.is_none() && r.missing.as_deref() != Some(NOT_ENOUGH))
+        .map(|r| r.round.id)
+        .collect();
+    let total = todo.len();
+    let progress = |done, stage| {
+        let _ = app.emit("loop_feedback", LoopProgress { loop_id, done, total, stage });
+    };
+    progress(0, "rounds");
+    let mut failed: Vec<(i64, String)> = Vec::new();
+    let mut done = 0;
+    let mut jobs = futures_util::stream::iter(todo.into_iter().map(|id| async move { (id, generate_report(app, id).await) }))
+        .buffer_unordered(PARALLEL_REPORTS);
+    while let Some((id, res)) = jobs.next().await {
+        done += 1;
+        progress(done, "rounds");
+        if let Err(e) = res {
+            tracing::warn!(round_id = id, "interview feedback: round report failed: {e}");
+            failed.push((id, e.to_string()));
+        }
+    }
+    let saved = loop_feedback_saved(&state, loop_id)?;
+    let reviewed = saved.rounds.iter().filter(|r| r.report.is_some()).count();
+    // A new round report makes the old verdict stale.
+    if reviewed >= 2 && (done > failed.len() || saved.verdict.is_none()) {
+        progress(done, "verdict");
+        if let Err(e) = loop_verdict(app, loop_id).await {
+            tracing::warn!(loop_id, "interview feedback: verdict failed: {e}");
+        }
+    }
+    let mut out = loop_feedback_saved(&state, loop_id)?;
+    for r in out.rounds.iter_mut() {
+        if let Some((_, e)) = failed.iter().find(|(id, _)| *id == r.round.id) {
+            r.missing = Some(e.clone());
+        }
+    }
+    Ok(out)
+}
