@@ -3,7 +3,7 @@
 use crate::error::{AppError, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -227,60 +227,66 @@ fn err(e: impl std::fmt::Display) -> AppError {
     AppError::Voice(format!("audio device: {e}"))
 }
 
-/// Default output device, fed from a sample queue at the device rate.
+/// Runs `f` on the one long-lived audio thread. Opening WASAPI devices from tokio workers failed
+/// after a device change ("Cannot change thread mode after it is set"): another library had put
+/// that worker's COM apartment in a different mode. This thread only ever touches cpal.
+fn on_audio_thread<R: Send + 'static>(f: impl FnOnce() -> R + Send + 'static) -> R {
+    type Job = Box<dyn FnOnce() + Send>;
+    static JOBS: std::sync::OnceLock<Mutex<std::sync::mpsc::Sender<Job>>> = std::sync::OnceLock::new();
+    let jobs = JOBS.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<Job>();
+        std::thread::Builder::new()
+            .name("onsite-audio".into())
+            .spawn(move || rx.into_iter().for_each(|job| job()))
+            .expect("audio thread");
+        Mutex::new(tx)
+    });
+    let (tx, rx) = std::sync::mpsc::sync_channel(1);
+    jobs.lock().unwrap().send(Box::new(move || drop(tx.send(f())))).expect("audio thread alive");
+    rx.recv().expect("audio job finished")
+}
+
+/// True for stream errors after which the stream never recovers (device unplugged or switched).
+fn fatal(e: &cpal::Error) -> bool {
+    matches!(e.kind(), cpal::ErrorKind::StreamInvalidated | cpal::ErrorKind::DeviceNotAvailable)
+}
+
+/// Default output device, fed from a sample queue at the device rate. Rebuilds its stream
+/// when Windows invalidates it (headphones plugged in, Bluetooth connecting).
 pub struct Player {
-    _stream: Mutex<cpal::Stream>,
+    stream: Mutex<Option<cpal::Stream>>,
     queue: Arc<Mutex<VecDeque<f32>>>,
-    rate: u32,
+    rate: AtomicU32,
+    dead: Arc<AtomicBool>,
     pub level: Arc<Level>,
 }
 
 impl Player {
     pub fn open() -> Result<Self> {
-        let device = cpal::default_host().default_output_device().ok_or_else(|| err("no speaker found"))?;
-        let supported = device.default_output_config().map_err(err)?;
-        let format = supported.sample_format();
-        let config: cpal::StreamConfig = supported.into();
-        let channels = config.channels as usize;
-        let queue: Arc<Mutex<VecDeque<f32>>> = Default::default();
-        let level: Arc<Level> = Default::default();
-        let (q, lv) = (queue.clone(), level.clone());
-        let fill = move |out: &mut dyn FnMut(usize, f32), frames: usize| {
-            let mut q = q.lock().unwrap();
-            let mut sum = 0.0;
-            for f in 0..frames {
-                let v = q.pop_front().unwrap_or(0.0);
-                sum += v * v;
-                out(f, v);
-            }
-            lv.set(if frames > 0 { (sum / frames as f32).sqrt() } else { 0.0 });
+        let p = Self {
+            stream: Mutex::new(None),
+            queue: Default::default(),
+            rate: AtomicU32::new(0),
+            dead: Arc::new(AtomicBool::new(true)),
+            level: Default::default(),
         };
-        let on_err = |e: cpal::Error| tracing::warn!("speaker stream: {e}");
-        let stream = match format {
-            cpal::SampleFormat::F32 => device.build_output_stream(
-                config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let frames = data.len() / channels;
-                    fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill(v), frames)
-                },
-                on_err,
-                None,
-            ),
-            cpal::SampleFormat::I16 => device.build_output_stream(
-                config,
-                move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                    let frames = data.len() / channels;
-                    fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill((v * 32767.0) as i16), frames)
-                },
-                on_err,
-                None,
-            ),
-            other => return Err(err(format!("unsupported speaker format {other}"))),
+        p.ensure()?;
+        Ok(p)
+    }
+
+    /// Opens the stream if it is missing or was invalidated.
+    fn ensure(&self) -> Result<()> {
+        if !self.dead.load(Ordering::SeqCst) {
+            return Ok(());
         }
-        .map_err(err)?;
-        stream.play().map_err(err)?;
-        tracing::info!(rate = config.sample_rate, channels, "speaker open");
-        Ok(Self { _stream: Mutex::new(stream), queue, rate: config.sample_rate, level })
+        let (queue, level, dead) = (self.queue.clone(), self.level.clone(), self.dead.clone());
+        let (stream, rate) = on_audio_thread(move || build_output(queue, level, dead))?;
+        // Samples queued for the old device were resampled for its rate.
+        self.queue.lock().unwrap().clear();
+        self.rate.store(rate, Ordering::SeqCst);
+        *self.stream.lock().unwrap() = Some(stream);
+        self.dead.store(false, Ordering::SeqCst);
+        Ok(())
     }
 
     /// Queues mono PCM recorded at `sr`.
@@ -289,17 +295,72 @@ impl Player {
         self.queue.lock().unwrap().extend(out);
     }
 
+    /// A resampler to the device rate. Reopens a dead stream first, so each reply after a
+    /// device change plays on the new device.
     pub fn resampler_from(&self, sr: u32) -> Resampler {
-        Resampler::new(sr, self.rate)
+        if let Err(e) = self.ensure() {
+            tracing::warn!("speaker reopen: {e}");
+        }
+        Resampler::new(sr, self.rate.load(Ordering::SeqCst).max(1))
     }
 
     pub fn clear(&self) {
         self.queue.lock().unwrap().clear();
     }
 
+    /// Idle when nothing is queued, or when the stream died (the queue would never drain).
     pub fn is_idle(&self) -> bool {
-        self.queue.lock().unwrap().is_empty()
+        self.dead.load(Ordering::SeqCst) || self.queue.lock().unwrap().is_empty()
     }
+}
+
+fn build_output(queue: Arc<Mutex<VecDeque<f32>>>, lv: Arc<Level>, dead: Arc<AtomicBool>) -> Result<(cpal::Stream, u32)> {
+    let device = cpal::default_host().default_output_device().ok_or_else(|| err("no speaker found"))?;
+    let supported = device.default_output_config().map_err(err)?;
+    let format = supported.sample_format();
+    let config: cpal::StreamConfig = supported.into();
+    let channels = config.channels as usize;
+    let fill = move |out: &mut dyn FnMut(usize, f32), frames: usize| {
+        let mut q = queue.lock().unwrap();
+        let mut sum = 0.0;
+        for f in 0..frames {
+            let v = q.pop_front().unwrap_or(0.0);
+            sum += v * v;
+            out(f, v);
+        }
+        lv.set(if frames > 0 { (sum / frames as f32).sqrt() } else { 0.0 });
+    };
+    let on_err = move |e: cpal::Error| {
+        tracing::warn!("speaker stream: {e}");
+        if fatal(&e) {
+            dead.store(true, Ordering::SeqCst);
+        }
+    };
+    let stream = match format {
+        cpal::SampleFormat::F32 => device.build_output_stream(
+            config,
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                let frames = data.len() / channels;
+                fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill(v), frames)
+            },
+            on_err,
+            None,
+        ),
+        cpal::SampleFormat::I16 => device.build_output_stream(
+            config,
+            move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                let frames = data.len() / channels;
+                fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill((v * 32767.0) as i16), frames)
+            },
+            on_err,
+            None,
+        ),
+        other => return Err(err(format!("unsupported speaker format {other}"))),
+    }
+    .map_err(err)?;
+    stream.play().map_err(err)?;
+    tracing::info!(rate = config.sample_rate, channels, "speaker open");
+    Ok((stream, config.sample_rate))
 }
 
 pub const MIC_RATE: u32 = 16_000;
@@ -308,10 +369,20 @@ pub const MIC_RATE: u32 = 16_000;
 pub struct Mic {
     _stream: cpal::Stream,
     pub level: Arc<Level>,
+    dead: Arc<AtomicBool>,
 }
 
 impl Mic {
     pub fn open(tx: UnboundedSender<Vec<i16>>) -> Result<Self> {
+        on_audio_thread(move || Self::build(tx))
+    }
+
+    /// True once the device was unplugged or switched; no more audio will come.
+    pub fn is_dead(&self) -> bool {
+        self.dead.load(Ordering::SeqCst)
+    }
+
+    fn build(tx: UnboundedSender<Vec<i16>>) -> Result<Self> {
         let device = cpal::default_host().default_input_device().ok_or_else(|| err("no microphone found"))?;
         let supported = device.default_input_config().map_err(err)?;
         let format = supported.sample_format();
@@ -319,12 +390,18 @@ impl Mic {
         let channels = config.channels as usize;
         let mut rs = Downsampler::new(config.sample_rate, MIC_RATE);
         let level: Arc<Level> = Default::default();
-        let lv = level.clone();
+        let dead: Arc<AtomicBool> = Default::default();
+        let (lv, d) = (level.clone(), dead.clone());
         let mut handle = move |mut mono: Vec<f32>| {
             lv.set(rms(&mono));
             let _ = tx.send(f32_to_i16(&rs.process(&mut mono)));
         };
-        let on_err = |e: cpal::Error| tracing::warn!("mic stream: {e}");
+        let on_err = move |e: cpal::Error| {
+            tracing::warn!("mic stream: {e}");
+            if fatal(&e) {
+                d.store(true, Ordering::SeqCst);
+            }
+        };
         let stream = match format {
             cpal::SampleFormat::F32 => device.build_input_stream(
                 config,
@@ -351,7 +428,7 @@ impl Mic {
         .map_err(err)?;
         stream.play().map_err(err)?;
         tracing::info!(rate = config.sample_rate, channels, "mic open");
-        Ok(Self { _stream: stream, level })
+        Ok(Self { _stream: stream, level, dead })
     }
 }
 

@@ -499,6 +499,8 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
     let mut last_level = Instant::now();
     let mut shown = String::new();
     let heard = |ans: &Answer| clean_transcript(&ans.text(), &opts.vocab);
+    let mut health = tokio::time::interval(Duration::from_millis(500));
+    let mut mic_lost = false;
     emit(VoiceEvent::Listening { active: true });
 
     loop {
@@ -508,6 +510,12 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
                 return Ok(ListenEnd::Cancelled { heard: heard(&ans) });
             }
             _ = ctl.finish.notified() => break,
+            // An unplugged or switched mic sends nothing more; end with what we have.
+            _ = health.tick() => if mic.is_dead() {
+                tracing::warn!("microphone stream lost");
+                mic_lost = true;
+                break;
+            },
             m = seg_rx.recv() => {
                 let Some(m) = m else { continue };
                 if ans.on_msg(m)? {
@@ -588,6 +596,9 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
     ctl.mic_level.set(0.0);
     emit(VoiceEvent::Listening { active: false });
     if ans.segs.is_empty() {
+        if mic_lost {
+            return Err(AppError::Voice("The microphone changed. Tap the mic to listen again.".into()));
+        }
         return Ok(ListenEnd::NoSpeech);
     }
     let ended_at = Instant::now();

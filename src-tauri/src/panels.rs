@@ -125,6 +125,20 @@ impl Panels {
         })
     }
 
+    /// Every interviewer who owns a round on some panel, once each.
+    pub fn all_personas(&self) -> Vec<Persona> {
+        let mut out: Vec<Persona> = Vec::new();
+        for panel in self.raw["panels"].as_array().into_iter().flatten() {
+            let id = s(&panel["id"]);
+            for key in panel["round_owner"].as_object().into_iter().flat_map(|o| o.keys()) {
+                if let Some(p) = self.persona(&id, key).filter(|p| !out.iter().any(|o| o.name == p.name)) {
+                    out.push(p);
+                }
+            }
+        }
+        out
+    }
+
     /// Values for `prompts/persona_block.md`.
     pub fn persona_vars(&self, panel_id: &str, round_key: &str, family: &str) -> Option<Vars<'static>> {
         let (panel, iv) = self.interviewer(panel_id, round_key)?;

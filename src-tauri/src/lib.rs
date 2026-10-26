@@ -123,6 +123,15 @@ pub fn run() {
                 let settings = handle.state::<AppState>().settings().voice;
                 if settings.enabled {
                     commands::warm_voice(&settings).await;
+                    // Build panel voices now, so a round never waits on one (~5-15 s each, once).
+                    let personas = handle.state::<AppState>().panels.all_personas();
+                    let vs = voice::vs::VoiceStudio::new(&settings.base_url);
+                    for p in personas {
+                        let pv = voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states };
+                        if let Err(e) = vs.persona_voice(&pv).await {
+                            tracing::warn!(name = %pv.name, "interviewer voice prebuild: {e}");
+                        }
+                    }
                 }
             });
             Ok(())

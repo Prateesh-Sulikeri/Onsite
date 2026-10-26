@@ -141,6 +141,10 @@ struct RoundVoice {
     muted: Arc<AtomicBool>,
     /// Why the current answer is being cancelled: true = mute (keep the text), false = typed or ended.
     hold: Arc<AtomicBool>,
+    /// The round's voice task. Aborted on end, so queued sentences are never spoken after hang-up.
+    task: tokio::task::JoinHandle<()>,
+    /// Cleared on end; stops audio already being received from reaching the speaker.
+    alive: Arc<AtomicBool>,
 }
 
 #[derive(Default)]
@@ -194,7 +198,9 @@ impl Voice {
         });
 
         let (task_ctl, task_muted, task_hold, task_answered) = (ctl.clone(), muted.clone(), hold.clone(), answered_at);
-        tokio::spawn(async move {
+        let alive = Arc::new(AtomicBool::new(true));
+        let task_alive = alive.clone();
+        let task = tokio::spawn(async move {
             // One concrete profile for the whole round, so every sentence is the same voice.
             let resolved = match &settings.persona {
                 Some(p) => vs.persona_voice(p).await,
@@ -214,7 +220,9 @@ impl Voice {
             // VoiceStudio drops its weights after ~15 min idle (next call ~10 s, else ~1 s), and
             // `/model/status` can't tell us which. Warm up while Claude writes its first reply;
             // sentences queue meanwhile.
-            if let Some(v) = voice.as_ref() {
+            // Skipped when VoiceStudio spoke recently (app start, last round): it adds ~1-2 s
+            // before the first line.
+            if let Some(v) = voice.as_ref().filter(|_| !vs::spoke_within(Duration::from_secs(300))) {
                 let t = Instant::now();
                 match vs.speak("Okay, let's begin.", v, settings.steps, settings.speed, |_| {}).await {
                     Ok(()) => tracing::info!(ms = t.elapsed().as_millis() as u64, "VoiceStudio warm for the round"),
@@ -265,7 +273,7 @@ impl Voice {
                         }
                         // Playback runs from the Player queue, so the next batch is generated
                         // while this one plays.
-                        speak_into(&vs, &player, voice, &settings, &batch.0, &task_answered, &emit).await;
+                        speak_into(&vs, &player, voice, &settings, &batch.0, &task_answered, &task_alive, &emit).await;
                     }
                     Cmd::TurnDone { ended } => {
                         while !player.is_idle() {
@@ -291,7 +299,7 @@ impl Voice {
             player.clear();
         });
 
-        *self.current.lock().unwrap() = Some(RoundVoice { round_id, tx, ctl, muted, hold });
+        *self.current.lock().unwrap() = Some(RoundVoice { round_id, tx, ctl, muted, hold, task, alive });
         Ok(())
     }
 
@@ -350,6 +358,8 @@ impl Voice {
 
     pub fn end(&self) {
         if let Some(r) = self.current.lock().unwrap().take() {
+            r.alive.store(false, Ordering::SeqCst);
+            r.task.abort();
             r.hold.store(false, Ordering::SeqCst);
             r.ctl.lock().unwrap().cancel.notify_one();
         }
@@ -375,6 +385,7 @@ impl Voice {
 }
 
 /// One TTS call into the speaker queue. Errors are reported, never replaced by another voice.
+#[allow(clippy::too_many_arguments)]
 async fn speak_into(
     vs: &VoiceStudio,
     player: &Player,
@@ -382,6 +393,7 @@ async fn speak_into(
     settings: &VoiceSettings,
     text: &str,
     answered_at: &Mutex<Option<Instant>>,
+    alive: &AtomicBool,
     emit: &impl Fn(VoiceEvent),
 ) {
     let mut rs = player.resampler_from(TTS_RATE);
@@ -389,6 +401,9 @@ async fn speak_into(
     let mut first_ms: Option<u64> = None;
     let res = vs
         .speak(text, voice, settings.steps, settings.speed, |pcm| {
+            if !alive.load(Ordering::SeqCst) {
+                return;
+            }
             if first_ms.is_none() {
                 first_ms = Some(started.elapsed().as_millis() as u64);
                 if let Some(t) = answered_at.lock().unwrap().take() {
