@@ -139,7 +139,10 @@ pub enum VadEvent {
     SpeechEnd,
 }
 
-/// Energy VAD over fixed frames with an adaptive noise floor.
+/// Energy VAD over fixed frames with a noise floor learned before speech.
+///
+/// The floor only learns while nobody is speaking. Learning during speech let soft syllables
+/// raise it until normal speech read as silence, which ended answers mid-sentence.
 #[derive(Debug, Clone)]
 pub struct Vad {
     frame_ms: u32,
@@ -152,6 +155,10 @@ pub struct Vad {
 
 impl Vad {
     const MIN_THRESHOLD: f32 = 0.012;
+    /// A noisy room can't push the start threshold above 3x this.
+    const MAX_NOISE: f32 = 0.02;
+    /// While speaking, frames above this keep the turn open (quiet word endings).
+    const MIN_HOLD: f32 = 0.008;
     const START_FRAMES: u32 = 3;
 
     /// `pause_ms == 0` never ends on silence (manual mode).
@@ -168,17 +175,22 @@ impl Vad {
         self.quiet_ms
     }
 
+    /// Level that starts speech.
     pub fn threshold(&self) -> f32 {
         (self.noise * 3.0).max(Self::MIN_THRESHOLD)
     }
 
+    /// Level that keeps speech going once started.
+    fn hold_threshold(&self) -> f32 {
+        (self.noise * 2.0).max(Self::MIN_HOLD)
+    }
+
     pub fn push(&mut self, frame_rms: f32) -> VadEvent {
-        let loud = frame_rms > self.threshold();
-        if !loud {
-            // Only learn the floor from quiet frames, slowly.
-            self.noise = self.noise * 0.95 + frame_rms * 0.05;
-        }
         if !self.speaking {
+            let loud = frame_rms > self.threshold();
+            if !loud {
+                self.noise = (self.noise * 0.95 + frame_rms * 0.05).min(Self::MAX_NOISE);
+            }
             self.loud_frames = if loud { self.loud_frames + 1 } else { 0 };
             if self.loud_frames >= Self::START_FRAMES {
                 self.speaking = true;
@@ -187,7 +199,8 @@ impl Vad {
             }
             return VadEvent::None;
         }
-        self.quiet_ms = if loud { 0 } else { self.quiet_ms + self.frame_ms };
+        let voiced = frame_rms > self.hold_threshold();
+        self.quiet_ms = if voiced { 0 } else { self.quiet_ms + self.frame_ms };
         if self.pause_ms > 0 && self.quiet_ms >= self.pause_ms {
             self.speaking = false;
             self.loud_frames = 0;
@@ -443,6 +456,36 @@ mod tests {
         }
         assert_eq!(v.push(0.2), VadEvent::None, "short gap keeps speaking");
         let ends: Vec<_> = (0..5).map(|_| v.push(0.001)).collect();
+        assert_eq!(ends.last(), Some(&VadEvent::SpeechEnd));
+    }
+
+    #[test]
+    fn vad_floor_does_not_climb_during_speech() {
+        // Speech with soft syllables between loud ones, for 30 s. The old VAD learned the
+        // soft frames as noise, its threshold rose past the speech, and it ended the turn.
+        let mut v = Vad::new(20, 1800);
+        (0..50).for_each(|_| {
+            v.push(0.003);
+        });
+        let levels = [0.01, 0.02, 0.04, 0.08, 0.12, 0.06, 0.03, 0.015];
+        let events: Vec<_> = (0..1500).map(|i| v.push(levels[i % levels.len()])).collect();
+        assert_eq!(events.iter().filter(|e| **e == VadEvent::SpeechStart).count(), 1);
+        assert!(!events.contains(&VadEvent::SpeechEnd));
+        assert!(v.threshold() <= 0.015, "threshold {}", v.threshold());
+    }
+
+    #[test]
+    fn vad_soft_word_endings_keep_turn_open() {
+        let mut v = Vad::new(20, 200);
+        (0..50).for_each(|_| {
+            v.push(0.003);
+        });
+        (0..5).for_each(|_| {
+            v.push(0.1);
+        });
+        // Trailing off: below the start threshold but well above the room.
+        assert!((0..50).all(|_| v.push(0.01) == VadEvent::None));
+        let ends: Vec<_> = (0..10).map(|_| v.push(0.003)).collect();
         assert_eq!(ends.last(), Some(&VadEvent::SpeechEnd));
     }
 
