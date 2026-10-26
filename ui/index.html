@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onsite</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ============ SETUP ============ -->
+<div id="setupView" class="wrap">
+  <div class="top">
+    <div class="brand"><h1>Onsite</h1><span>practise the whole interview loop, out loud</span></div>
+    <div class="row">
+      <button class="btn small" id="settingsBtn">Settings</button>
+      <button class="theme-btn" id="themeBtn" aria-label="Switch light or dark theme">◐</button>
+    </div>
+  </div>
+
+  <div id="aiBanner" class="banner warn hidden"></div>
+
+  <div class="modes" role="group" aria-label="Interview mode">
+    <button class="mode" id="modeGeneral" aria-pressed="true">
+      <h3>General loop</h3>
+      <p>Pick any rounds and a company style. Starts right away.</p>
+    </button>
+    <button class="mode" id="modeCompany" aria-pressed="false" disabled title="Coming in the next update">
+      <h3>Company-specific loop</h3>
+      <p>Uses a researched dossier of that company’s real, recent interviews. Coming soon.</p>
+    </button>
+  </div>
+
+  <div class="setup">
+    <div class="stack">
+      <div class="panel">
+        <h2>Your context</h2>
+        <div class="stack">
+          <div class="grid2">
+            <div class="field">
+              <label for="company">Company style</label>
+              <select id="company"></select>
+            </div>
+            <div class="field">
+              <label for="level">Level</label>
+              <select id="level"></select>
+            </div>
+            <div class="field">
+              <label for="lang">Coding language</label>
+              <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select>
+            </div>
+            <div class="field">
+              <label for="temper">Interviewer</label>
+              <select id="temper">
+                <option value="supportive">Supportive — gives hints</option>
+                <option value="realistic" selected>Realistic — like a real panel</option>
+                <option value="barraiser">Bar-raiser — hard, rarely hints</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="resume">Resume</label>
+            <textarea id="resume" rows="5" placeholder="Paste your resume text, or open a text file."></textarea>
+            <div class="row"><input type="file" id="resumeFile" accept=".txt,.md"><span class="hint" id="resumeMsg"></span></div>
+          </div>
+          <div class="field">
+            <label for="jd">Job description (optional)</label>
+            <textarea id="jd" rows="4" placeholder="Paste a JD to tailor every round to it."></textarea>
+            <div class="row"><input type="file" id="jdFile" accept=".txt,.md"><span class="hint" id="jdMsg"></span></div>
+          </div>
+          <div class="field">
+            <label for="extra">Anything else the panel should know (optional)</label>
+            <textarea id="extra" rows="2" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="roundsPanel">
+        <h2>Rounds</h2>
+        <div class="rounds" id="roundList"></div>
+        <div class="field" style="margin-top:12px">
+          <label for="roundLen">Round length</label>
+          <select id="roundLen">
+            <option value="">Real length (per round)</option>
+            <option value="10">10 minutes each</option>
+            <option value="20">20 minutes each</option>
+            <option value="30">30 minutes each</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack" style="position:sticky;top:16px">
+      <div class="panel">
+        <h2 id="agendaTitle">Today’s loop</h2>
+        <div id="agenda" class="agenda"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary" id="startBtn">Start the call</button>
+        </div>
+        <div class="hint" id="startMsg" style="margin-top:8px"></div>
+      </div>
+      <div class="panel">
+        <h2>Past rounds</h2>
+        <div class="hist" id="history"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="settingsView" class="wrap hidden">
+  <div class="top">
+    <div class="brand"><h1>Onsite</h1><span>Settings</span></div>
+    <button class="btn" id="setBack">Back to setup</button>
+  </div>
+  <div class="stack" style="max-width:760px">
+    <div class="panel">
+      <h2>Claude Code</h2>
+      <div class="stack">
+        <dl class="kv"><dt>Using</dt><dd id="clPath">Not found yet</dd></dl>
+        <div class="field">
+          <label for="clExe">Path to claude.exe (leave empty to auto-detect)</label>
+          <input type="text" id="clExe" placeholder="C:\Users\you\.local\bin\claude.exe">
+        </div>
+        <div class="row">
+          <button class="btn small" id="clDetect">Detect again</button>
+          <button class="btn small" id="clSavePath">Use this path</button>
+          <button class="btn small primary" id="clHealth">Run health check</button>
+        </div>
+        <div id="clResult" class="hint"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Models</h2>
+      <div class="grid2">
+        <div class="field">
+          <label for="ivModel">Interviewer</label>
+          <select id="ivModel">
+            <option value="sonnet">Sonnet — fast replies</option>
+            <option value="opus">Opus — sharper, slower</option>
+            <option value="haiku">Haiku — fastest, lighter</option>
+          </select>
+          <span class="hint">Used for the live call. Speed matters most here.</span>
+        </div>
+        <div class="field">
+          <label for="repModel">Feedback and verdict</label>
+          <select id="repModel">
+            <option value="opus">Opus — best judgment</option>
+            <option value="sonnet">Sonnet — faster</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="saveModels">Save</button><span class="hint" id="modelsMsg"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ROOM ============ -->
+<div id="roomView" class="room hidden">
+  <div class="room-bar">
+    <div>
+      <div class="title" id="roomTitle"></div>
+      <div class="sub" id="roomSub"></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="row mobile-switch" role="group">
+      <button class="btn small" data-view="convo">Call</button>
+      <button class="btn small" data-view="work">Workspace</button>
+    </div>
+    <span class="timer" id="timer">00:00</span>
+    <button class="btn small danger" id="endBtn">End round</button>
+  </div>
+  <div class="room-main" id="roomMain" data-view="convo">
+    <section class="convo">
+      <div class="stage">
+        <div class="avatar" id="avatar">A</div>
+        <div style="flex:1;min-width:0">
+          <div class="who" id="ivName"></div>
+          <div class="state" id="callState">Connecting…</div>
+          <div class="caption" id="caption"></div>
+        </div>
+        <div class="me" id="meBadge" title="You">You</div>
+      </div>
+      <div class="transcript" id="transcript" aria-live="polite"></div>
+      <div id="wrapBanner" class="banner info hidden" style="margin:0 12px 8px">The interviewer has closed the round. <button class="btn small primary" id="wrapReport">Get my feedback</button></div>
+      <div class="composer">
+        <textarea id="answer" placeholder="Type your answer…" aria-label="Your answer"></textarea>
+        <div class="row">
+          <span class="kbd-hint" id="turnInfo"></span>
+          <div class="row">
+            <span class="kbd-hint">Enter sends · Shift+Enter new line</span>
+            <button class="btn primary" id="sendBtn">Send</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="work">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-tab="editor" aria-selected="true">Your editor</button>
+        <button class="tab" role="tab" data-tab="notes" aria-selected="false">Whiteboard</button>
+        <button class="tab" role="tab" data-tab="shared" aria-selected="false">From interviewer<span class="dot hidden" id="sharedDot"></span></button>
+      </div>
+      <div class="pane" data-pane="editor">
+        <div class="pane-tools"><span id="edLang"></span><span class="spacer"></span><span class="kbd-hint">The interviewer sees this when you send.</span><button class="btn small" id="sendWork">Share now</button></div>
+        <div class="editor"><div class="gutter" id="gutter">1</div><textarea id="code" spellcheck="false" aria-label="Code editor"></textarea></div>
+      </div>
+      <div class="pane hidden" data-pane="notes">
+        <div class="pane-tools"><span>Design notes, diagrams as text, scratch work</span><span class="spacer"></span><button class="btn small" id="sendWork2">Share now</button></div>
+        <textarea class="notes" id="notes" aria-label="Whiteboard"></textarea>
+      </div>
+      <div class="pane hidden" data-pane="shared">
+        <div class="pane-tools"><select id="sharedPick"></select></div>
+        <pre class="shared-pre" id="sharedCode"><div class="empty">Code the interviewer shares appears here.</div></pre>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- ============ REPORT ============ -->
+<div id="reportView" class="wrap hidden">
+  <div class="top">
+    <div class="brand"><h1>Onsite</h1><span id="repCrumb"></span></div>
+    <button class="btn" id="repBack">Back to setup</button>
+  </div>
+  <div id="repBody"></div>
+</div>
+
+<script src="ipc.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
