@@ -107,6 +107,19 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   send `Authorization: Bearer <key>`. Read field names from the live backend (`/docs` OpenAPI)
   before coding against them; the notes above came from reading its source, not from a live test.
 
+- **Verified live (VoiceStudio 0.5.6, 2026-10-26, RTX 5050):**
+  - Cold start: backend up ~70 s after launching the app; the first speech call then takes ~60 s
+    (weights). Onsite warms it up at launch with one short line.
+  - TTS used: `POST /v1/audio/speech` JSON `{model:"omnivoice", input, voice:<profile id>,
+    response_format:"pcm", stream_format:"audio", num_step, speed}` → raw PCM16 24 kHz mono.
+    It arrives in one burst after generation, so latency = generation time. `num_step` 8: ~1.0 s for a
+    short sentence, ~1.2 s for a 5 s sentence; 16: ~1.6 s. Default 8.
+  - STT used: `ws://127.0.0.1:3900/v1/audio/transcriptions/stream?pcm=1&sr=16000`. Events seen:
+    `session.started`, `status` (stage loading/ready), `partial {text}`; then `final` (`final_kind`
+    utterance|summary). Send `{"type":"input_audio.end"}` to finish. Capabilities doc:
+    `GET /v1/audio/capabilities`.
+  - `/ws/tts` is not used; the HTTP stream is simpler and documented in `/openapi.json`.
+
 ### audio/ — mic and speaker
 - cpal input at the device rate, resample to 16 kHz mono i16 for STT.
 - Turn-taking: after TTS finishes, open the mic; energy VAD marks speech start; end the utterance after

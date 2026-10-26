@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,222 +8,324 @@
 </head>
 <body>
 
-<!-- ============ SETUP ============ -->
-<div id="setupView" class="wrap">
-  <div class="top">
-    <div class="brand"><h1>Onsite</h1><span>practise the whole interview loop, out loud</span></div>
-    <div class="row">
-      <button class="btn small" id="settingsBtn">Settings</button>
-      <button class="theme-btn" id="themeBtn" aria-label="Switch light or dark theme">◐</button>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></symbol>
+    <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M2 2l20 20M9 9v2a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.7M19 10v1a7 7 0 0 1-.9 3.4M5 10v1a7 7 0 0 0 11.2 5.6M12 18v4M8 22h8"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 18l-6-6 6-6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 18v-6M9 15l3-3 3 3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20M8 7h4M8 11h4M8 15h4"/></symbol>
+    <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.7 13.3a15 15 0 0 1-3-4.1l1.9-1.9a1 1 0 0 0 .2-1.1L8.6 3.6A1 1 0 0 0 7.6 3H4a1 1 0 0 0-1 1.1A18 18 0 0 0 7 14M14 17a15 15 0 0 0 5.9 1.9 1 1 0 0 0 1.1-1v-3.6a1 1 0 0 0-.6-.9l-2.6-1.2a1 1 0 0 0-1.1.2l-1.5 1.5M2 2l20 20"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
+    <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0zM8 21h8"/></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side" aria-label="Main">
+    <div class="logo">
+      <span class="logo-mark"><svg><use href="#i-mic"/></svg></span>
+      <span class="logo-word">Onsite</span>
     </div>
-  </div>
+    <nav class="nav">
+      <button class="nav-item" data-nav="dashboard"><svg><use href="#i-home"/></svg><span>Dashboard</span></button>
+      <button class="nav-item" data-nav="interviews"><svg><use href="#i-chat"/></svg><span>Interviews</span></button>
+      <button class="nav-item" data-nav="dossiers"><svg><use href="#i-folder"/></svg><span>Dossiers</span></button>
+      <button class="nav-item" data-nav="feedback"><svg><use href="#i-chart"/></svg><span>Feedback</span></button>
+      <button class="nav-item" data-nav="settings"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
+    </nav>
+    <div class="side-foot">
+      <button class="sys" id="sysClaude" data-nav="settings" title="Claude Code"><i class="dot"></i><span>Claude Code</span></button>
+      <button class="sys" id="sysVoice" data-nav="settings" title="VoiceStudio"><i class="dot"></i><span>VoiceStudio</span></button>
+    </div>
+  </aside>
 
-  <div id="aiBanner" class="banner warn hidden"></div>
-
-  <div class="modes" role="group" aria-label="Interview mode">
-    <button class="mode" id="modeGeneral" aria-pressed="true">
-      <h3>General loop</h3>
-      <p>Pick any rounds and a company style. Starts right away.</p>
-    </button>
-    <button class="mode" id="modeCompany" aria-pressed="false" disabled title="Coming in the next update">
-      <h3>Company-specific loop</h3>
-      <p>Uses a researched dossier of that company’s real, recent interviews. Coming soon.</p>
-    </button>
-  </div>
-
-  <div class="setup">
-    <div class="stack">
-      <div class="panel">
-        <h2>Your context</h2>
+  <main class="main">
+    <!-- ============ DASHBOARD ============ -->
+    <section class="view" id="view-dashboard" hidden>
+      <header class="page-head">
+        <div>
+          <h1>Ready when you are</h1>
+          <p class="lede">Run a full loop out loud. Get written feedback after every round.</p>
+        </div>
+        <button class="btn primary" data-nav="interviews">Start an interview<svg><use href="#i-arrow"/></svg></button>
+      </header>
+      <div class="dash">
+        <div class="panel">
+          <div class="panel-head"><h2>Recent rounds</h2><button class="btn ghost sm" data-nav="feedback">All feedback<svg><use href="#i-arrow"/></svg></button></div>
+          <div class="rows" id="dashRecent"></div>
+        </div>
         <div class="stack">
-          <div class="grid2">
-            <div class="field">
-              <label for="company">Company style</label>
-              <select id="company"></select>
-            </div>
-            <div class="field">
-              <label for="level">Level</label>
-              <select id="level"></select>
-            </div>
-            <div class="field">
-              <label for="lang">Coding language</label>
-              <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select>
-            </div>
-            <div class="field">
-              <label for="temper">Interviewer</label>
-              <select id="temper">
-                <option value="supportive">Supportive — gives hints</option>
-                <option value="realistic" selected>Realistic — like a real panel</option>
-                <option value="barraiser">Bar-raiser — hard, rarely hints</option>
-              </select>
-            </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Fix this first</h2></div>
+            <div id="dashFix" class="muted">Finish a round to get your first fix.</div>
           </div>
-          <div class="field">
-            <label for="resume">Resume</label>
-            <textarea id="resume" rows="5" placeholder="Paste your resume text, or open a text file."></textarea>
-            <div class="row"><input type="file" id="resumeFile" accept=".txt,.md"><span class="hint" id="resumeMsg"></span></div>
-          </div>
-          <div class="field">
-            <label for="jd">Job description (optional)</label>
-            <textarea id="jd" rows="4" placeholder="Paste a JD to tailor every round to it."></textarea>
-            <div class="row"><input type="file" id="jdFile" accept=".txt,.md"><span class="hint" id="jdMsg"></span></div>
-          </div>
-          <div class="field">
-            <label for="extra">Anything else the panel should know (optional)</label>
-            <textarea id="extra" rows="2" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel" id="roundsPanel">
-        <h2>Rounds</h2>
-        <div class="rounds" id="roundList"></div>
-        <div class="field" style="margin-top:12px">
-          <label for="roundLen">Round length</label>
-          <select id="roundLen">
-            <option value="">Real length (per round)</option>
-            <option value="10">10 minutes each</option>
-            <option value="20">20 minutes each</option>
-            <option value="30">30 minutes each</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <div class="stack" style="position:sticky;top:16px">
-      <div class="panel">
-        <h2 id="agendaTitle">Today’s loop</h2>
-        <div id="agenda" class="agenda"></div>
-        <div class="row" style="margin-top:8px">
-          <button class="btn primary" id="startBtn">Start the call</button>
-        </div>
-        <div class="hint" id="startMsg" style="margin-top:8px"></div>
-      </div>
-      <div class="panel">
-        <h2>Past rounds</h2>
-        <div class="hist" id="history"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ SETTINGS ============ -->
-<div id="settingsView" class="wrap hidden">
-  <div class="top">
-    <div class="brand"><h1>Onsite</h1><span>Settings</span></div>
-    <button class="btn" id="setBack">Back to setup</button>
-  </div>
-  <div class="stack" style="max-width:760px">
-    <div class="panel">
-      <h2>Claude Code</h2>
-      <div class="stack">
-        <dl class="kv"><dt>Using</dt><dd id="clPath">Not found yet</dd></dl>
-        <div class="field">
-          <label for="clExe">Path to claude.exe (leave empty to auto-detect)</label>
-          <input type="text" id="clExe" placeholder="C:\Users\you\.local\bin\claude.exe">
-        </div>
-        <div class="row">
-          <button class="btn small" id="clDetect">Detect again</button>
-          <button class="btn small" id="clSavePath">Use this path</button>
-          <button class="btn small primary" id="clHealth">Run health check</button>
-        </div>
-        <div id="clResult" class="hint"></div>
-      </div>
-    </div>
-    <div class="panel">
-      <h2>Models</h2>
-      <div class="grid2">
-        <div class="field">
-          <label for="ivModel">Interviewer</label>
-          <select id="ivModel">
-            <option value="sonnet">Sonnet — fast replies</option>
-            <option value="opus">Opus — sharper, slower</option>
-            <option value="haiku">Haiku — fastest, lighter</option>
-          </select>
-          <span class="hint">Used for the live call. Speed matters most here.</span>
-        </div>
-        <div class="field">
-          <label for="repModel">Feedback and verdict</label>
-          <select id="repModel">
-            <option value="opus">Opus — best judgment</option>
-            <option value="sonnet">Sonnet — faster</option>
-          </select>
-        </div>
-      </div>
-      <div class="row" style="margin-top:12px"><button class="btn primary" id="saveModels">Save</button><span class="hint" id="modelsMsg"></span></div>
-    </div>
-  </div>
-</div>
-
-<!-- ============ ROOM ============ -->
-<div id="roomView" class="room hidden">
-  <div class="room-bar">
-    <div>
-      <div class="title" id="roomTitle"></div>
-      <div class="sub" id="roomSub"></div>
-    </div>
-    <div class="spacer"></div>
-    <div class="row mobile-switch" role="group">
-      <button class="btn small" data-view="convo">Call</button>
-      <button class="btn small" data-view="work">Workspace</button>
-    </div>
-    <span class="timer" id="timer">00:00</span>
-    <button class="btn small danger" id="endBtn">End round</button>
-  </div>
-  <div class="room-main" id="roomMain" data-view="convo">
-    <section class="convo">
-      <div class="stage">
-        <div class="avatar" id="avatar">A</div>
-        <div style="flex:1;min-width:0">
-          <div class="who" id="ivName"></div>
-          <div class="state" id="callState">Connecting…</div>
-          <div class="caption" id="caption"></div>
-        </div>
-        <div class="me" id="meBadge" title="You">You</div>
-      </div>
-      <div class="transcript" id="transcript" aria-live="polite"></div>
-      <div id="wrapBanner" class="banner info hidden" style="margin:0 12px 8px">The interviewer has closed the round. <button class="btn small primary" id="wrapReport">Get my feedback</button></div>
-      <div class="composer">
-        <textarea id="answer" placeholder="Type your answer…" aria-label="Your answer"></textarea>
-        <div class="row">
-          <span class="kbd-hint" id="turnInfo"></span>
-          <div class="row">
-            <span class="kbd-hint">Enter sends · Shift+Enter new line</span>
-            <button class="btn primary" id="sendBtn">Send</button>
+          <div class="panel">
+            <div class="panel-head"><h2>Setup</h2></div>
+            <ul class="checks" id="dashChecks"></ul>
           </div>
         </div>
       </div>
     </section>
-    <section class="work">
-      <div class="tabs" role="tablist">
-        <button class="tab" role="tab" data-tab="editor" aria-selected="true">Your editor</button>
-        <button class="tab" role="tab" data-tab="notes" aria-selected="false">Whiteboard</button>
-        <button class="tab" role="tab" data-tab="shared" aria-selected="false">From interviewer<span class="dot hidden" id="sharedDot"></span></button>
-      </div>
-      <div class="pane" data-pane="editor">
-        <div class="pane-tools"><span id="edLang"></span><span class="spacer"></span><span class="kbd-hint">The interviewer sees this when you send.</span><button class="btn small" id="sendWork">Share now</button></div>
-        <div class="editor"><div class="gutter" id="gutter">1</div><textarea id="code" spellcheck="false" aria-label="Code editor"></textarea></div>
-      </div>
-      <div class="pane hidden" data-pane="notes">
-        <div class="pane-tools"><span>Design notes, diagrams as text, scratch work</span><span class="spacer"></span><button class="btn small" id="sendWork2">Share now</button></div>
-        <textarea class="notes" id="notes" aria-label="Whiteboard"></textarea>
-      </div>
-      <div class="pane hidden" data-pane="shared">
-        <div class="pane-tools"><select id="sharedPick"></select></div>
-        <pre class="shared-pre" id="sharedCode"><div class="empty">Code the interviewer shares appears here.</div></pre>
+
+    <!-- ============ INTERVIEWS (SETUP) ============ -->
+    <section class="view" id="view-interviews" hidden>
+      <header class="page-head">
+        <div>
+          <div class="crumb">Interviews</div>
+          <h1>Start your next interview</h1>
+          <p class="lede">Pick a mode, set your context and let’s practise.</p>
+        </div>
+        <button class="btn ghost sm" data-nav="feedback">View past rounds<svg><use href="#i-arrow"/></svg></button>
+      </header>
+
+      <div class="setup-grid">
+        <div class="stack">
+          <div class="modes" role="radiogroup" aria-label="Mode">
+            <button class="mode" role="radio" aria-checked="true" id="modeGeneral">
+              <span class="mode-ic"><svg><use href="#i-sparkle"/></svg></span>
+              <span class="mode-tx"><b>General practice</b><small>Pick any rounds and a company style. Starts right away.</small></span>
+              <span class="mode-check"><svg><use href="#i-check"/></svg></span>
+            </button>
+            <button class="mode" role="radio" aria-checked="false" id="modeCompany" disabled>
+              <span class="mode-ic"><svg><use href="#i-building"/></svg></span>
+              <span class="mode-tx"><b>Company-specific <em class="badge">Soon</em></b><small>Uses a researched dossier of that company’s real, recent interviews.</small></span>
+            </button>
+          </div>
+
+          <div class="panel">
+            <h2>Your context</h2>
+            <div class="form-grid">
+              <label class="field"><span>Company style</span><select id="company"></select></label>
+              <label class="field"><span>Interviewer style</span>
+                <select id="temper">
+                  <option value="supportive">Supportive — gives hints</option>
+                  <option value="realistic">Realistic — like a real panel</option>
+                  <option value="barraiser">Bar-raiser — hard, rarely hints</option>
+                </select>
+              </label>
+              <label class="field"><span>Level</span><select id="level"></select></label>
+              <label class="field"><span>Coding language</span>
+                <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select>
+              </label>
+            </div>
+
+            <div class="field" style="margin-top:18px">
+              <span>Rounds <small class="muted" id="roundCount"></small></span>
+              <div class="chips" id="roundList" role="group" aria-label="Rounds"></div>
+            </div>
+
+            <div class="drops">
+              <div class="drop" id="dropResume" tabindex="0">
+                <svg class="drop-ic"><use href="#i-upload"/></svg>
+                <div class="drop-tx"><b>Resume <small>(optional)</small></b><span id="resumeMsg">Drop a .txt or .md file, or <u>choose a file</u>, or <u data-paste="resume">paste text</u></span></div>
+                <input type="file" id="resumeFile" accept=".txt,.md" hidden>
+              </div>
+              <div class="drop" id="dropJd" tabindex="0">
+                <svg class="drop-ic"><use href="#i-upload"/></svg>
+                <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <u>Choose a file</u> or <u data-paste="jd">paste text</u></span></div>
+                <input type="file" id="jdFile" accept=".txt,.md" hidden>
+              </div>
+            </div>
+            <textarea id="resume" class="paste" rows="6" placeholder="Resume text" hidden></textarea>
+            <textarea id="jd" class="paste" rows="5" placeholder="Job description text" hidden></textarea>
+
+            <label class="field" style="margin-top:18px"><span>Anything else the panel should know? <small class="muted">(optional)</small></span>
+              <textarea id="extra" rows="2" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea>
+            </label>
+
+            <div class="start-row">
+              <label class="field"><span>Round length</span>
+                <select id="roundLen">
+                  <option value="">Real length (per round)</option>
+                  <option value="10">10 minutes each</option>
+                  <option value="20">20 minutes each</option>
+                  <option value="30">30 minutes each</option>
+                </select>
+              </label>
+              <div class="field"><span>Duration</span><div class="readout" id="duration">—</div></div>
+              <button class="btn primary lg" id="startBtn">Start interview<svg><use href="#i-arrow"/></svg></button>
+            </div>
+            <p class="form-msg" id="startMsg" role="status"></p>
+          </div>
+        </div>
+
+        <aside class="panel loop-card">
+          <h2>Your loop</h2>
+          <ol class="timeline" id="agenda"></ol>
+        </aside>
       </div>
     </section>
-  </div>
+
+    <!-- ============ DOSSIERS ============ -->
+    <section class="view" id="view-dossiers" hidden>
+      <header class="page-head"><div><div class="crumb">Dossiers</div><h1>Company dossiers</h1>
+        <p class="lede">Onsite will research how a company interviews right now, from recent candidate reports, then run that loop.</p></div></header>
+      <div class="empty-state panel">
+        <span class="empty-ic"><svg><use href="#i-building"/></svg></span>
+        <h2>Research arrives in the next update</h2>
+        <p class="muted">You’ll name a company and role, and a background job reads 8+ first-hand reports, extracts each round and its real questions, and saves a dossier here. Your Razorpay SDE-2 dossier is ready to import.</p>
+      </div>
+    </section>
+
+    <!-- ============ FEEDBACK ============ -->
+    <section class="view" id="view-feedback" hidden>
+      <header class="page-head"><div><div class="crumb">Feedback</div><h1>Your rounds</h1>
+        <p class="lede">Every finished round, with its written feedback.</p></div></header>
+      <div class="panel"><div class="rows" id="history"></div></div>
+    </section>
+
+    <!-- ============ REPORT ============ -->
+    <section class="view" id="view-report" hidden>
+      <header class="page-head">
+        <div><button class="crumb link" data-nav="feedback"><svg><use href="#i-back"/></svg>Feedback</button><h1 id="repTitle">Feedback</h1><p class="lede" id="repSub"></p></div>
+      </header>
+      <div id="repBody"></div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section class="view" id="view-settings" hidden>
+      <header class="page-head"><div><div class="crumb">Settings</div><h1>Settings</h1>
+        <p class="lede">Everything runs on this machine. Model calls go through your own Claude Code login.</p></div></header>
+      <div class="settings">
+        <div class="panel">
+          <div class="panel-head"><h2>Claude Code</h2><span class="pill" id="clPill">Checking…</span></div>
+          <dl class="kv"><dt>Using</dt><dd id="clPath">Not found yet</dd></dl>
+          <label class="field"><span>Path to claude.exe <small class="muted">(leave empty to auto-detect)</small></span>
+            <input type="text" id="clExe" placeholder="C:\Users\you\.local\bin\claude.exe"></label>
+          <div class="btn-row">
+            <button class="btn" id="clDetect"><svg><use href="#i-refresh"/></svg>Detect again</button>
+            <button class="btn" id="clSavePath">Use this path</button>
+            <button class="btn primary" id="clHealth">Run health check</button>
+          </div>
+          <p class="form-msg" id="clResult" role="status"></p>
+          <div class="form-grid" style="margin-top:18px">
+            <label class="field"><span>Interviewer model</span>
+              <select id="ivModel"><option value="sonnet">Sonnet — fast replies</option><option value="opus">Opus — sharper, slower</option><option value="haiku">Haiku — fastest, lighter</option></select></label>
+            <label class="field"><span>Feedback and verdict model</span>
+              <select id="repModel"><option value="opus">Opus — best judgment</option><option value="sonnet">Sonnet — faster</option></select></label>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Voice</h2><span class="pill" id="vsPill">Checking…</span></div>
+          <p class="muted" id="vsInfo">VoiceStudio speaks for the interviewer and transcribes your answers, locally.</p>
+          <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
+          <label class="switch"><input type="checkbox" id="vEnabled"><span class="track"></span><span>Spoken interviews</span></label>
+          <div class="form-grid">
+            <label class="field"><span>Interviewer voice</span><select id="vVoice"><option value="">VoiceStudio default</option></select></label>
+            <label class="field"><span>Voice quality</span>
+              <select id="vSteps"><option value="8">Fast — about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best — slow</option></select></label>
+            <label class="field"><span>Speaking speed</span>
+              <select id="vSpeed"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select></label>
+            <label class="field"><span>Send my answer after I stop talking for</span>
+              <select id="vPause"><option value="1800">1.8 seconds</option><option value="3000">3 seconds</option><option value="5000">5 seconds</option><option value="0">Never — I tap the mic</option></select></label>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="vTestSpeak"><svg><use href="#i-speaker"/></svg>Test voice</button>
+            <button class="btn" id="vTestMic"><svg><use href="#i-mic"/></svg>Test mic</button>
+            <div class="meter" aria-hidden="true"><i id="vMeter"></i></div>
+          </div>
+          <p class="form-msg" id="vResult" role="status"></p>
+        </div>
+        <div class="btn-row"><button class="btn primary" id="saveSettings">Save settings</button><span class="form-msg" id="saveMsg" role="status"></span></div>
+      </div>
+    </section>
+
+    <!-- ============ CALL ROOM ============ -->
+    <section class="view room" id="view-room" hidden>
+      <header class="room-head">
+        <div class="room-title">
+          <span class="room-ic" id="roomIc">D</span>
+          <div><h1 id="roomTitle"></h1><p id="roomSub"></p></div>
+        </div>
+        <div class="room-meta">
+          <span class="timer" id="timer"><i class="rec"></i><b id="timerText">00:00</b> <span id="timerLabel">remaining</span></span>
+        </div>
+      </header>
+
+      <div class="room-body">
+        <div class="convo">
+          <div class="transcript" id="transcript" aria-live="polite"></div>
+          <div class="closed-note" id="wrapBanner" hidden>
+            <span>The interviewer has closed the round.</span>
+            <button class="btn primary sm" id="wrapReport">Get my feedback<svg><use href="#i-arrow"/></svg></button>
+          </div>
+          <div class="composer">
+            <textarea id="answer" rows="1" placeholder="Type instead…" aria-label="Type your answer"></textarea>
+            <button class="icon-btn" id="sendBtn" aria-label="Send"><svg><use href="#i-send"/></svg></button>
+          </div>
+          <div class="controls">
+            <button class="btn ctrl" id="muteBtn"><svg><use href="#i-mic-off"/></svg><span>Mute</span></button>
+            <div class="orb-wrap">
+              <div class="wave" id="waveL" aria-hidden="true"></div>
+              <button class="orb" id="orb" aria-label="Microphone"><svg><use href="#i-mic"/></svg></button>
+              <div class="wave" id="waveR" aria-hidden="true"></div>
+              <div class="orb-label" id="orbLabel">Connecting…</div>
+            </div>
+            <button class="btn ctrl danger" id="endBtn"><i class="stop"></i><span>End interview</span></button>
+          </div>
+          <div class="turn-info" id="turnInfo"></div>
+        </div>
+
+        <div class="work">
+          <div class="tabs" role="tablist">
+            <button class="tab" role="tab" data-tab="editor" aria-selected="true"><svg><use href="#i-code"/></svg>Editor</button>
+            <button class="tab" role="tab" data-tab="notes" aria-selected="false"><svg><use href="#i-pen"/></svg>Whiteboard</button>
+            <button class="tab" role="tab" data-tab="shared" aria-selected="false"><svg><use href="#i-user"/></svg>From interviewer<i class="tab-dot" id="sharedDot" hidden></i></button>
+          </div>
+          <div class="pane" data-pane="editor">
+            <div class="pane-bar"><span class="lang-tag" id="edLang"></span><span class="muted">The interviewer sees this when you send.</span><button class="btn ghost sm" id="sendWork">Share now</button></div>
+            <div class="editor"><div class="gutter" id="gutter">1</div><textarea id="code" spellcheck="false" aria-label="Code editor"></textarea></div>
+          </div>
+          <div class="pane" data-pane="notes" hidden>
+            <div class="pane-bar"><span class="muted">Design notes, diagrams as text, scratch work.</span><button class="btn ghost sm" id="sendWork2">Share now</button></div>
+            <textarea class="notes" id="notes" aria-label="Whiteboard"></textarea>
+          </div>
+          <div class="pane" data-pane="shared" hidden>
+            <div class="pane-bar"><select id="sharedPick" class="sm"></select></div>
+            <pre class="shared-code" id="sharedCode"></pre>
+          </div>
+        </div>
+
+        <aside class="rail">
+          <div class="panel tight">
+            <h3>Round context</h3>
+            <div class="ctx-title"><span class="room-ic sm" id="ctxIc">D</span><div><b id="ctxCompany"></b><span class="tag" id="ctxRound"></span></div></div>
+            <div class="ctx-chips" id="ctxChips"></div>
+          </div>
+          <div class="panel tight">
+            <h3>Round plan</h3>
+            <ol class="phases" id="phases"></ol>
+          </div>
+          <div class="panel tight">
+            <h3><svg class="h-ic"><use href="#i-bulb"/></svg>Tips</h3>
+            <ul class="tips" id="tips"></ul>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
 </div>
 
-<!-- ============ REPORT ============ -->
-<div id="reportView" class="wrap hidden">
-  <div class="top">
-    <div class="brand"><h1>Onsite</h1><span id="repCrumb"></span></div>
-    <button class="btn" id="repBack">Back to setup</button>
-  </div>
-  <div id="repBody"></div>
-</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script src="ipc.js"></script>
 <script src="app.js"></script>
