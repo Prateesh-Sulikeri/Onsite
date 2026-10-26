@@ -53,9 +53,10 @@ impl VoiceStudio {
         self.get_json("/health").await
     }
 
-    /// `loaded` is false while the TTS weights are still loading after launch.
-    pub async fn model_loaded(&self) -> Result<bool> {
-        Ok(self.get_json("/model/status").await?["loaded"].as_bool().unwrap_or(false))
+    /// Ready unless weights are loading. `/model/status` reports `loaded: false` while idle
+    /// (it loads on demand in about a second), so only `loading` means "not yet".
+    pub async fn ready(&self) -> Result<bool> {
+        Ok(!self.get_json("/model/status").await?["loading"].as_bool().unwrap_or(false))
     }
 
     pub async fn profiles(&self) -> Result<Vec<Profile>> {

@@ -115,6 +115,7 @@ pub async fn listen(vs: &VoiceStudio, pause_ms: u32, ctl: &ListenCtl, mut emit: 
     let mut preroll: VecDeque<i16> = VecDeque::with_capacity(PREROLL + FRAME);
     let mut ws: Option<Ws> = None;
     let mut st = SttState::default();
+    let mut last_level = Instant::now();
     emit(VoiceEvent::Listening { active: true });
 
     loop {
@@ -127,6 +128,10 @@ pub async fn listen(vs: &VoiceStudio, pause_ms: u32, ctl: &ListenCtl, mut emit: 
             chunk = rx.recv() => {
                 let Some(chunk) = chunk else { break };
                 ctl.mic_level.set(mic.level.get());
+                if last_level.elapsed() >= Duration::from_millis(80) {
+                    last_level = Instant::now();
+                    emit(VoiceEvent::Level { mic: mic.level.get(), out: 0.0 });
+                }
                 let mut ended = false;
                 let mut started = false;
                 for &s in &chunk {

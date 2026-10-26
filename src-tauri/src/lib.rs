@@ -78,12 +78,21 @@ fn prompts_dir(app: &tauri::App) -> PathBuf {
     app.path().resource_dir().map(|d| d.join("prompts")).unwrap_or(dev)
 }
 
+/// Logs go to %LOCALAPPDATA%\Onsite\onsite.log (the app has no console window).
+fn init_logging() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "onsite=info,onsite_lib=info".into());
+    let dir = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("Onsite");
+    let file = std::fs::create_dir_all(&dir).and_then(|_| {
+        std::fs::OpenOptions::new().create(true).append(true).open(dir.join("onsite.log"))
+    });
+    match file {
+        Ok(f) => tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(Mutex::new(f)).init(),
+        Err(_) => tracing_subscriber::fmt().with_env_filter(filter).init(),
+    }
+}
+
 pub fn run() {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "onsite=info,onsite_lib=info".into()),
-        )
-        .init();
+    init_logging();
 
     tauri::Builder::default()
         .setup(|app| {
@@ -112,6 +121,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_catalog,
+            commands::ui_log,
             commands::get_settings,
             commands::save_settings,
             commands::detect_claude,

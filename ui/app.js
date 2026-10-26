@@ -1,5 +1,5 @@
 "use strict";
-/* Onsite UI. Model calls, storage and audio all live in Rust (window.ipc). */
+/* Onsite UI. Model calls, storage and audio all live in Rust (window.api). */
 const F = "```";
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -76,8 +76,8 @@ function toast(msg, kind = ""){
 }
 
 async function refreshStatus(){
-  try{ SETTINGS = await ipc.invoke("get_settings"); }catch(e){}
-  try{ VS = await ipc.invoke("voice_status"); }catch(e){ VS = {up:false, loaded:false, profiles:[]}; }
+  try{ SETTINGS = await api.invoke("get_settings"); }catch(e){}
+  try{ VS = await api.invoke("voice_status"); }catch(e){ VS = {up:false, loaded:false, profiles:[]}; }
   const cl = $("#sysClaude"); cl.className = "sys " + (SETTINGS && SETTINGS.claude ? "ok" : "bad");
   const vs = $("#sysVoice"); vs.className = "sys " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
   vs.title = !VS.up ? "VoiceStudio is not running" : VS.loaded ? "VoiceStudio ready" : "VoiceStudio is loading its voice model";
@@ -87,12 +87,12 @@ setInterval(() => { if (!session) refreshStatus(); }, 15000);
 /* ---------------- dashboard ---------------- */
 async function renderDashboard(){
   let h = [];
-  try{ h = await ipc.invoke("history"); }catch(e){}
+  try{ h = await api.invoke("history"); }catch(e){}
   $("#dashRecent").innerHTML = h.length ? h.slice(0, 5).map(rowHtml).join("") : `<div class="none">No rounds yet. Your first one takes about a minute to set up.</div>`;
   bindRows("#dashRecent");
   const latest = h.find(x => x.overall != null);
   if (latest){
-    const rep = await ipc.invoke("get_report", {roundId: latest.round_id}).catch(() => null);
+    const rep = await api.invoke("get_report", {roundId: latest.round_id}).catch(() => null);
     if (rep && rep.fix_first) $("#dashFix").innerHTML = `<p>${esc(rep.fix_first)}</p><p class="muted" style="margin-top:8px">From ${esc(latest.name)}, ${esc(new Date(latest.started_at).toLocaleDateString())}</p>`;
   }
   await refreshStatus();
@@ -184,7 +184,7 @@ $("#startBtn").onclick = async () => {
   };
   const btn = $("#startBtn"); btn.classList.add("is-busy"); $("#startMsg").className = "form-msg"; $("#startMsg").textContent = "";
   try{
-    const id = await ipc.invoke("create_loop", {setup});
+    const id = await api.invoke("create_loop", {setup});
     loop = {id, setup, count: rounds.length};
     await startRound(0);
   }catch(e){ $("#startMsg").className = "form-msg err"; $("#startMsg").textContent = errText(e); }
@@ -233,7 +233,7 @@ async function startRound(index){
   session.pendingEl = addMsg("iv", "", true);
   startTimer();
   try{
-    const info = await ipc.invoke("start_round", {loopId: loop.id, index});
+    const info = await api.invoke("start_round", {loopId: loop.id, index});
     session.roundId = info.round_id;
     session.minutes = info.plan.minutes;
   }catch(e){
@@ -245,7 +245,7 @@ async function startRound(index){
 function leaveRound(){
   const s = session; session = null;
   clearInterval(timerI);
-  if (s && s.roundId !== null) ipc.invoke("end_round", {roundId: s.roundId, workspace: {code: $("#code").value, notes: $("#notes").value}}).catch(() => {});
+  if (s && s.roundId !== null) api.invoke("end_round", {roundId: s.roundId, workspace: {code: $("#code").value, notes: $("#notes").value}}).catch(() => {});
 }
 
 /* phases: thinking | speaking | listening | hearing | idle | muted | closed */
@@ -282,7 +282,7 @@ function setWave(level){
 
 $("#orb").onclick = () => {
   if (!session || !session.voiceOn || session.closed) { $("#answer").focus(); return; }
-  if (session.phase === "listening" || session.phase === "hearing") ipc.invoke("voice_finish");
+  if (session.phase === "listening" || session.phase === "hearing") api.invoke("voice_finish");
   else if (session.phase === "muted" || session.phase === "idle") setMuted(false);
 };
 $("#muteBtn").onclick = () => session && session.voiceOn && setMuted(!session.muted);
@@ -291,7 +291,7 @@ function setMuted(m){
   $("#muteBtn").setAttribute("aria-pressed", String(m));
   $("#muteBtn").querySelector("span").textContent = m ? "Unmute" : "Mute";
   $("#muteBtn").querySelector("use").setAttribute("href", m ? "#i-mic" : "#i-mic-off");
-  ipc.invoke("voice_mute", {muted: m});
+  api.invoke("voice_mute", {muted: m});
   if (m){ clearDraft(); if (session.phase === "listening" || session.phase === "hearing" || session.phase === "idle") setPhase("muted"); }
   else if (session.phase === "muted") setPhase("idle");
 }
@@ -321,7 +321,7 @@ function renderPhases(min){
 }
 
 /* events from the interviewer (Claude) */
-ipc.listen("round", ev => {
+api.listen("round", ev => {
   if (!session || (session.roundId !== null && ev.round_id !== session.roundId)) return;
   switch (ev.kind){
     case "delta":
@@ -350,7 +350,7 @@ ipc.listen("round", ev => {
 });
 
 /* events from the voice loop (VoiceStudio + mic) */
-ipc.listen("voice", ev => {
+api.listen("voice", ev => {
   if (!session) return;
   switch (ev.kind){
     case "speaking": if (ev.active) setPhase("speaking"); else if (!session.closed) setPhase(session.muted ? "muted" : "idle"); break;
@@ -399,10 +399,10 @@ async function sendAnswer({text, force = false, fromVoice = false} = {}){
   if (session.busy){ toast("The interviewer is still replying."); return; }
   const typed = text == null;
   if (typed) text = $("#answer").value;
-  if (typed && session.voiceOn) ipc.invoke("voice_cancel_listen");
+  if (typed && session.voiceOn) api.invoke("voice_cancel_listen");
   session.busy = true; session.voiceMs = null;
   try{
-    const turn = await ipc.invoke("send_answer", {roundId: session.roundId, text, workspace: currentWorkspace(), force});
+    const turn = await api.invoke("send_answer", {roundId: session.roundId, text, workspace: currentWorkspace(), force});
     if (!turn){ session.busy = false; return; }
     if (typed){ $("#answer").value = ""; autosize(); }
     addMsg("me", turn.text || "(shared workspace)", false, false, turn.shared_workspace);
@@ -518,20 +518,20 @@ function rowHtml(x){
 function bindRows(sel){ $$(sel + " .row-item").forEach(b => b.onclick = () => openReport(Number(b.dataset.roundId), false)); }
 async function renderHistory(){
   let h = [];
-  try{ h = await ipc.invoke("history"); }catch(e){ toast(errText(e), "err"); }
+  try{ h = await api.invoke("history"); }catch(e){ toast(errText(e), "err"); }
   $("#history").innerHTML = h.length ? h.map(rowHtml).join("") : `<div class="none">Your finished rounds and their feedback appear here.</div>`;
   bindRows("#history");
 }
 
 async function openReport(roundId, live){
   nav("report");
-  const round = await ipc.invoke("get_round", {roundId});
+  const round = await api.invoke("get_round", {roundId});
   $("#repTitle").textContent = round.name;
   $("#repSub").textContent = `With ${round.persona} · ${new Date(round.started_at).toLocaleString()}`;
-  let rep = await ipc.invoke("get_report", {roundId});
+  let rep = await api.invoke("get_report", {roundId});
   if (!rep){
     $("#repBody").innerHTML = `<div class="stack"><div class="panel"><h2>Writing your feedback…</h2><p class="muted" style="margin-top:6px">The panel is reviewing the transcript. This takes 20–90 seconds.</p></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
-    try{ rep = await ipc.invoke("generate_report", {roundId}); }
+    try{ rep = await api.invoke("generate_report", {roundId}); }
     catch(e){
       $("#repBody").innerHTML = `<div class="panel"><h2>Feedback didn’t come through</h2><p class="form-msg err">${esc(errText(e))}</p><div class="btn-row"><button class="btn primary" id="repRetry">${icon("refresh")}Try again</button></div></div>`;
       $("#repRetry").onclick = () => openReport(roundId, live);
@@ -595,7 +595,7 @@ async function loopVerdict(loopId){
   const el = $("#verdict");
   el.innerHTML = `<div class="panel"><h2>The hiring committee is deliberating…</h2><div class="skeleton" style="height:80px; margin-top:12px"></div></div>`;
   try{
-    const v = await ipc.invoke("loop_verdict", {loopId});
+    const v = await api.invoke("loop_verdict", {loopId});
     el.innerHTML = `<div class="panel"><div class="panel-head"><h2>Committee decision</h2><span class="decision ${decClass(v.decision||"")}">${esc(v.decision)}</span></div><p>${esc(v.rationale)}</p><div class="cols" style="margin-top:14px"><div><b>Strongest signal</b><p class="muted">${esc(v.strongest_signal)}</p></div><div><b>Biggest risk</b><p class="muted">${esc(v.biggest_risk)}</p></div></div><h3 style="margin:16px 0 8px">Two-week plan</h3><ul class="list">${(v.plan||[]).map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>`;
   }catch(e){ el.innerHTML = `<div class="panel"><p class="form-msg err">${esc(errText(e))}</p></div>`; }
 }
@@ -625,31 +625,31 @@ function msg(sel, text, kind = ""){ const el = $(sel); el.className = "form-msg 
 
 $("#saveSettings").onclick = async () => {
   const s = {...SETTINGS, interviewer_model: $("#ivModel").value, report_model: $("#repModel").value, voice: formVoice()};
-  try{ await ipc.invoke("save_settings", {settings: s}); SETTINGS = s; msg("#saveMsg", "Saved.", "ok"); }
+  try{ await api.invoke("save_settings", {settings: s}); SETTINGS = s; msg("#saveMsg", "Saved.", "ok"); }
   catch(e){ msg("#saveMsg", esc(errText(e)), "err"); }
 };
 $("#clDetect").onclick = async () => {
   msg("#clResult", "Looking for Claude Code…");
-  try{ const loc = await ipc.invoke("detect_claude"); $("#clPath").textContent = describe(loc); msg("#clResult", "Found it.", "ok"); refreshStatus(); }
+  try{ const loc = await api.invoke("detect_claude"); $("#clPath").textContent = describe(loc); msg("#clResult", "Found it.", "ok"); refreshStatus(); }
   catch(e){ msg("#clResult", esc(errText(e)), "err"); }
 };
 $("#clSavePath").onclick = async () => {
   const exe = $("#clExe").value.trim(); if (!exe) return;
   const s = {...SETTINGS, claude: {kind: "windows", exe}};
-  await ipc.invoke("save_settings", {settings: s}); SETTINGS = s;
+  await api.invoke("save_settings", {settings: s}); SETTINGS = s;
   $("#clPath").textContent = exe; msg("#clResult", "Saved. Run the health check to test it.");
 };
 $("#clHealth").onclick = async () => {
   const b = $("#clHealth"); b.classList.add("is-busy");
   msg("#clResult", "Asking Claude to reply with OK…");
   try{
-    const h = await ipc.invoke("health_check");
+    const h = await api.invoke("health_check");
     msg("#clResult", `${h.ok ? "Working" : "Unexpected reply"} · “${esc(h.reply)}” · ${(h.latency_ms/1000).toFixed(1)} s · ${esc(h.model)} · ${esc(h.location)}`, h.ok ? "ok" : "err");
   }catch(e){ msg("#clResult", esc(errText(e)), "err"); }
   finally{ b.classList.remove("is-busy"); }
 };
 $("#vsLaunch").onclick = async () => {
-  try{ await ipc.invoke("voice_launch"); msg("#vResult", "Starting VoiceStudio. This page updates when it’s ready."); waitForVoice(); }
+  try{ await api.invoke("voice_launch"); msg("#vResult", "Starting VoiceStudio. This page updates when it’s ready."); waitForVoice(); }
   catch(e){ msg("#vResult", esc(errText(e)), "err"); }
 };
 async function waitForVoice(){
@@ -662,7 +662,7 @@ async function waitForVoice(){
 $("#vTestSpeak").onclick = async () => {
   const b = $("#vTestSpeak"); b.classList.add("is-busy"); msg("#vResult", "Generating…");
   try{
-    const ms = await ipc.invoke("voice_test_speak", {settings: formVoice(), text: "Hi, I'm your interviewer today. Let's start with a quick intro."});
+    const ms = await api.invoke("voice_test_speak", {settings: formVoice(), text: "Hi, I'm your interviewer today. Let's start with a quick intro."});
     msg("#vResult", `First audio in ${(ms/1000).toFixed(1)} s.`, "ok");
   }catch(e){ msg("#vResult", esc(errText(e)), "err"); }
   finally{ b.classList.remove("is-busy"); }
@@ -670,12 +670,12 @@ $("#vTestSpeak").onclick = async () => {
 let testUnlisten = null;
 $("#vTestMic").onclick = async () => {
   const b = $("#vTestMic"); b.classList.add("is-busy"); msg("#vResult", "Say a sentence. I’ll stop when you pause.");
-  if (!testUnlisten) testUnlisten = await ipc.listen("voice_test", ev => {
+  if (!testUnlisten) testUnlisten = await api.listen("voice_test", ev => {
     if (ev.kind === "partial") msg("#vResult", `Hearing: “${esc(ev.text)}”`);
     if (ev.kind === "level") $("#vMeter").style.width = `${Math.min(100, ev.mic * 900)}%`;
   });
   try{
-    const text = await ipc.invoke("voice_test_listen", {settings: formVoice()});
+    const text = await api.invoke("voice_test_listen", {settings: formVoice()});
     msg("#vResult", `Heard: “${esc(text)}”`, "ok");
   }catch(e){ msg("#vResult", esc(errText(e)), "err"); }
   finally{ $("#vMeter").style.width = "0"; b.classList.remove("is-busy"); }
@@ -683,10 +683,10 @@ $("#vTestMic").onclick = async () => {
 
 /* ---------------- init ---------------- */
 (async function init(){
-  try{ CAT = await ipc.invoke("get_catalog"); }
+  try{ CAT = await api.invoke("get_catalog"); }
   catch(e){ document.body.innerHTML = `<div class="view"><div class="panel"><h2>Onsite couldn’t start</h2><p class="form-msg err">${esc(errText(e))}</p></div></div>`; return; }
   initSetup();
   await refreshStatus();
-  if (SETTINGS && !SETTINGS.claude) ipc.invoke("detect_claude").then(refreshStatus).catch(() => {});
+  if (SETTINGS && !SETTINGS.claude) api.invoke("detect_claude").then(refreshStatus).catch(() => {});
   nav("dashboard");
 })();

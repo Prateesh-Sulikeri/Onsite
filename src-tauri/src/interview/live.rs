@@ -103,7 +103,8 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         system_prompt: system_prompt.clone(),
         resume: None,
     };
-    if settings.voice.enabled {
+    let voice_up = crate::voice::vs::VoiceStudio::new(&settings.voice.base_url).health().await.is_ok();
+    if settings.voice.enabled && voice_up {
         if let Err(e) = state.voice.begin(app, round_id, settings.voice.clone()) {
             tracing::warn!("voice off for this round: {e}");
             let _ = app.emit("voice", &crate::voice::VoiceEvent::Error { message: e.to_string() });

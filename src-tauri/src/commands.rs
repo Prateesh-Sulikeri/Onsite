@@ -13,6 +13,15 @@ use crate::voice::vs::VoiceStudio;
 use crate::voice::VoiceSettings;
 use tauri::{AppHandle, Emitter, State};
 
+/// UI errors land in the same log file as the backend's.
+#[tauri::command]
+pub fn ui_log(level: String, message: String) {
+    match level.as_str() {
+        "error" => tracing::error!(target: "ui", "{message}"),
+        _ => tracing::info!(target: "ui", "{message}"),
+    }
+}
+
 #[tauri::command]
 pub fn get_catalog(state: State<AppState>) -> Catalog {
     state.catalog.clone()
@@ -128,7 +137,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
     };
     Ok(VoiceStatus {
         up: true,
-        loaded: vs.model_loaded().await.unwrap_or(false),
+        loaded: vs.ready().await.unwrap_or(false),
         device: health["device"].as_str().unwrap_or_default().to_string(),
         profiles: vs.profiles().await.unwrap_or_default(),
         installed,

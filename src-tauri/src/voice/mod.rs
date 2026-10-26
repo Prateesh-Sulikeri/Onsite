@@ -97,15 +97,16 @@ impl Voice {
             }
         };
 
-        // Meter ticker for the UI waveform.
-        let (meter_ctl, meter_player, meter_emit) = (ctl.clone(), player.clone(), emit.clone());
-        let meter_tx = tx.clone();
+        // Speaker meter for the UI waveform; listen() reports the mic itself.
+        let (meter_player, meter_emit, meter_tx) = (player.clone(), emit.clone(), tx.clone());
         tokio::spawn(async move {
             let mut tick = tokio::time::interval(Duration::from_millis(80));
             while !meter_tx.is_closed() {
                 tick.tick().await;
-                let mic = meter_ctl.lock().unwrap().mic_level.get();
-                meter_emit(VoiceEvent::Level { mic, out: meter_player.level.get() });
+                let out = meter_player.level.get();
+                if out > 0.0 {
+                    meter_emit(VoiceEvent::Level { mic: 0.0, out });
+                }
             }
         });
 
