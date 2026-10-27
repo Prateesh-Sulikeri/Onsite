@@ -59,13 +59,31 @@ function nav(view){
   if (view === "feedback") renderHistory();
   if (view === "settings") renderSettings();
 }
-document.addEventListener("click", e => {
+document.addEventListener("click", async e => {
   const t = e.target.closest("[data-nav]");
   if (!t) return;
-  if (session && !confirm("Leave the call? The round keeps its transcript, but the interviewer stops.")) return;
-  if (session) leaveRound();
+  if (session){
+    if (!await ask("Leave the call?", "The interviewer stops. The round keeps its transcript.", "Leave")) return;
+    leaveRound().then(kept => {
+      if (kept !== false) return;
+      toast("You didn’t answer anything, so the round wasn’t saved.");
+      // The list may have rendered before Rust dropped the round.
+      if (!$("#view-feedback").hidden) renderHistory();
+      if (!$("#view-dashboard").hidden) renderDashboard();
+    });
+  }
   nav(t.dataset.nav);
 });
+
+/* In-app yes/no dialog. Resolves true on the OK button; Esc or Cancel resolve false. */
+function ask(title, body, ok, danger = false){
+  const d = $("#askDlg"), b = $("#askOk");
+  $("#askTitle").textContent = title; $("#askBody").textContent = body;
+  b.textContent = ok; b.classList.toggle("danger-fill", danger);
+  d.returnValue = ""; d.showModal();
+  (danger ? $("#askNo") : b).focus();
+  return new Promise(r => d.addEventListener("close", () => r(d.returnValue === "ok"), {once: true}));
+}
 
 const toastSeen = new Map();
 function toast(msg, kind = ""){
@@ -199,6 +217,7 @@ function roundMinutes(k){ return Number($("#roundLen").value) || CAT.ROUNDS[k].m
 function renderAgenda(){
   if (!CAT) return;
   const rs = selectedRounds();
+  $$("#roundList .chip").forEach(b => b.querySelector(".min").textContent = `${roundMinutes(b.dataset.round)}m`);
   $("#roundCount").textContent = rs.length ? `· ${rs.length} selected` : "";
   if (!rs.length){
     $("#agenda").innerHTML = `<li><span class="empty">Pick at least one round.</span></li>`;
@@ -239,7 +258,7 @@ function notesTemplate(k){
   return "";
 }
 /* "Indian fintech (Razorpay, …)" reads as "Indian fintech" in titles. */
-const shortName = n => String(n || "").replace(/\s*\(.*\)\s*$/, "");
+const shortName = n => /^inferred from jd$/i.test(String(n || "").trim()) ? "General" : String(n || "").replace(/\s*\(.*\)\s*$/, "");
 function companyLabel(setup){ return setup.company === "auto" ? "General" : shortName((CAT.COMPANIES[setup.company] || {}).name || setup.company); }
 function temperLabel(v){ const o = [...$("#temper").options].find(o => o.value === v); return o ? o.text.split(" —")[0] : v; }
 
@@ -265,7 +284,8 @@ async function openRoom(index){
   $("#roomSub").textContent = `${CAT.LEVELS[loop.setup.level]} · ${s.minutes} minutes · round ${index+1} of ${loop.count} · with ${who.full ? `${who.full}, ${who.role}` : name}`;
   $("#ctxCompany").textContent = comp === "General" ? "General practice" : comp;
   $("#ctxRound").textContent = CAT.ROUNDS[k].name;
-  $("#ctxChips").innerHTML = [loop.setup.lang, temperLabel(loop.setup.temperament) + " interviewer", CAT.LEVELS[loop.setup.level]].map(x => `<span>${esc(x)}</span>`).join("");
+  const codes = ["coding", "comprehension", "lld", "fundamentals"].includes(k);
+  $("#ctxChips").innerHTML = [codes ? loop.setup.lang : null, temperLabel(loop.setup.temperament) + " interviewer", CAT.LEVELS[loop.setup.level]].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("");
   $("#tips").innerHTML = (TIPS[k] || []).map(t => `<li>${esc(t)}</li>`).join("");
   $("#transcript").innerHTML = ""; $("#answer").value = ""; autosize(); hint(""); $("#turnInfo").textContent = "";
   $("#code").value = ""; $("#notes").value = notesTemplate(k); updateGutter();
@@ -312,14 +332,17 @@ function applyVoiceUi(){
   const mb = $("#muteBtn");
   mb.setAttribute("aria-pressed", String(s.muted));
   mb.querySelector("span").textContent = s.muted ? "Unmute" : "Mute";
+  mb.setAttribute("aria-label", s.muted ? "Unmute" : "Mute");
   mb.querySelector("use").setAttribute("href", s.muted ? "#i-mic" : "#i-mic-off");
   mb.disabled = !s.voiceOn || s.closed;
   mb.title = !s.voiceOn ? "Voice is off for this round" : s.muted ? "Unmute" : "Mute";
   $("#roomMic").disabled = !s.voiceOn;
+  $("#view-room").classList.toggle("typed", !s.voiceOn);
   $("#answer").placeholder = s.voiceOn ? "Type instead…" : "Type your answer…";
 }
 
-/* Stops the round. Resolves once Rust has saved it, so a report call sees the final transcript. */
+/* Stops the round. Resolves once Rust has saved it, so a report call sees the final transcript.
+   Resolves false when Rust dropped the round because the candidate never answered. */
 async function leaveRound(){
   const s = session; session = null;
   clearInterval(timerI);
@@ -327,7 +350,7 @@ async function leaveRound(){
   clearTimeout(s.transcribeT);
   if (s.roundId === null){ s.abandoned = true; return; }
   deadRounds.add(s.roundId);
-  await api.invoke("end_round", {roundId: s.roundId, workspace: {code: $("#code").value, notes: $("#notes").value}}).catch(e => api.log("error", `end_round: ${errText(e)}`));
+  return api.invoke("end_round", {roundId: s.roundId, workspace: {code: $("#code").value, notes: $("#notes").value}}).catch(e => api.log("error", `end_round: ${errText(e)}`));
 }
 
 /* phases: thinking | speaking | cutting | listening | hearing | transcribing | idle | muted | closed
@@ -750,13 +773,17 @@ $("#wrapReport").onclick = () => endRound();
 async function endRound(){
   const s = session;
   if (!s) return;
-  if (!s.closed && !confirm("End this round? You can get feedback afterwards.")) return;
+  if (!s.closed && !await ask("End this round?", "You can get feedback afterwards.", "End round")) return;
+  if (session !== s) return;
   const pending = leaveRound();
   if (s.roundId === null){ nav("interviews"); return; }
   nav("report");
   $("#repTitle").textContent = CAT.ROUNDS[s.key].name; $("#repSub").textContent = `With ${s.persona}`;
   $("#repBody").innerHTML = `<div class="panel"><h2>Saving the round…</h2></div>`;
-  await pending;
+  if (await pending === false){
+    toast("You didn’t answer anything, so the round wasn’t saved.");
+    nav("interviews"); return;
+  }
   openReport(s.roundId, true);
 }
 
@@ -849,10 +876,10 @@ $("#code").addEventListener("keydown", e => {
 });
 
 /* ---------------- feedback + report ---------------- */
-const decClass = d => /no hire/i.test(d) ? "d-no" : /lean/i.test(d) ? "d-lean" : "d-hire";
+const decClass = d => /no hire|reject/i.test(d) ? "d-no" : /lean|borderline|more data/i.test(d) ? "d-lean" : "d-hire";
 const scoreClass = n => n >= 70 ? "hi" : n >= 50 ? "mid" : "lo";
 function rowHtml(x){
-  return `<button class="row-item" data-round-id="${x.round_id}" data-loop-id="${x.loop_id}"><span class="row-ic">${esc((x.company || x.name || "?")[0])}</span><span class="row-tx"><b>${esc(x.name)}</b><span>${esc(shortName(x.company))} · ${esc(new Date(x.started_at).toLocaleDateString())}${x.decision ? " · " + esc(x.decision) : ""}</span></span>${x.overall != null ? `<span class="score ${scoreClass(x.overall)}">${x.overall}</span>` : `<span class="pill">No feedback yet</span>`}</button>`;
+  return `<button class="row-item" data-round-id="${x.round_id}" data-loop-id="${x.loop_id}"><span class="row-ic">${esc((shortName(x.company) || x.name || "?")[0])}</span><span class="row-tx"><b>${esc(x.name)}</b><span>${esc(shortName(x.company))} · ${esc(new Date(x.started_at).toLocaleDateString())}${x.decision ? " · " + esc(x.decision) : ""}</span></span>${x.overall != null ? `<span class="score ${scoreClass(x.overall)}">${x.overall}</span>` : `<span class="pill">No feedback yet</span>`}</button>`;
 }
 function bindRows(sel){ $$(sel + " .row-item[data-round-id]").forEach(b => b.onclick = () => openInterview(Number(b.dataset.loopId), {focus: Number(b.dataset.roundId)})); }
 /* One block per interview (loop), newest first, with its rounds in order. */
@@ -878,7 +905,7 @@ async function renderHistory(){
 }
 /* Deletes a round with its transcript and feedback. True when it was deleted. */
 async function deleteRound(roundId){
-  if (!confirm("Delete this round and its feedback? This can’t be undone.")) return false;
+  if (!await ask("Delete this round?", "Its transcript and feedback go too. This can’t be undone.", "Delete", true)) return false;
   try{ await api.invoke("delete_round", {roundId}); toast("Deleted."); return true; }
   catch(e){ toast(errText(e), "err"); return false; }
 }
@@ -1029,7 +1056,7 @@ function reportHtml(round, r, actions = ""){
       ${section("Key moments", moments)}
       <div class="cols">
         <div class="panel"><h2>Practise next</h2><ul class="list">${li(r.practice_next)}</ul></div>
-        <div class="panel"><h2>How you spoke</h2><div class="metrics">
+        <div class="panel"><h2>How you answered</h2><div class="metrics">
           <div class="metric"><b>${met.avg_words ?? "—"}</b><span>words per answer</span></div>
           <div class="metric"><b>${met.answers ?? "—"}</b><span>answers</span></div>
           <div class="metric"><b>${met.minutes ?? "—"}</b><span>minutes</span></div>
@@ -1102,6 +1129,7 @@ function renderInterviewProgress(fb, ev){
 }
 function renderInterview(fb, focus){
   const rounds = fb.rounds;
+  if (!rounds.length){ nav("feedback"); return; }
   const first = rounds[0] && rounds[0].round;
   $("#repSub").textContent = [shortName(fb.company), fb.level, first ? new Date(first.started_at).toLocaleDateString() : "", `${rounds.length} round${rounds.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
   const scored = rounds.filter(r => r.report && Number.isFinite(Number(r.report.overall)));
@@ -1151,7 +1179,15 @@ async function renderSettings(){
   $("#vsLaunchRow").hidden = VS.up || !VS.installed;
   // Only real profiles: VoiceStudio's "default" is a random speaker on every call.
   const profiles = VS.profiles || [];
-  const saved = s.voice.voice;
+  let saved = s.voice.voice;
+  // The saved voice was deleted in VoiceStudio: show and keep the one Rust falls back to.
+  if (saved && VS.up && profiles.length && !profiles.some(p => p.id === saved)){
+    const used = profiles.find(p => !p.name.startsWith("Onsite · ")) || profiles[0];
+    msg("#vResult", `Your saved voice is no longer in VoiceStudio, so Onsite uses ${esc(used.name)}. Pick another below if you like.`);
+    saved = s.voice.voice = used.id;
+    $("#vVoice").innerHTML = `<option value="${esc(used.id)}"></option>`; $("#vVoice").value = used.id;
+    saveSettings();
+  }
   let opts = profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
   if (saved && !profiles.some(p => p.id === saved)) opts += `<option value="${esc(saved)}">${VS.up ? "Saved voice (missing in VoiceStudio)" : "Saved voice"}</option>`;
   if (!opts) opts = `<option value="" disabled>${VS.up ? "No voices in VoiceStudio — create one there" : "Start VoiceStudio to pick a voice"}</option>`;
@@ -1304,11 +1340,14 @@ async function setDevices(input, output, relisten = false){
 }
 /* Where English-only speech recognition stands. */
 function showLang(sel){
-  const e = VS.english, el = $(sel);
+  const e = VS.english, w = VS.whisper || {}, el = $(sel);
   if (!VS.up || !e){ el.textContent = ""; return; }
-  el.textContent = e.state === "ready" ? "Speech recognition: English only."
-    : e.state === "installing" ? `Downloading the English speech model… ${Math.round(e.pct)}%. Until it’s done, a strong accent may come out as another language.`
-    : `English speech model missing (${e.reason}). Install Parakeet TDT v2 in VoiceStudio’s dictation settings.`;
+  const engine = w.state === "ready" ? "Speech recognition: Whisper large-v3 on your GPU, English only."
+    : w.state === "loading" ? "Loading Whisper onto your GPU… until then, answers use the faster but less accurate Parakeet."
+    : `Whisper is off (${w.reason || "not started"}), so answers use Parakeet, which mishears some tech terms.`;
+  el.textContent = e.state === "installing" ? `${engine} Downloading the English caption model… ${Math.round(e.pct)}%.`
+    : e.state === "missing" ? `${engine} English caption model missing (${e.reason}).`
+    : engine;
 }
 /* ---------------- get ready (before the call) ---------------- */
 /* Shown before round 1 of every loop, and before later rounds when "Check before every round" is on. */
@@ -1323,7 +1362,6 @@ async function openReady(index){
   $("#readyIc").textContent = comp[0];
   $("#readyRound").textContent = `${comp} — ${CAT.ROUNDS[k].name}`;
   $("#readyWho").textContent = `Round ${index+1} of ${loop.count} · ${roundMinutes(k)} minutes · with ${who.full ? `${who.full}, ${who.role}` : who.name}`;
-  $("#readySub").textContent = "Pick your mic and speaker, then check they work. Takes ten seconds.";
   $("#readyEvery").checked = readyEvery();
   $("#readyJoin").disabled = false; $("#readyJoin").classList.remove("is-busy");
   msg("#acResult", "");
@@ -1335,17 +1373,28 @@ async function renderAudioCheck(){
   fillDevice($("#acMic"), DEVICES.inputs, SETTINGS.voice.input_device);
   fillDevice($("#acSpk"), DEVICES.outputs, SETTINGS.voice.output_device);
   const on = SETTINGS.voice.enabled && VS.up;
+  $("#acBody").hidden = $("#acLang").hidden = !on;
+  $("#acTitle").textContent = on ? "Check your mic and speaker" : "Typed round";
+  $("#readySub").textContent = on ? "Pick your mic and speaker, then check they work. Takes ten seconds." : "You type your answers. Join when you’re ready.";
+  $("#acVoiceRow").hidden = on || !VS.up;
   const p = $("#acPill");
-  p.className = "pill " + (!on ? "bad" : VS.loaded ? "ok" : "warn");
+  p.className = "pill " + (!SETTINGS.voice.enabled ? "" : !on ? "bad" : VS.loaded ? "ok" : "warn");
   p.textContent = !SETTINGS.voice.enabled ? "Voice off" : !VS.up ? "VoiceStudio off" : VS.loaded ? "Ready" : "Loading";
-  const off = !SETTINGS.voice.enabled ? "Spoken interviews are off in Settings, so this round will be typed."
+  const off = !SETTINGS.voice.enabled ? "Spoken interviews are off, so this round will be typed."
     : !VS.up ? "VoiceStudio isn’t running, so this round will be typed. Start it in Settings to talk." : "";
-  if (!testing && (off || / will be typed/.test($("#acResult").textContent))) msg("#acResult", off, off ? "err" : "");
+  if (!testing && (off || / will be typed/.test($("#acResult").textContent))) msg("#acResult", off);
   $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";
   showLang("#acLang");
   setTesting(testing);
-  startMonitor();
+  if (on) startMonitor(); else stopMonitor();
 }
+$("#acVoiceOn").onclick = async () => {
+  const b = $("#acVoiceOn"); b.disabled = true;
+  try{ SETTINGS.voice.enabled = true; await api.invoke("save_settings", {settings: SETTINGS}); }
+  catch(e){ SETTINGS.voice.enabled = false; toast(errText(e), "err"); }
+  b.disabled = false;
+  renderAudioCheck();
+};
 /* Live mic meter: moves as soon as the screen opens, no speech recognition involved. */
 let monitorUnlisten = null, monitorOn = false;
 async function startMonitor(){

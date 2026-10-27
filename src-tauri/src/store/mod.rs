@@ -8,6 +8,8 @@ use serde_json::Value;
 use std::path::Path;
 
 const SCHEMA_VERSION: i32 = 1;
+/// Settings key holding the last round id handed out.
+const ROUND_SEQ: &str = "round_seq";
 
 pub struct Store {
     conn: Connection,
@@ -130,12 +132,18 @@ impl Store {
         minutes: u32,
         model: &str,
     ) -> Result<i64> {
+        // Ids are never reused, even after a delete: the UI ignores late events from rounds it
+        // left by id, so a new round that got an old id would never show its replies.
+        let last: i64 = self.get_setting(ROUND_SEQ)?.unwrap_or(0);
+        let max: i64 = self.conn.query_row("SELECT COALESCE(MAX(id), 0) FROM rounds", [], |r| r.get(0))?;
+        let id = last.max(max) + 1;
         self.conn.execute(
-            "INSERT INTO rounds (loop_id, idx, round_key, name, persona, minutes, model, started_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![loop_id, idx as i64, round_key, name, persona, minutes, model, now()],
+            "INSERT INTO rounds (id, loop_id, idx, round_key, name, persona, minutes, model, started_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![id, loop_id, idx as i64, round_key, name, persona, minutes, model, now()],
         )?;
-        Ok(self.conn.last_insert_rowid())
+        self.set_setting(ROUND_SEQ, &id)?;
+        Ok(id)
     }
 
     pub fn save_round_progress(
@@ -220,6 +228,22 @@ impl Store {
 
     /// Deletes a round and its feedback. The loop stays (a live loop may start its next round),
     /// but its verdict is cleared because it was judged on the deleted round too.
+    /// Deletes rounds the candidate never answered in: ones a crash or force-close left behind.
+    /// Call only when no round is running. Returns how many went.
+    pub fn delete_unanswered_rounds(&self) -> Result<usize> {
+        let mut stmt = self.conn.prepare("SELECT id, transcript FROM rounds")?;
+        let empty: Vec<i64> = stmt
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
+            .filter_map(|r| r.ok())
+            .filter(|(_, t)| !serde_json::from_str::<Vec<Turn>>(t).is_ok_and(|t| t.iter().any(|x| x.who == "me")))
+            .map(|(id, _)| id)
+            .collect();
+        for &id in &empty {
+            self.delete_round(id)?;
+        }
+        Ok(empty.len())
+    }
+
     pub fn delete_round(&self, round_id: i64) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         let loop_id: Option<i64> = tx.query_row("SELECT loop_id FROM rounds WHERE id = ?1", [round_id], |r| r.get(0)).optional()?;
@@ -300,6 +324,15 @@ mod tests {
         assert!(s.history(10).unwrap().is_empty());
         assert!(s.report(id).unwrap().is_none());
         assert!(s.round(id).is_err());
+        // Rounds with no answers are swept; answered ones stay.
+        let kept = s.create_round(loop_id, 0, "coding", "DSA coding", "Rahul", 45, "sonnet").unwrap();
+        let me = vec![Turn { who: "me".into(), text: "Hello.".into(), at_min: 0.0, ttft_ms: None, shared_workspace: false, sent: None }];
+        s.save_round_progress(kept, &me, &json!({}), None).unwrap();
+        s.create_round(loop_id, 0, "coding", "DSA coding", "Rahul", 45, "sonnet").unwrap();
+        assert_eq!(s.delete_unanswered_rounds().unwrap(), 1);
+        assert_eq!(s.loop_round_ids(loop_id).unwrap(), vec![kept]);
+        // A deleted round's id is never handed out again.
+        assert!(s.create_round(loop_id, 0, "coding", "DSA coding", "Rahul", 45, "sonnet").unwrap() > id);
         assert_eq!(s.loop_verdict(loop_id).unwrap(), None);
         s.delete_round(id).unwrap(); // already gone: no error
     }

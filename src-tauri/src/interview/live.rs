@@ -110,8 +110,8 @@ fn problem_block(q: &Question) -> String {
         .join("\n");
     format!(
         "\n\nTHE PROBLEM FOR THIS ROUND (this replaces choosing one yourself): {title} ({difficulty}).\n\
-         The candidate already sees it in a Problem tab with the full statement, examples and constraints. \
-         Introduce it in one or two spoken sentences and point them to the Problem tab. Do not read it out in full or paste it.\n\
+         The candidate already sees it on screen, above your chat, with the full statement, examples and constraints. \
+         Introduce it in one or two spoken sentences and tell them it is on their screen. Never call it a tab. Do not read it out in full or paste it.\n\
          Statement:\n{statement}\nExamples:\n{examples}\nConstraints:\n{constraints}\n\
          Optimal: time {time}, space {space}.\n\
          Hints, one at a time and only if they are stuck: {hints}\nFollow-ups if time allows: {follow}\n\
@@ -233,7 +233,11 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
             model: settings.interviewer_model,
             minutes: plan.minutes,
             lang: setup.lang.clone(),
-            last_ws: Workspace::default(),
+            // The editor opens with the starter code; it is not worth sending until they change it.
+            last_ws: Workspace {
+                code: question.as_ref().zip(Lang::from_name(&setup.lang)).map(|(q, l)| runner::starter(q, l)).unwrap_or_default(),
+                notes: String::new(),
+            },
             log,
         },
     );
@@ -399,7 +403,9 @@ async fn close_other_rounds(state: &AppState, keep: Option<i64>) {
     }
 }
 
-pub async fn end_round(app: &AppHandle, round_id: i64, ws: Workspace) -> Result<()> {
+/// Stops the round and saves it. A round the candidate never answered in is deleted
+/// instead, so history only lists rounds that happened. True when the round was kept.
+pub async fn end_round(app: &AppHandle, round_id: i64, ws: Workspace) -> Result<bool> {
     let state = app.state::<AppState>();
     state.voice.end();
     let active = state.rounds.lock().await.remove(&round_id);
@@ -408,8 +414,14 @@ pub async fn end_round(app: &AppHandle, round_id: i64, ws: Workspace) -> Result<
         r.log.persist(&state, r.session.session_id().as_deref());
         r.session.shutdown().await;
     }
-    state.store.lock().unwrap().finish_round(round_id)?;
-    Ok(())
+    let store = state.store.lock().unwrap();
+    store.finish_round(round_id)?;
+    let answered = store.round(round_id).is_ok_and(|r| r.transcript.iter().any(|t| t.who == "me"));
+    if !answered {
+        tracing::info!(round_id, "no answers; deleting the round");
+        store.delete_round(round_id)?;
+    }
+    Ok(answered)
 }
 
 /// Returned by `generate_report` when the candidate said too little to judge.
@@ -438,7 +450,7 @@ pub async fn generate_report(app: &AppHandle, round_id: i64) -> Result<Value> {
         &ReportInput {
             round_name: &round.name,
             round_minutes: round.minutes,
-            company: &setup.company_name(cat),
+            company: &setup.company_for_prompt(cat),
             level_name: cat.levels.get(&setup.level).unwrap_or(&setup.level),
             level_bar: cat.level_bar.get(&setup.level).map_or("", String::as_str),
             rubric: &rubric,
@@ -483,7 +495,7 @@ pub async fn loop_verdict(app: &AppHandle, loop_id: i64) -> Result<Value> {
     }
     let cat = &state.catalog;
     let template = prompts::load(&state.prompts_dir, "verdict.md")?;
-    let prompt = verdict_prompt(&template, &setup.company_name(cat), cat.levels.get(&setup.level).unwrap_or(&setup.level), &summaries);
+    let prompt = verdict_prompt(&template, &setup.company_for_prompt(cat), cat.levels.get(&setup.level).unwrap_or(&setup.level), &summaries);
     let location = state.claude_location().await?;
     let out = run_once(&location, &prompt, Tools::None, &state.settings().report_model, |_| {}).await?;
     let verdict = out.json.filter(Value::is_object).ok_or_else(|| AppError::Claude("The verdict came back in the wrong format.".into()))?;

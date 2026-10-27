@@ -90,7 +90,7 @@ pub async fn send_answer(app: AppHandle, round_id: i64, text: String, workspace:
 }
 
 #[tauri::command]
-pub async fn end_round(app: AppHandle, round_id: i64, workspace: Workspace) -> Result<()> {
+pub async fn end_round(app: AppHandle, round_id: i64, workspace: Workspace) -> Result<bool> {
     live::end_round(&app, round_id, workspace).await
 }
 

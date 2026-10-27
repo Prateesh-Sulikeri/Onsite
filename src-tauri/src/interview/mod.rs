@@ -72,10 +72,19 @@ impl LoopSetup {
         }
     }
 
+    /// What the candidate sees: "General" for a loop with no company style.
     pub fn company_name(&self, cat: &Catalog) -> String {
         match self.company.as_str() {
-            "auto" => "Inferred from JD".into(),
+            "auto" => "General".into(),
             k => cat.companies.get(k).map_or_else(|| k.to_string(), |c| c.name.clone()),
+        }
+    }
+
+    /// The company as the report and verdict prompts name it.
+    pub fn company_for_prompt(&self, cat: &Catalog) -> String {
+        match self.company.as_str() {
+            "auto" => "the company in the job description (a typical product company if there is none)".into(),
+            _ => self.company_name(cat),
         }
     }
 

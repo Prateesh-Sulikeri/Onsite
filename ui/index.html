@@ -192,7 +192,8 @@
       </header>
       <div class="ready-grid">
         <div class="panel" id="audioCheck">
-          <div class="panel-head"><h2>Check your mic and speaker</h2><span class="pill" id="acPill">Checking…</span></div>
+          <div class="panel-head"><h2 id="acTitle">Check your mic and speaker</h2><span class="pill" id="acPill">Checking…</span></div>
+          <div id="acBody">
           <div class="form-grid">
             <label class="field"><span>Microphone</span><select id="acMic"></select></label>
             <label class="field"><span>Speaker</span><select id="acSpk"></select></label>
@@ -206,7 +207,9 @@
             <button class="btn" id="acSpeak"><svg><use href="#i-speaker"/></svg>Test speaker</button>
             <button class="btn" id="acListen"><svg><use href="#i-mic"/></svg>Test mic</button>
           </div>
+          </div>
           <p class="form-msg" id="acResult" role="status"></p>
+          <div class="btn-row" id="acVoiceRow" hidden><button class="btn" id="acVoiceOn"><svg><use href="#i-mic"/></svg>Turn on spoken interviews</button></div>
           <p class="muted ac-lang" id="acLang"></p>
         </div>
         <aside class="panel ready-card">
@@ -226,7 +229,7 @@
       <div class="empty-state panel">
         <span class="empty-ic"><svg><use href="#i-building"/></svg></span>
         <h2>Research arrives in the next update</h2>
-        <p class="muted">You’ll name a company and role, and a background job reads 8+ first-hand reports, extracts each round and its real questions, and saves a dossier here. Your Razorpay SDE-2 dossier is ready to import.</p>
+        <p class="muted">You’ll name a company and role, and a background job reads 8+ first-hand reports, extracts each round and its real questions, and saves a dossier here. Your Razorpay SDE-2 dossier will be imported then.</p>
       </div>
     </section>
 
@@ -298,6 +301,17 @@
       </div>
     </section>
 
+    <dialog class="dlg" id="askDlg" aria-labelledby="askTitle">
+      <form method="dialog">
+        <h2 id="askTitle"></h2>
+        <p class="muted" id="askBody"></p>
+        <div class="btn-row">
+          <button class="btn primary" id="askOk" value="ok"></button>
+          <button class="btn ghost" id="askNo" value="cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- ============ CALL ROOM ============ -->
     <dialog class="dlg" id="termDlg" aria-labelledby="termTitle">
       <form method="dialog" id="termForm">
@@ -349,7 +363,7 @@
               <div class="wave" id="waveR" aria-hidden="true"></div>
               <div class="orb-label" id="orbLabel" aria-live="polite">Connecting…</div>
             </div>
-            <button class="btn ctrl danger" id="endBtn"><i class="stop"></i><span>End interview</span></button>
+            <button class="btn ctrl danger" id="endBtn" aria-label="End interview"><i class="stop"></i><span>End interview</span></button>
           </div>
           <div class="turn-info" id="turnInfo"></div>
         </div>

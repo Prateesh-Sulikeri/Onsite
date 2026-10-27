@@ -114,8 +114,14 @@ pub fn run() {
             let prompts_dir = prompts_dir(app);
             voice::whisper::set_script_dir(voice::whisper::script_dir_for(app.path().resource_dir().ok().as_deref()));
             let catalog = Catalog::load(&prompts_dir)?;
+            let store = Store::open(&db)?;
+            match store.delete_unanswered_rounds() {
+                Ok(0) => {}
+                Ok(n) => tracing::info!(n, "deleted rounds with no answers"),
+                Err(e) => tracing::warn!("sweeping empty rounds: {e}"),
+            }
             app.manage(AppState {
-                store: Arc::new(Mutex::new(Store::open(&db)?)),
+                store: Arc::new(Mutex::new(store)),
                 catalog,
                 panels: panels::Panels::load(&prompts_dir),
                 bank: bank::Bank::load(&prompts_dir),
