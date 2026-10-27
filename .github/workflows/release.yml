@@ -1,0 +1,35 @@
+# Builds the Windows installer (NSIS) when a version tag is pushed, and attaches it to a
+# draft GitHub release. Push a tag like v0.2.0, then publish the draft.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Test
+        working-directory: src-tauri
+        run: cargo test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Onsite ${{ github.ref_name }}
+          releaseBody: |
+            Install VoiceStudio first, then run the Onsite installer.
+            On first launch, pick an AI in Settings: Claude Code (Pro/Max), or paste a Claude, OpenAI or Gemini API key.
+          releaseDraft: true
