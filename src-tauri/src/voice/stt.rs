@@ -354,6 +354,12 @@ pub fn pick_model(models: &Value) -> Option<String> {
     MODEL_PREFERENCE.iter().find(|p| installed.contains(p)).map(|s| s.to_string())
 }
 
+/// Picks (and un-demotes) the dictation model before the round, so the first answer doesn't
+/// pay for it. None = VoiceStudio's own default (often Whisper Tiny).
+pub async fn prepare(vs: &VoiceStudio) -> Option<String> {
+    choose_model(vs).await
+}
+
 async fn choose_model(vs: &VoiceStudio) -> Option<String> {
     if let Some(m) = MODEL.lock().unwrap().clone() {
         return m;

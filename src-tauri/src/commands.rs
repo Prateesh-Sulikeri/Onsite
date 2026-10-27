@@ -84,6 +84,12 @@ pub async fn start_round(app: AppHandle, loop_id: i64, index: usize) -> Result<R
     live::start_round(&app, loop_id, index).await
 }
 
+/// Stops a round that is still loading; its `start_round` returns an error.
+#[tauri::command]
+pub fn cancel_start(state: State<AppState>) {
+    state.prep_gen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
 #[tauri::command]
 pub async fn send_answer(app: AppHandle, round_id: i64, text: String, workspace: Workspace, force: bool) -> Result<Option<Turn>> {
     live::send_answer(&app, round_id, text, workspace, force).await

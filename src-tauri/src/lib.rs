@@ -50,6 +50,8 @@ pub struct AppState {
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
     pub bank: bank::Bank,
     pub voice: voice::Voice,
+    /// Bumped by every round start and by `cancel_start`; a start whose number is stale stops loading.
+    pub prep_gen: std::sync::atomic::AtomicU64,
 }
 
 impl AppState {
@@ -129,6 +131,7 @@ pub fn run() {
                 prompts_dir,
                 rounds: Default::default(),
                 voice: Default::default(),
+                prep_gen: Default::default(),
             });
             // Warm VoiceStudio up so the first spoken reply is not a 60 s cold start.
             let handle = app.handle().clone();
@@ -162,6 +165,7 @@ pub fn run() {
             commands::health_check,
             commands::create_loop,
             commands::start_round,
+            commands::cancel_start,
             commands::send_answer,
             commands::end_round,
             commands::generate_report,

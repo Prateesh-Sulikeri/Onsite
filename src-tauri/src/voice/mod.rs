@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use stt::{ListenCtl, ListenEnd};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::oneshot;
 use vs::{Profile, VoiceStudio, TTS_RATE};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -141,6 +142,13 @@ fn should_listen(awaiting_answer: bool, muted: bool) -> bool {
     awaiting_answer && !muted
 }
 
+/// From [`Voice::begin`]: `ready` gives the interviewer's voice name once VoiceStudio has spoken
+/// with it (or why it couldn't); sending `go` lets queued speech play.
+pub struct VoiceStart {
+    pub ready: oneshot::Receiver<std::result::Result<String, String>>,
+    pub go: oneshot::Sender<()>,
+}
+
 struct RoundVoice {
     round_id: i64,
     tx: UnboundedSender<Cmd>,
@@ -175,8 +183,9 @@ impl Voice {
         Ok(opened)
     }
 
-    /// Starts the voice loop for a round. Speech follows `say`/`turn_done` calls.
-    pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings) -> Result<()> {
+    /// Starts the voice loop for a round. Speech follows `say`/`turn_done` calls, but nothing
+    /// plays until `go` is sent (or dropped), so the loader can finish first.
+    pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings) -> Result<VoiceStart> {
         self.end();
         stt::reset_model_choice();
         // Normally already loaded at app start; restarts it if it died.
@@ -184,6 +193,8 @@ impl Voice {
         let player = self.player()?;
         let vs = VoiceStudio::new(&settings.base_url);
         let (tx, mut rx) = unbounded_channel::<Cmd>();
+        let (ready_tx, ready) = oneshot::channel();
+        let (go, go_rx) = oneshot::channel::<()>();
         let ctl: Arc<Mutex<Arc<ListenCtl>>> = Default::default();
         let muted: Arc<AtomicBool> = Default::default();
         let hold: Arc<AtomicBool> = Default::default();
@@ -221,6 +232,8 @@ impl Voice {
                 Some(p) => vs.persona_voice(p).await,
                 None => vs.resolve_voice(&settings.voice).await,
             };
+            // Sent to the loader once the voice has spoken (or can't).
+            let mut warm = resolved.as_ref().map(|p| p.name.clone()).map_err(|e| e.to_string());
             let voice = match resolved {
                 Ok(p) => {
                     tracing::info!(id = %p.id, name = %p.name, seed = ?p.seed, "interviewer voice");
@@ -228,7 +241,6 @@ impl Voice {
                 }
                 Err(e) => {
                     tracing::warn!("no interviewer voice: {e}");
-                    emit(VoiceEvent::Error { message: e.to_string() });
                     None
                 }
             };
@@ -241,9 +253,14 @@ impl Voice {
                 let t = Instant::now();
                 match vs.speak("Okay, let's begin.", v, settings.steps, settings.speed, |_| {}).await {
                     Ok(()) => tracing::info!(ms = t.elapsed().as_millis() as u64, "VoiceStudio warm for the round"),
-                    Err(e) => tracing::warn!("VoiceStudio warm-up failed: {e}"),
+                    Err(e) => {
+                        tracing::warn!("VoiceStudio warm-up failed: {e}");
+                        warm = Err(e.to_string());
+                    }
                 }
             }
+            let _ = ready_tx.send(warm);
+            let _ = go_rx.await;
             let mut speaking = false;
             // True from the end of an interviewer turn until an answer is sent.
             let mut awaiting_answer = false;
@@ -329,7 +346,7 @@ impl Voice {
         });
 
         *self.current.lock().unwrap() = Some(RoundVoice { round_id, tx, ctl, muted, hold, task, alive, speaking: speaking_flag, cut });
-        Ok(())
+        Ok(VoiceStart { ready, go })
     }
 
     fn with_round(&self, round_id: i64, f: impl FnOnce(&RoundVoice)) {

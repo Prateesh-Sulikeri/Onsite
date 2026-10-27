@@ -12,6 +12,9 @@ pub struct RoundKind {
     pub blurb: String,
     pub guide: String,
     pub rubric: Vec<String>,
+    /// Starting points; one is drawn per session so the round doesn't open the same way each time.
+    #[serde(default)]
+    pub openers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,5 +58,6 @@ mod tests {
         assert_eq!(c.rounds["coding"].tab, "editor");
         assert!(c.levels.keys().eq(c.level_bar.keys()));
         assert!(!c.persona(0).is_empty());
+        assert!(c.rounds["comprehension"].openers.len() > 10);
     }
 }

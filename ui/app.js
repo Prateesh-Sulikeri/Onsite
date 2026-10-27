@@ -49,7 +49,7 @@ const TIPS = {
 /* ---------------- shell ---------------- */
 function nav(view){
   $$(".view").forEach(v => v.hidden = v.id !== "view-" + view);
-  const section = view === "report" ? "feedback" : view === "room" || view === "ready" ? "interviews" : view;
+  const section = view === "report" ? "feedback" : ["room", "ready", "prep"].includes(view) ? "interviews" : view;
   $$(".nav-item").forEach(b => b.dataset.nav === section ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
   $("#app").classList.toggle("in-call", view === "room");
   $(".main").scrollTop = 0;
@@ -64,7 +64,8 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("[data-nav]");
   if (!t) return;
   if (session){
-    if (!await ask("Leave the call?", "The interviewer stops. The round keeps its transcript.", "Leave")) return;
+    // Still loading: nothing to lose, so no question.
+    if (session.roundId !== null && !await ask("Leave the call?", "The interviewer stops. The round keeps its transcript.", "Leave")) return;
     leaveRound().then(kept => {
       if (kept !== false) return;
       toast("You didn’t answer anything, so the round wasn’t saved.");
@@ -209,6 +210,8 @@ function hookDrop(dropSel, inputSel, textSel, msgSel, label){
   drop.ondragleave = e => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); };
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) load(f); };
   ta.addEventListener("input", show);
+  // Hand edits mean the file no longer matches what the interviewer reads.
+  if (label === "Resume") ta.addEventListener("input", () => { if (RESUME_FILE) rememberResumeFile(null); });
   show();
 }
 /* Who runs round i. A panel gives each round type a fixed person; "Mixed" rotates names. */
@@ -249,9 +252,14 @@ $("#startBtn").onclick = async () => {
     panel: $("#panel").value,
   };
   const btn = $("#startBtn"), m = $("#startMsg");
+  if (!words(setup.resume)){ m.className = "form-msg err"; m.textContent = "Add your resume. Every interview starts with a resume check."; return; }
   btn.disabled = true; btn.setAttribute("aria-busy", "true"); btn.classList.add("is-busy");
-  m.className = "form-msg"; m.textContent = "Setting up your loop…";
+  m.className = "form-msg"; m.textContent = "Checking your resume…";
   try{
+    const check = await api.invoke("ats_check", resumeArgs(setup.jd));
+    if (check.extractability === "none") throw "An ATS can’t read any text in your resume file, so neither can the panel. Open Resume check to see why.";
+    RESUME_CHECK = check; atsShown = false;
+    m.textContent = "Setting up your loop…";
     const id = await api.invoke("create_loop", {setup});
     loop = {id, setup, count: rounds.length};
     m.textContent = "";
@@ -287,7 +295,8 @@ async function openRoom(index){
   const s = session = {roundId: null, index, key: k, persona: name, minutes: roundMinutes(k), startedAt: Date.now(),
              shared: [], closed: false, busy: true, pendingEl: null, live: "", draftEl: null,
              voiceOn, muted: false, phase: "thinking", heldBase: null, fromHeld: false, transcribeT: null, abandoned: false};
-  nav("room");
+  // The room fills in behind the loader, so the first question streams in while voice loads.
+  openPrep(index, who);
   const comp = companyLabel(loop.setup);
   $("#roomIc").textContent = $("#ctxIc").textContent = comp[0];
   $("#roomTitle").textContent = `${comp} — ${CAT.ROUNDS[k].name}`;
@@ -304,37 +313,105 @@ async function openRoom(index){
   $("#sharedDot").hidden = true;
   applyVoiceUi();
   fillRoomMic();
-  if (!voiceOn && SETTINGS && SETTINGS.voice.enabled) toast("VoiceStudio isn’t running, so this round is typed. Start it in Settings.", "err");
   showProblem(null);
   renderShared(); selectTab(CAT.ROUNDS[k].tab === "shared" ? "editor" : CAT.ROUNDS[k].tab);
   buildWaves();
   setPhase("thinking");
   s.pendingEl = addMsg("iv", "", true);
-  startTimer();
-  try{
-    const info = await api.invoke("start_round", {loopId: loop.id, index});
-    if (s.abandoned || session !== s){
-      // The user left while the round was starting: stop the interviewer we just created.
-      deadRounds.add(info.round_id);
-      api.invoke("end_round", {roundId: info.round_id, workspace: {code: "", notes: ""}}).catch(() => {});
-      return;
-    }
-    s.roundId = info.round_id;
-    s.minutes = info.plan.minutes;
-    if (info.problem) showProblem(info.problem);
-    // Rust decides whether voice really started (VoiceStudio health, audio device). Trust it when it says.
-    if (typeof info.voice === "boolean" && info.voice !== s.voiceOn){
-      s.voiceOn = info.voice; applyVoiceUi();
-      if (!info.voice) toast("Voice couldn’t start, so this round is typed.", "err");
-      if (s.phase !== "thinking" || !s.busy) setPhase("idle");
-    }
-  }catch(e){
-    if (session !== s) return;
-    failPending(`Couldn’t start the round. ${errText(e)}`, `<button class="btn sm" data-retry-start>${icon("refresh")}Try again</button>`);
-    const b = $("[data-retry-start]");
-    if (b) b.onclick = () => { session = null; clearInterval(timerI); startRound(index); };
-    s.busy = false; setPhase("idle");
+  let info;
+  try{ info = await api.invoke("start_round", {loopId: loop.id, index}); }
+  catch(e){
+    if (session !== s || s.abandoned) return;
+    session = null;
+    prepFailed(`Couldn’t start the round. ${errText(e)}`, index);
+    return;
   }
+  if (s.abandoned || session !== s){
+    // The user left while the round was starting: stop the interviewer we just created.
+    deadRounds.add(info.round_id);
+    api.invoke("end_round", {roundId: info.round_id, workspace: {code: "", notes: ""}}).catch(() => {});
+    return;
+  }
+  s.roundId = info.round_id;
+  s.minutes = info.plan.minutes;
+  if (info.problem) showProblem(info.problem);
+  // Rust decides whether voice really started. If it was wanted and didn't, say so before the call.
+  const lostVoice = !!(SETTINGS && SETTINGS.voice.enabled) && info.voice === false;
+  if (typeof info.voice === "boolean" && info.voice !== s.voiceOn){
+    s.voiceOn = info.voice; applyVoiceUi();
+    if (s.phase !== "thinking" || !s.busy) setPhase("idle");
+  }
+  if (lostVoice && !await prepTyped(s)) return;
+  enterRoom(s);
+}
+function enterRoom(s){
+  stopPrep();
+  s.startedAt = Date.now();
+  nav("room");
+  startTimer();
+}
+
+/* ---------------- preparing (between Get ready and the call) ---------------- */
+/* Every line is a real check reported by Rust (`prep` events); the call opens when they're done. */
+const PREP_STEPS = [
+  ["claude", "Claude Code"], ["question", "First question"],
+  ["voicestudio", "VoiceStudio"], ["voice", "Interviewer’s voice"],
+  ["stt", "Live captions"], ["whisper", "Accurate transcript"],
+  ["speaker", "Speaker"], ["mic", "Microphone"],
+];
+const PREP_WORD = {wait: "Waiting", ok: "Ready", warn: "Fallback", fail: "Failed", off: "Off"};
+let prepT = null;
+function openPrep(index, who){
+  nav("prep");
+  $("#prepIc").textContent = companyLabel(loop.setup)[0];
+  $("#prepTitle").textContent = "Getting the room ready";
+  $("#prepSub").textContent = `${CAT.ROUNDS[loop.setup.rounds[index]].name} with ${who.full || who.name}. The call opens when everything below is ready.`;
+  $("#prepList").innerHTML = PREP_STEPS.map(([id, name]) =>
+    `<li class="wait" data-step="${id}"><i class="dot"></i><div><b>${esc(name)}</b><small></small></div><span>Waiting</span></li>`).join("");
+  msg("#prepMsg", "");
+  prepButtons(`<button class="btn ghost" data-prep="cancel">Cancel</button>`, {cancel: cancelPrep});
+  clearInterval(prepT);
+  prepT = setInterval(() => $$("#prepList li.run").forEach(li => li.querySelector("span").textContent = `${Math.round((Date.now() - li.dataset.since) / 1000)} s`), 1000);
+}
+function stopPrep(){ clearInterval(prepT); prepT = null; }
+function prepButtons(html, actions){
+  $("#prepBtns").innerHTML = html;
+  $$("#prepBtns [data-prep]").forEach(b => b.onclick = actions[b.dataset.prep]);
+}
+api.listen("prep", ev => {
+  if ($("#view-prep").hidden) return;
+  const li = $(`#prepList li[data-step="${ev.step}"]`); if (!li) return;
+  if (ev.state === "run" && !li.classList.contains("run")) li.dataset.since = Date.now();
+  li.className = ev.state;
+  li.querySelector("small").textContent = ev.detail || "";
+  li.querySelector("span").textContent = ev.state === "run" ? `${Math.round((Date.now() - li.dataset.since) / 1000)} s` : PREP_WORD[ev.state] || "";
+});
+function cancelPrep(){
+  const s = session;
+  if (s){ s.abandoned = true; session = null; }
+  api.invoke("cancel_start").catch(() => {});
+  stopPrep();
+  openReady(s ? s.index : readyIndex);
+}
+function prepFailed(message, index){
+  stopPrep();
+  $("#prepTitle").textContent = "The room isn’t ready";
+  msg("#prepMsg", esc(message), "err");
+  prepButtons(`<button class="btn primary" data-prep="retry">${icon("refresh")}Try again</button><button class="btn ghost" data-prep="back">Back</button>`, {
+    retry: () => startRound(index),
+    back: () => openReady(index),
+  });
+}
+/* Claude is ready but voice isn't: the candidate picks typed or back. Resolves true to go on. */
+function prepTyped(s){
+  stopPrep();
+  $("#prepTitle").textContent = "Voice isn’t working";
+  msg("#prepMsg", "The interviewer is ready, but this round can only be typed. Fix the red line above, or carry on typing.", "err");
+  return new Promise(done => prepButtons(
+    `<button class="btn primary" data-prep="typed">Start typed</button><button class="btn ghost" data-prep="back">Back</button>`, {
+    typed: () => done(true),
+    back: () => { done(false); leaveRound(); openReady(s.index); },
+  }));
 }
 
 function applyVoiceUi(){
@@ -358,7 +435,12 @@ async function leaveRound(){
   clearInterval(timerI);
   if (!s) return;
   clearTimeout(s.transcribeT);
-  if (s.roundId === null){ s.abandoned = true; return; }
+  if (s.roundId === null){
+    // Still on the loader: stop the start in Rust too.
+    s.abandoned = true; stopPrep();
+    api.invoke("cancel_start").catch(() => {});
+    return;
+  }
   deadRounds.add(s.roundId);
   return api.invoke("end_round", {roundId: s.roundId, workspace: {code: $("#code").value, notes: $("#notes").value}}).catch(e => api.log("error", `end_round: ${errText(e)}`));
 }
@@ -1174,6 +1256,11 @@ function renderInterview(fb, focus){
 /* ---------------- resume check (ATS) ---------------- */
 const MAX_FILE = 10 * 1024 * 1024;
 let RESUME_FILE = LS.get("onsite.resumeFile", null);   // {name, data(base64), size} — the last resume file, for layout checks
+let RESUME_CHECK = null;   // the check run when this loop started, shown on Get ready
+/* The resume as both checks read it: the file when there is one (layout checks need it), else the text. */
+function resumeArgs(jd){
+  return RESUME_FILE ? {name: RESUME_FILE.name, data: RESUME_FILE.data, text: null, jd} : {name: null, data: null, text: $("#resume").value, jd};
+}
 function rememberResumeFile(file){
   RESUME_FILE = file;
   LS.set("onsite.resumeFile", file);
@@ -1236,8 +1323,7 @@ async function runAts(){
   btn.disabled = true; btn.classList.add("is-busy"); btn.setAttribute("aria-busy", "true");
   st.className = "form-msg"; st.textContent = jd ? "Reading the file and the posting… (the posting takes Claude ~10 s the first time)" : "Reading the file…";
   try{
-    const args = RESUME_FILE ? {name: RESUME_FILE.name, data: RESUME_FILE.data, text: null, jd} : {name: null, data: null, text, jd};
-    const r = await api.invoke("ats_check", args);
+    const r = await api.invoke("ats_check", resumeArgs(jd));
     st.textContent = "";
     atsShown = true;
     renderAts(r, false);
@@ -1317,7 +1403,7 @@ async function runAiScreen(){
   const seq = ++aiSeq;
   renderAiScreen(null);
   const jd = $("#atsJd").value.trim();
-  const args = RESUME_FILE ? {name: RESUME_FILE.name, data: RESUME_FILE.data, text: null, jd} : {name: null, data: null, text: $("#resume").value, jd};
+  const args = resumeArgs(jd);
   try{
     const s = await api.invoke("ats_screen", args);
     if (seq === aiSeq) renderAiScreen(s);
@@ -1559,9 +1645,26 @@ async function openReady(index){
   $("#readyRound").textContent = `${comp} — ${CAT.ROUNDS[k].name}`;
   $("#readyWho").textContent = `Round ${index+1} of ${loop.count} · ${roundMinutes(k)} minutes · with ${who.full ? `${who.full}, ${who.role}` : who.name}`;
   $("#readyEvery").checked = readyEvery();
+  renderReadyResume();
   $("#readyJoin").disabled = false; $("#readyJoin").classList.remove("is-busy");
   msg("#acResult", "");
   await renderAudioCheck();
+}
+/* The resume check from Start, in short. The full report is on the Resume check page. */
+function renderReadyResume(){
+  const el = $("#readyResume"), r = RESUME_CHECK;
+  el.hidden = !r; if (!r) return;
+  const passing = r.ats.filter(a => a.passes).length;
+  const [tip] = r.tips;
+  const head = r.extractability === "partial" ? "Part of your resume file can’t be read" : `Passes ${passing} of 6 simulated ATSs`;
+  el.innerHTML = `
+    <div class="panel-head"><h2>Resume check</h2><span class="pill ${scoreClass(r.matched.overall) === "hi" ? "ok" : scoreClass(r.matched.overall) === "mid" ? "warn" : "bad"}">Checked</span></div>
+    <div class="ready-resume">
+      <div><span class="score ${scoreClass(r.matched.overall)}">${r.matched.overall}</span><small class="muted"> / 100 ${r.job ? "job match" : "structure"}</small></div>
+      <div><b>${esc(head)}.</b>${tip ? `<p class="muted small">${esc(tip)}</p>` : ""}</div>
+    </div>
+    <div class="btn-row"><button class="btn sm ghost" id="readyAts">See the full check</button></div>`;
+  $("#readyAts").onclick = () => { atsShown = true; nav("resume"); renderAts(r, true); };
 }
 async function renderAudioCheck(){
   await Promise.all([refreshStatus(), loadDevices()]);

@@ -59,6 +59,13 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   - Model aliases: `fable`, `opus`, `sonnet` (sonnet resolved to `claude-sonnet-5-5`). Also `--effort`.
   - Latency (WSL, sonnet, tiny prompt): whole one-shot run ~6.8 s incl. process start; second turn on
     a warm process ~6 s round trip. Real TTFT numbers go here after M1.
+- Every round is a **fresh** `claude -p` process in a new temp dir with no `--resume` (resume is used only to
+  reconnect a crashed process mid-round). Nothing carries over between rounds or loops.
+- Variety: Claude Code has no temperature flag, so the same prompt opened the same way every time (same greeting,
+  same payments code). Each round now appends a THIS SESSION block: one starting point from the round's
+  `openers` in `catalog.json` (the last half used are skipped; kept in `settings` under `openers:<round_key>`),
+  plus the first two interviewer turns of the last 4 rounds of that kind as "do not reuse". Coding rounds skip
+  the history (the bank picks the problem). Persona opening lines are a tone guide, never said word for word.
 - Run every session with `current_dir` set to an **empty per-session temp dir**, so no CLAUDE.md,
   repo files, or project settings leak into the interviewer.
 - Write candidate turns to stdin as JSONL user messages:
@@ -151,6 +158,15 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
     nothing (`prefs.json` `dictation.silent_models`), then serves whisper-tiny even when `&model=` asks
     for Parakeet. Not exposed in the API; choosing the model via `POST /dictation/prefs` clears it.
     Onsite does that at round start and restores the owner's own pick.
+
+### Loader (start_round)
+- Join opens a "Getting the room ready" view; `start_round` returns only when the room is ready, emitting `prep`
+  events `{step, state: run|ok|warn|fail|off, detail}` for: claude (system/init seen), question (first sentence
+  written), voicestudio, voice (persona profile resolved and warm-up spoken), stt (Parakeet picked/un-demoted),
+  whisper (sidecar Ready, waits up to 60 s), speaker, mic (3 s of real audio). Voice playback is held (`go`) until
+  then, and the round clock restarts. Voice or mic failure → the UI offers "Start typed". `cancel_start` stops it.
+- Start runs the resume check (`ats_check`) first; no resume or an unreadable file blocks the loop. The result
+  is shown on Get ready.
 
 ### audio/ — mic and speaker
 - cpal input at the device rate, resample to 16 kHz mono i16 for STT.

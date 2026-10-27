@@ -232,6 +232,20 @@ a.row-item{color:inherit; text-decoration:none}
 .checks li .dot{width:10px; height:10px}
 .checks li.ok .dot{background:var(--ok)} .checks li.bad .dot{background:var(--bad)} .checks li.warn .dot{background:var(--warn)}
 .checks li span{color:var(--muted); margin-left:auto; font-size:12.5px}
+.prep{max-width:560px; margin:6vh auto 0; display:flex; flex-direction:column; align-items:flex-start; gap:6px}
+.prep h1{font-size:22px; margin:6px 0 0}
+.prep-list{width:100%; margin:14px 0 4px}
+.prep-list li{align-items:flex-start}
+.prep-list li .dot{margin-top:5px}
+.prep-list li div{display:flex; flex-direction:column; gap:2px; min-width:0}
+.prep-list li small{color:var(--muted); font-size:12.5px; overflow-wrap:anywhere}
+.prep-list li span{margin-top:1px; white-space:nowrap}
+.prep-list li.run .dot{background:none; border:2px solid var(--surface-3); border-top-color:var(--ink-2); animation:spin .9s linear infinite}
+.prep-list li.off{opacity:.55}
+.prep-list li.wait .dot{background:var(--surface-3)}
+@media (prefers-reduced-motion: reduce){ .prep-list li.run .dot{animation:none; border-top-color:var(--warn)} }
+.ready-resume{display:flex; gap:16px; align-items:center}
+.ready-resume .score{font-size:26px; font-weight:700}
 
 .empty-state{display:flex; flex-direction:column; align-items:flex-start; gap:10px; max-width:640px; padding:28px}
 .empty-ic{width:48px; height:48px; border-radius:14px; display:grid; place-items:center; background:var(--accent-soft); color:var(--accent-text)}

@@ -133,7 +133,7 @@ pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, s
         Some(vars) => (
             vars["name"].clone(),
             vars["role"].clone(),
-            format!("\nYOUR PERSONA (keep it identical every session):\n{}\n", render(&t.persona_block, &vars)),
+            format!("\nYOUR PERSONA (the same person every session; the questions change every session):\n{}\n", render(&t.persona_block, &vars)),
         ),
         None => (plan.persona.clone(), "a senior software engineer".to_string(), String::new()),
     };
@@ -162,6 +162,67 @@ pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, s
     ]
     .into();
     render(&t.interviewer, &vars)
+}
+
+/// How the last few sessions of this round opened: the first two interviewer turns, with
+/// shared code cut to its first lines. Shown to the interviewer so it doesn't repeat itself.
+pub fn opening_excerpt(turns: &[crate::store::Turn]) -> Option<String> {
+    let mut parts = Vec::new();
+    for t in turns.iter().filter(|t| t.who == "iv").take(2) {
+        let mut out = String::new();
+        let mut in_code = 0usize;
+        for line in t.text.lines() {
+            if line.trim_start().starts_with("```") {
+                in_code = if in_code > 0 { 0 } else { 1 };
+                if in_code == 0 {
+                    out.push_str(" …code… ");
+                }
+                continue;
+            }
+            if in_code > 0 {
+                in_code += 1;
+                if in_code > 5 {
+                    continue;
+                }
+            }
+            out.push_str(line.trim());
+            out.push(' ');
+        }
+        let out = out.replace("[[END]]", "");
+        let out = out.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !out.is_empty() {
+            parts.push(out);
+        }
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    let joined = parts.join(" / ");
+    let clipped = clip(&joined, 600);
+    Some(if clipped.len() < joined.len() { format!("{clipped}…") } else { joined })
+}
+
+/// One opener, avoiding the ones used recently while others are left. `seed` picks among the rest.
+pub fn pick_opener<'a>(openers: &'a [String], recent: &[String], seed: u64) -> Option<&'a String> {
+    let fresh: Vec<&String> = openers.iter().filter(|o| !recent.contains(o)).collect();
+    let pool: Vec<&String> = if fresh.is_empty() { openers.iter().collect() } else { fresh };
+    (!pool.is_empty()).then(|| pool[(seed % pool.len() as u64) as usize])
+}
+
+/// Added to the interviewer's system prompt: today's starting point and what recent sessions asked.
+pub fn session_block(opener: Option<&str>, earlier: &[String]) -> String {
+    let mut s = String::from("\n\nTHIS SESSION (private notes; never mention them):\n");
+    if let Some(o) = opener {
+        s.push_str(&format!("- Starting point for today: {o}. Build the round around it. It overrides the examples in HOW TO RUN IT.\n"));
+    }
+    if !earlier.is_empty() {
+        s.push_str("- Earlier sessions of this round opened like this. Do not reuse their questions, scenarios, code or wording:\n");
+        for (i, e) in earlier.iter().enumerate() {
+            s.push_str(&format!("  {}. {e}\n", i + 1));
+        }
+    }
+    s.push_str("- Word your greeting and first question freshly. A real interviewer never sounds recited.");
+    s
 }
 
 pub fn opening_message(minutes: u32) -> String {
@@ -288,6 +349,43 @@ mod tests {
         assert!(candidate_message("", &ws, &mut last, false, "Java", 4.0, 45).is_none());
         let (m, _) = candidate_message("", &ws, &mut last, true, "Java", 4.0, 45).unwrap();
         assert!(m.starts_with("(The candidate shares their workspace"));
+    }
+
+    fn turn(who: &str, text: &str) -> crate::store::Turn {
+        crate::store::Turn { who: who.into(), text: text.into(), at_min: 0.0, ttft_ms: None, shared_workspace: false, sent: None }
+    }
+
+    #[test]
+    fn opening_excerpt_keeps_first_iv_turns_and_cuts_code() {
+        let code = (1..=20).map(|i| format!("line{i}")).collect::<Vec<_>>().join("\n");
+        let turns = vec![
+            turn("iv", "Hi, I'm Vikram.\nTell me about yourself."),
+            turn("me", "I build payments."),
+            turn("iv", &format!("Here is some code.\n```java\n{code}\n```\nWhat does it do?")),
+            turn("iv", "Third turn is ignored."),
+        ];
+        let e = opening_excerpt(&turns).unwrap();
+        assert!(e.starts_with("Hi, I'm Vikram. Tell me about yourself. / Here is some code. line1"), "{e}");
+        assert!(e.contains("line4 …code… What does it do?") && !e.contains("line5") && !e.contains("Third"), "{e}");
+        assert!(opening_excerpt(&[turn("me", "hello")]).is_none());
+    }
+
+    #[test]
+    fn pick_opener_skips_recent_until_all_used() {
+        let all: Vec<String> = ["a", "b", "c"].map(String::from).to_vec();
+        for seed in 0..10 {
+            assert_eq!(pick_opener(&all, &["a".into(), "b".into()], seed).unwrap(), "c");
+        }
+        assert!(pick_opener(&all, &all, 7).is_some());
+        assert!(pick_opener(&[], &[], 1).is_none());
+    }
+
+    #[test]
+    fn session_block_lists_opener_and_earlier_openings() {
+        let b = session_block(Some("a rate limiter"), &["Hi, here is a PaymentService".into()]);
+        assert!(b.contains("Starting point for today: a rate limiter."));
+        assert!(b.contains("1. Hi, here is a PaymentService"));
+        assert!(!session_block(None, &[]).contains("Earlier sessions"));
     }
 
     #[test]

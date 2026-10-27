@@ -12,6 +12,16 @@
         "Role fit",
         "Motivation",
         "Communication"
+      ],
+      "openers": [
+        "Start from their most recent role and its biggest claim.",
+        "Start from their earliest role and walk forward in time.",
+        "Start from one number or metric on the resume and ask how it was measured.",
+        "Start from one technology in their skills list and ask where they used it for real.",
+        "Start with why they are looking for a change now, then go to the resume.",
+        "Start from the project line on the resume that reads thinnest or vaguest.",
+        "Start from a gap, short stint or team change if there is one; otherwise from the latest role.",
+        "Start from the job description: ask which part of it matches their work best, then test that claim."
       ]
     },
     "project": {
@@ -26,6 +36,15 @@
         "Trade-off reasoning",
         "Impact and metrics",
         "Communication"
+      ],
+      "openers": [
+        "Ask them to choose the project they are proudest of.",
+        "Pick the project on the resume with the biggest scale claim yourself.",
+        "Ask about a project that failed, slipped badly or was cancelled.",
+        "Ask about the hardest production incident they owned, then drill into the system around it.",
+        "Pick the second most recent project on the resume, not the latest one.",
+        "Ask about a time they changed the architecture of an existing system.",
+        "Ask about a project where they had to migrate data or traffic with no downtime."
       ]
     },
     "fundamentals": {
@@ -39,6 +58,16 @@
         "Depth",
         "Applied reasoning",
         "Communication"
+      ],
+      "openers": [
+        "Open with databases: indexes, isolation levels or locking.",
+        "Open with concurrency in the candidate's language.",
+        "Open with messaging: ordering, delivery guarantees or consumer lag.",
+        "Open with caching: invalidation, stampedes or eviction.",
+        "Open with networking: what happens during an HTTP request, timeouts, keep-alive or TLS.",
+        "Open with language internals: memory model, garbage collection or collections.",
+        "Open with distributed systems: idempotency, retries, clocks or consensus.",
+        "Open with operating systems: processes and threads, context switches, file descriptors or the page cache."
       ]
     },
     "coding": {
@@ -60,7 +89,7 @@
       "min": 45,
       "tab": "shared",
       "blurb": "Read unfamiliar code, trace it, find the bugs, fix and test it.",
-      "guide": "Share a realistic piece of production-style code (60–120 lines) in the candidate's language, from the JD's domain where possible (e.g. payments, order processing, caching, a job scheduler). Put it in ONE code fence in your first technical message. Seed 3–5 real issues across categories (correctness, concurrency, resource leak, performance, security, idempotency/retry, error handling, design smell) without comments that give them away. Sequence: (1) ask what the code does at a high level, (2) ask them to trace a specific input or scenario, (3) ask what problems they see and which matter most, (4) ask how they would fix the top issues and how they would test it, (5) if time remains, ask how they would extend it for a new requirement. Do not reveal issues they miss until the end, and even then only name one or two.",
+      "guide": "Share a realistic piece of production-style code (60–120 lines) in the candidate's language, built around the scenario given under THIS SESSION. Put it in ONE code fence in your first technical message. Seed 3–5 real issues across categories (correctness, concurrency, resource leak, performance, security, idempotency/retry, error handling, design smell) without comments that give them away. Sequence: (1) ask what the code does at a high level, (2) ask them to trace a specific input or scenario, (3) ask what problems they see and which matter most, (4) ask how they would fix the top issues and how they would test it, (5) if time remains, ask how they would extend it for a new requirement. Do not reveal issues they miss until the end, and even then only name one or two.",
       "rubric": [
         "Reading accuracy",
         "Bug finding",
@@ -68,6 +97,26 @@
         "Fix quality",
         "Testing mindset",
         "Communication"
+      ],
+      "openers": [
+        "a rate limiter used by an API gateway",
+        "an in-memory cache with a TTL and a size limit",
+        "a job scheduler with retries and backoff",
+        "an inventory reservation service for a flash sale",
+        "a notification worker that fans out to email, SMS and push",
+        "an event ingestion service that batches writes to a database",
+        "a URL shortener with click counting",
+        "a ride or delivery matching service",
+        "a seat booking service with holds that expire",
+        "a file upload and thumbnail worker",
+        "a real-time leaderboard service",
+        "a feature flag evaluation library",
+        "a chat message delivery service with read receipts",
+        "a CSV import that upserts records into a database",
+        "a database connection pool",
+        "an order checkout flow that calls several downstream services",
+        "a webhook delivery service with signatures and retries",
+        "a service from the job description's own domain"
       ]
     },
     "lld": {
@@ -75,13 +124,33 @@
       "min": 60,
       "tab": "notes",
       "blurb": "Object-oriented design or machine coding: classes, interfaces, patterns.",
-      "guide": "Give a low-level design / machine-coding problem fitting the company and domain (e.g. rate limiter, parking lot, splitwise, wallet/ledger, in-memory key-value store, job scheduler). Expect: requirement clarification, core entities, class/interface design (on the whiteboard), key methods, design patterns where they help, concurrency and thread safety, extensibility for a new requirement you add midway. Ask them to code the core classes in the editor and review it like a senior engineer would.",
+      "guide": "Give the low-level design / machine-coding problem named under THIS SESSION, framed for the company. Expect: requirement clarification, core entities, class/interface design (on the whiteboard), key methods, design patterns where they help, concurrency and thread safety, extensibility for a new requirement you add midway. Ask them to code the core classes in the editor and review it like a senior engineer would.",
       "rubric": [
         "Requirements",
         "Object modelling",
         "Code quality and SOLID",
         "Extensibility",
         "Concurrency"
+      ],
+      "openers": [
+        "parking lot",
+        "rate limiter",
+        "expense splitting app like Splitwise",
+        "wallet with a ledger",
+        "in-memory key-value store with TTL",
+        "job scheduler",
+        "elevator system",
+        "movie ticket booking",
+        "vending machine",
+        "logging framework with pluggable sinks",
+        "LRU and LFU cache",
+        "in-process pub-sub message broker",
+        "meeting room scheduler",
+        "food delivery order lifecycle",
+        "notification service with pluggable channels",
+        "snake and ladder game",
+        "inventory management for a warehouse",
+        "a design from the job description's own domain"
       ]
     },
     "sysdesign": {
@@ -89,7 +158,7 @@
       "min": 60,
       "tab": "notes",
       "blurb": "High-level design: scope, estimates, architecture, deep dives, failures.",
-      "guide": "Give an open-ended system design problem fitting the company (and JD domain if any). Stay vague at first; the candidate must drive. Expect: functional and non-functional requirements, rough capacity estimates, APIs, data model, high-level architecture (on the whiteboard as text), then deep dives into 1–2 components. Push with real interviewer moves: change the scale 10x, kill a node or a region, introduce a hot key, ask about consistency vs availability, idempotency, exactly-once claims, monitoring, cost. Calibrate depth to level: SDE-2 should drive most of it; senior must lead trade-offs unprompted.",
+      "guide": "Give the open-ended system design problem named under THIS SESSION, framed for the company. Stay vague at first; the candidate must drive. Expect: functional and non-functional requirements, rough capacity estimates, APIs, data model, high-level architecture (on the whiteboard as text), then deep dives into 1–2 components. Push with real interviewer moves: change the scale 10x, kill a node or a region, introduce a hot key, ask about consistency vs availability, idempotency, exactly-once claims, monitoring, cost. Calibrate depth to level: SDE-2 should drive most of it; senior must lead trade-offs unprompted.",
       "rubric": [
         "Requirements and scoping",
         "Architecture",
@@ -97,6 +166,27 @@
         "Scale and reliability",
         "Trade-offs",
         "Driving the discussion"
+      ],
+      "openers": [
+        "a URL shortener at scale",
+        "a social news feed",
+        "a chat and messaging service",
+        "ride hailing",
+        "a payment gateway",
+        "a notification system",
+        "a distributed rate limiter",
+        "video streaming",
+        "search autocomplete",
+        "a flash sale for an e-commerce site",
+        "a distributed cache",
+        "metrics and monitoring",
+        "file storage and sync like Dropbox",
+        "event ticket booking",
+        "live order tracking for food delivery",
+        "a web crawler",
+        "ad click aggregation",
+        "a distributed job scheduler",
+        "a system from the job description's own domain"
       ]
     },
     "behavioral": {
@@ -111,6 +201,18 @@
         "Self-awareness",
         "Collaboration and conflict",
         "Values alignment"
+      ],
+      "openers": [
+        "Open with a conflict with a peer.",
+        "Open with a mistake or failure they own.",
+        "Open with a disagreement with their manager.",
+        "Open with a hard deadline and what they cut.",
+        "Open with something they owned beyond their role.",
+        "Open with hard feedback they gave or got.",
+        "Open with influencing a decision without authority.",
+        "Open with a decision made on incomplete data.",
+        "Open with helping someone else grow.",
+        "Open with a time they put the user or customer first at a cost."
       ]
     },
     "hm": {
@@ -125,6 +227,15 @@
         "Team fit",
         "Motivation",
         "Quality of their questions"
+      ],
+      "openers": [
+        "Open with their career story and the thread that connects it.",
+        "Open with why this team and why now.",
+        "Open with a prioritisation scenario from your team.",
+        "Open with an incident judgment call they made.",
+        "Open with how they work with product managers.",
+        "Open with what they want their next two years to look like.",
+        "Open with a time they pushed back on a plan."
       ]
     }
   },

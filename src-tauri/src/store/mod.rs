@@ -199,6 +199,13 @@ impl Store {
         Ok(round)
     }
 
+    /// Transcripts of the latest rounds of one kind, newest first.
+    pub fn recent_transcripts(&self, round_key: &str, limit: i64) -> Result<Vec<Vec<Turn>>> {
+        let mut st = self.conn.prepare("SELECT transcript FROM rounds WHERE round_key = ?1 ORDER BY id DESC LIMIT ?2")?;
+        let rows = st.query_map(params![round_key, limit], |r| r.get::<_, String>(0))?;
+        Ok(rows.filter_map(|r| r.ok()).filter_map(|t| serde_json::from_str(&t).ok()).collect())
+    }
+
     pub fn loop_round_ids(&self, loop_id: i64) -> Result<Vec<i64>> {
         let mut st = self.conn.prepare("SELECT id FROM rounds WHERE loop_id = ?1 ORDER BY idx, id")?;
         let ids = st.query_map([loop_id], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;

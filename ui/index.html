@@ -142,7 +142,7 @@
             <div class="drops">
               <div class="drop" id="dropResume">
                 <svg class="drop-ic"><use href="#i-upload"/></svg>
-                <div class="drop-tx"><b>Resume <small>(optional)</small></b><span id="resumeMsg">Drop a PDF, Word or text file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
+                <div class="drop-tx"><b>Resume</b><span id="resumeMsg">Drop a PDF, Word or text file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
                 <input type="file" id="resumeFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
               </div>
               <div class="drop" id="dropJd">
@@ -214,6 +214,7 @@
           <div class="btn-row" id="acVoiceRow" hidden><button class="btn" id="acVoiceOn"><svg><use href="#i-mic"/></svg>Turn on spoken interviews</button></div>
           <p class="muted ac-lang" id="acLang"></p>
         </div>
+        <div class="panel" id="readyResume" hidden></div>
         <aside class="panel ready-card">
           <span class="room-ic" id="readyIc">D</span>
           <h2 id="readyRound"></h2>
@@ -221,6 +222,18 @@
           <button class="btn primary lg" id="readyJoin">Join interview<svg><use href="#i-arrow"/></svg></button>
           <label class="check"><input type="checkbox" id="readyEvery"><span>Check before every round</span></label>
         </aside>
+      </div>
+    </section>
+
+    <!-- ============ PREPARING (between Get ready and the call) ============ -->
+    <section class="view" id="view-prep" hidden>
+      <div class="prep panel" aria-live="polite">
+        <span class="room-ic" id="prepIc">D</span>
+        <h1 id="prepTitle">Getting the room ready</h1>
+        <p class="muted" id="prepSub"></p>
+        <ul class="checks prep-list" id="prepList"></ul>
+        <p class="form-msg" id="prepMsg" role="status"></p>
+        <div class="btn-row" id="prepBtns"><button class="btn ghost" id="prepCancel">Cancel</button></div>
       </div>
     </section>
 

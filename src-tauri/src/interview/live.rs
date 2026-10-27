@@ -1,7 +1,7 @@
 //! Running rounds: owns the Claude session, forwards its events to the UI, saves every turn.
 
 use super::report::{enough_to_review, metrics, report_prompt, round_summary, verdict_prompt, ReportInput};
-use super::{candidate_message, interviewer_prompt, opening_message, LoopSetup, PlannedRound, PromptTemplates, Workspace};
+use super::{candidate_message, interviewer_prompt, opening_excerpt, opening_message, pick_opener, session_block, LoopSetup, PlannedRound, PromptTemplates, Workspace};
 use crate::bank::{Question, Test};
 use crate::brain::{prompts, run_once, ClaudeSession, SessionConfig, SessionEvent, Tools};
 use crate::runner::{self, Kind, Lang};
@@ -10,10 +10,11 @@ use crate::store::Turn;
 use crate::AppState;
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 /// A reply older than this no longer blocks the next answer (Claude may be hung).
 const REPLY_STALE: Duration = Duration::from_secs(120);
@@ -36,14 +37,15 @@ pub struct ActiveRound {
 
 struct RoundLog {
     round_id: i64,
-    started: Instant,
+    /// Reset when the loader finishes, so preparation time doesn't count against the round.
+    started: Mutex<Instant>,
     turns: Mutex<Vec<Turn>>,
     workspace: Mutex<Workspace>,
 }
 
 impl RoundLog {
     fn elapsed_min(&self) -> f64 {
-        self.started.elapsed().as_secs_f64() / 60.0
+        self.started.lock().unwrap().elapsed().as_secs_f64() / 60.0
     }
 
     fn persist(&self, state: &AppState, session_id: Option<&str>) {
@@ -128,6 +130,145 @@ fn problem_block(q: &Question) -> String {
     )
 }
 
+/// One line of the loader, sent as the `prep` event. `state`: run, ok, warn, fail or off.
+#[derive(Debug, Clone, Serialize)]
+struct Prep<'a> {
+    step: &'a str,
+    state: &'a str,
+    detail: &'a str,
+}
+
+fn prep(app: &AppHandle, step: &str, state: &str, detail: &str) {
+    let _ = app.emit("prep", Prep { step, state, detail });
+}
+
+/// Loader steps that need VoiceStudio.
+const VOICE_STEPS: [&str; 5] = ["voice", "stt", "whisper", "speaker", "mic"];
+
+/// Opens the speaker and starts the voice loop, if spoken interviews are on and VoiceStudio is up.
+async fn start_voice(app: &AppHandle, round_id: i64, settings: &crate::voice::VoiceSettings) -> Option<crate::voice::VoiceStart> {
+    let state = app.state::<AppState>();
+    let skip = |why: &str| VOICE_STEPS.iter().for_each(|s| prep(app, s, "off", why));
+    if !settings.enabled {
+        prep(app, "voicestudio", "off", "Spoken interviews are off");
+        skip("Typed round");
+        return None;
+    }
+    prep(app, "voicestudio", "run", "Connecting");
+    let health = match crate::voice::vs::VoiceStudio::new(&settings.base_url).health().await {
+        Ok(h) => h,
+        Err(_) => {
+            prep(app, "voicestudio", "fail", "Not running. This round will be typed.");
+            skip("Needs VoiceStudio");
+            return None;
+        }
+    };
+    let device = health["device"].as_str().unwrap_or("Running");
+    prep(app, "voicestudio", "ok", device);
+    match state.voice.begin(app, round_id, settings.clone()) {
+        Ok(v) => {
+            prep(app, "speaker", "ok", "Open");
+            Some(v)
+        }
+        Err(e) => {
+            tracing::warn!("voice off for this round: {e}");
+            prep(app, "speaker", "fail", &e.to_string());
+            ["voice", "stt", "whisper", "mic"].iter().for_each(|s| prep(app, s, "off", "Needs the speaker"));
+            None
+        }
+    }
+}
+
+/// Waits for Claude to start and write the first sentence of its reply.
+async fn wait_claude(
+    app: &AppHandle,
+    started: oneshot::Receiver<std::result::Result<String, String>>,
+    reply: oneshot::Receiver<std::result::Result<(), String>>,
+) -> Result<()> {
+    let t = Instant::now();
+    let fail = |m: &str| {
+        prep(app, "claude", "fail", m);
+        prep(app, "question", "off", "");
+        AppError::Claude(m.to_string())
+    };
+    prep(app, "claude", "run", "Starting the interviewer");
+    match tokio::time::timeout(Duration::from_secs(60), started).await {
+        Ok(Ok(Ok(model))) => prep(app, "claude", "ok", &model),
+        Ok(Ok(Err(m))) if !m.is_empty() => return Err(fail(&m)),
+        _ => return Err(fail("Claude Code didn't start. Run the health check in Settings.")),
+    }
+    prep(app, "question", "run", "Writing the first question");
+    let m = match tokio::time::timeout(Duration::from_secs(150), reply).await {
+        Ok(Ok(Ok(()))) => {
+            prep(app, "question", "ok", &format!("First sentence in {:.1} s", t.elapsed().as_secs_f64()));
+            return Ok(());
+        }
+        Ok(Ok(Err(m))) => m,
+        Ok(Err(_)) => "The interviewer stopped.".to_string(),
+        Err(_) => "No reply after two and a half minutes.".to_string(),
+    };
+    prep(app, "question", "fail", &m);
+    Err(AppError::Claude(m))
+}
+
+/// Waits for the interviewer's voice, speech recognition and the mic. Returns `go` when the
+/// round can be spoken; None makes it a typed round.
+async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, start: Option<crate::voice::VoiceStart>) -> Option<oneshot::Sender<()>> {
+    use crate::voice::{audio, stt, vs::VoiceStudio, whisper::{self, WhisperStatus}};
+    let crate::voice::VoiceStart { ready, go } = start?;
+    let vs = VoiceStudio::new(&settings.base_url);
+    let voice = async {
+        prep(app, "voice", "run", "Loading the voice model. Up to a minute when VoiceStudio is cold.");
+        let (state, detail) = match tokio::time::timeout(Duration::from_secs(240), ready).await {
+            Ok(Ok(Ok(name))) => ("ok", name),
+            Ok(Ok(Err(e))) => ("fail", e),
+            Ok(Err(_)) => ("fail", "The voice loop stopped.".to_string()),
+            Err(_) => ("fail", "VoiceStudio took over four minutes.".to_string()),
+        };
+        prep(app, "voice", state, &detail);
+        state == "ok"
+    };
+    let recognizer = async {
+        prep(app, "stt", "run", "Choosing the speech model");
+        match stt::prepare(&vs).await {
+            Some(m) if m == stt::ENGLISH_MODEL => prep(app, "stt", "ok", "Parakeet TDT v2, English"),
+            Some(m) => prep(app, "stt", "warn", &format!("{m} for now. The English model is downloading.")),
+            None => prep(app, "stt", "warn", "VoiceStudio's default model. Captions may be rough."),
+        }
+    };
+    let accuracy = async {
+        prep(app, "whisper", "run", "Loading Whisper large-v3 on the GPU");
+        let until = Instant::now() + Duration::from_secs(60);
+        loop {
+            match whisper::status() {
+                WhisperStatus::Ready { model } => break prep(app, "whisper", "ok", &model),
+                WhisperStatus::Off { reason } => break prep(app, "whisper", "warn", &format!("Off ({reason}). Parakeet's text is used.")),
+                WhisperStatus::Loading if Instant::now() > until => break prep(app, "whisper", "warn", "Still loading. Parakeet's text is used until it's ready."),
+                WhisperStatus::Loading => tokio::time::sleep(Duration::from_millis(300)).await,
+            }
+        }
+    };
+    let mic = async {
+        prep(app, "mic", "run", "Opening the microphone");
+        let (tx, mut rx) = mpsc::unbounded_channel::<Vec<i16>>();
+        let heard = match audio::Mic::open(tx) {
+            Ok(m) => {
+                let got = tokio::time::timeout(Duration::from_secs(3), rx.recv()).await;
+                drop(m);
+                if matches!(got, Ok(Some(_))) { Ok(()) } else { Err("No audio came from the microphone.".to_string()) }
+            }
+            Err(e) => Err(e.to_string()),
+        };
+        match &heard {
+            Ok(()) => prep(app, "mic", "ok", "Receiving audio"),
+            Err(e) => prep(app, "mic", "fail", e),
+        }
+        heard.is_ok()
+    };
+    let (voice_ok, (), (), mic_ok) = tokio::join!(voice, recognizer, accuracy, mic);
+    (voice_ok && mic_ok).then_some(go)
+}
+
 pub fn create_loop(state: &AppState, setup: &LoopSetup) -> Result<i64> {
     setup.validate(&state.catalog, &state.panels)?;
     let mut config = serde_json::to_value(setup)?;
@@ -165,13 +306,48 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         tracing::info!(id = %q.id, difficulty = %q.difficulty, "coding question");
         system_prompt.push_str(&problem_block(q));
     }
+    // Claude Code has no temperature flag, and the same prompt opens the same way every time.
+    // So each session gets a starting point not used lately, and sees how recent ones opened.
+    let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
+    let opener = {
+        let openers = &cat.rounds[&plan.key].openers;
+        let key = format!("openers:{}", plan.key);
+        let store = state.store.lock().unwrap();
+        let mut recent: Vec<String> = store.get_setting(&key).ok().flatten().unwrap_or_default();
+        let pick = pick_opener(openers, &recent, seed).cloned();
+        if let Some(o) = &pick {
+            recent.retain(|r| r != o);
+            recent.insert(0, o.clone());
+            recent.truncate((openers.len() / 2).max(1));
+            if let Err(e) = store.set_setting(&key, &recent) {
+                tracing::warn!("saving recent openers: {e}");
+            }
+        }
+        pick
+    };
+    // A coding round's problem comes from the bank, so only its wording needs to vary.
+    let earlier: Vec<String> = match question {
+        Some(_) => Vec::new(),
+        None => state.store.lock().unwrap().recent_transcripts(&plan.key, 4).unwrap_or_default().iter().filter_map(|t| opening_excerpt(t)).collect(),
+    };
+    tracing::info!(?opener, earlier = earlier.len(), "round variety");
+    system_prompt.push_str(&session_block(opener.as_deref(), &earlier));
     let mut settings = state.settings();
     // A panel interviewer always speaks in their own voice, at their own pace.
     if let Some(p) = state.panels.persona(&setup.panel, &plan.key) {
         settings.voice.speed *= p.speed_factor;
         settings.voice.persona = Some(crate::voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states });
     }
-    let location = state.claude_location().await?;
+    // A newer start (or cancel_start) bumps this; the loader below then gives up.
+    let me = state.prep_gen.fetch_add(1, Ordering::SeqCst) + 1;
+    prep(app, "claude", "run", "Finding Claude Code");
+    let location = match state.claude_location().await {
+        Ok(l) => l,
+        Err(e) => {
+            prep(app, "claude", "fail", &e.to_string());
+            return Err(e);
+        }
+    };
     // One round at a time: a round left open (window closed, crash) would keep its Claude process.
     close_other_rounds(&state, None).await;
 
@@ -186,7 +362,7 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     )?;
     let log = Arc::new(RoundLog {
         round_id,
-        started: Instant::now(),
+        started: Mutex::new(Instant::now()),
         turns: Mutex::new(Vec::new()),
         workspace: Mutex::new(Workspace::default()),
     });
@@ -197,18 +373,12 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         system_prompt: system_prompt.clone(),
         resume: None,
     };
-    let mut voice = false;
-    if settings.voice.enabled && crate::voice::vs::VoiceStudio::new(&settings.voice.base_url).health().await.is_ok() {
-        match state.voice.begin(app, round_id, settings.voice.clone()) {
-            Ok(()) => voice = true,
-            Err(e) => {
-                tracing::warn!("voice off for this round: {e}");
-                let _ = app.emit("voice", &crate::voice::VoiceEvent::Error { message: e.to_string() });
-            }
-        }
-    }
+    let voice_start = start_voice(app, round_id, &settings.voice).await;
+    let (started_tx, started_rx) = oneshot::channel();
+    let (reply_tx, reply_rx) = oneshot::channel();
+    let first = FirstReply { started: started_tx, reply: reply_tx };
     let started = async {
-        let mut session = spawn_session(app, round_id, cfg, log.clone()).await?;
+        let mut session = spawn_session(app, round_id, cfg, log.clone(), Some(first)).await?;
         session.send(&opening_message(plan.minutes)).await?;
         Ok::<_, AppError>(session)
     }
@@ -216,11 +386,46 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     let session = match started {
         Ok(s) => s,
         Err(e) => {
+            prep(app, "claude", "fail", &e.to_string());
             state.voice.end();
-            let _ = state.store.lock().unwrap().finish_round(round_id);
+            let _ = state.store.lock().unwrap().delete_round(round_id);
             return Err(e);
         }
     };
+
+    // The loader: Claude's first question and every voice part, side by side.
+    let ready = async {
+        let (claude, go) = tokio::join!(wait_claude(app, started_rx, reply_rx), prepare_voice(app, &settings.voice, voice_start));
+        claude.map(|()| go)
+    };
+    let cancelled = async {
+        while state.prep_gen.load(Ordering::SeqCst) == me {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    };
+    let outcome = tokio::select! {
+        r = ready => r,
+        () = cancelled => Err(AppError::Invalid("Cancelled.".into())),
+    };
+    let voice = match outcome {
+        Ok(Some(go)) => {
+            let _ = go.send(());
+            true
+        }
+        Ok(None) => {
+            state.voice.end();
+            false
+        }
+        Err(e) => {
+            state.voice.end();
+            session.shutdown().await;
+            // Nothing was answered, so the round isn't kept.
+            let _ = state.store.lock().unwrap().delete_round(round_id);
+            return Err(e);
+        }
+    };
+    // The round starts now, not when the loader opened.
+    *log.started.lock().unwrap() = Instant::now();
 
     state.rounds.lock().await.insert(
         round_id,
@@ -255,18 +460,58 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     })
 }
 
-async fn spawn_session(app: &AppHandle, round_id: i64, cfg: SessionConfig, log: Arc<RoundLog>) -> Result<ClaudeSession> {
+/// Tells the loader when Claude is up (its model) and when the first sentence of its reply is in.
+struct FirstReply {
+    started: oneshot::Sender<std::result::Result<String, String>>,
+    reply: oneshot::Sender<std::result::Result<(), String>>,
+}
+
+fn fail_first(
+    started: &mut Option<oneshot::Sender<std::result::Result<String, String>>>,
+    reply: &mut Option<oneshot::Sender<std::result::Result<(), String>>>,
+    message: &str,
+) {
+    if let Some(tx) = started.take() {
+        let _ = tx.send(Err(message.to_string()));
+    }
+    if let Some(tx) = reply.take() {
+        let _ = tx.send(Err(message.to_string()));
+    }
+}
+
+async fn spawn_session(app: &AppHandle, round_id: i64, cfg: SessionConfig, log: Arc<RoundLog>, first: Option<FirstReply>) -> Result<ClaudeSession> {
     let (tx, mut rx) = mpsc::unbounded_channel::<SessionEvent>();
     let session = ClaudeSession::start(round_id, cfg, tx).await?;
     let app = app.clone();
     tokio::spawn(async move {
+        let (mut started, mut reply) = match first {
+            Some(f) => (Some(f.started), Some(f.reply)),
+            None => (None, None),
+        };
         while let Some(ev) = rx.recv().await {
             let state = app.state::<AppState>();
             match &ev {
-                SessionEvent::Started { session_id, .. } => log.persist(&state, Some(session_id)),
-                SessionEvent::Sentence { text, .. } => state.voice.say(round_id, text),
-                SessionEvent::Error { .. } => state.voice.turn_done(round_id, false),
+                SessionEvent::Started { session_id, model, .. } => {
+                    log.persist(&state, Some(session_id));
+                    if let Some(tx) = started.take() {
+                        let _ = tx.send(Ok(model.clone()));
+                    }
+                }
+                SessionEvent::Sentence { text, .. } => {
+                    if let Some(tx) = reply.take() {
+                        let _ = tx.send(Ok(()));
+                    }
+                    state.voice.say(round_id, text)
+                }
+                SessionEvent::Error { message, .. } => {
+                    state.voice.turn_done(round_id, false);
+                    fail_first(&mut started, &mut reply, message);
+                }
+                SessionEvent::Exited { .. } => fail_first(&mut started, &mut reply, "Claude Code quit before its first reply."),
                 SessionEvent::TurnDone { text, ttft_ms, ended, .. } => {
+                    if let Some(tx) = reply.take() {
+                        let _ = tx.send(Ok(()));
+                    }
                     state.voice.turn_done(round_id, *ended);
                     log.turns.lock().unwrap().push(Turn {
                         who: "iv".into(),
@@ -319,7 +564,7 @@ pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, ws: Works
                 system_prompt: r.cfg_prompt.clone(),
                 resume,
             };
-            spawn_session(app, round_id, cfg, r.log.clone()).await
+            spawn_session(app, round_id, cfg, r.log.clone(), None).await
         }
         .await;
         sent = match restarted {
