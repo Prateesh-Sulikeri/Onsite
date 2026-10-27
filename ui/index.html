@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Onsite</title>
+<link rel="icon" href="assets/logo.png">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -36,6 +37,17 @@
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
     <symbol id="i-doc-check" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/></symbol>
     <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0zM8 21h8"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+    <symbol id="i-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></symbol>
+    <symbol id="i-wand" viewBox="0 0 24 24"><path d="m3 21 11-11M15 3v3M13.5 4.5h3M20 8v3M18.5 9.5h3M8 3v2M7 4h2"/><path d="m12.5 8.5 3 3"/></symbol>
+    <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M6 2h12M6 22h12M7 2v4a5 5 0 0 0 10 0V2M7 22v-4a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+    <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
   </defs>
 </svg>
 
@@ -43,7 +55,7 @@
   <!-- ============ SIDEBAR ============ -->
   <aside class="side" aria-label="Main">
     <div class="logo">
-      <span class="logo-mark"><svg><use href="#i-mic"/></svg></span>
+      <img class="logo-mark" src="assets/logo.png" alt="">
       <span class="logo-word">Onsite</span>
     </div>
     <nav class="nav">
@@ -65,24 +77,56 @@
     <section class="view" id="view-dashboard" hidden>
       <header class="page-head">
         <div>
-          <h1>Ready when you are</h1>
-          <p class="lede">Run a full loop out loud. Get written feedback after every round.</p>
+          <div class="crumb" id="dashHello">Dashboard</div>
+          <h1>Keep building, one <em class="hl">interview</em> at a time</h1>
+          <p class="lede">Every score here comes from your own rounds and their written feedback.</p>
         </div>
-        <button class="btn primary" data-nav="interviews">Start an interview<svg><use href="#i-arrow"/></svg></button>
       </header>
       <div class="dash">
-        <div class="panel">
-          <div class="panel-head"><h2>Recent rounds</h2><button class="btn ghost sm" data-nav="feedback">All feedback<svg><use href="#i-arrow"/></svg></button></div>
-          <div class="rows" id="dashRecent"></div>
+        <div class="stack">
+          <div class="dash-actions">
+            <button class="action lead" data-nav="interviews">
+              <span class="action-ic"><svg><use href="#i-mic"/></svg></span>
+              <span class="action-tx"><b>Start a new interview</b><small>Pick the rounds, a panel and your level. Answer out loud or type.</small></span>
+              <svg class="action-go"><use href="#i-arrow"/></svg>
+            </button>
+            <button class="action" id="dashContinue" data-nav="resume">
+              <span class="action-ic"><svg><use href="#i-doc-check"/></svg></span>
+              <span class="action-tx"><b>Check your resume</b><small>See what an ATS extracts and how an AI screen grades it.</small></span>
+              <svg class="action-go"><use href="#i-arrow"/></svg>
+            </button>
+          </div>
+          <div class="cols">
+            <div class="panel">
+              <div class="panel-head"><h2>This week</h2><span class="muted small" id="dashWeekRange"></span></div>
+              <div id="dashProgress"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2>Skill performance</h2><span class="muted small">avg of 4 · trend · rounds</span></div>
+              <div id="dashSkills"></div>
+            </div>
+          </div>
+          <div class="panel dash-next">
+            <div id="dashTrend"></div>
+            <div id="dashNext"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Recent interviews</h2><button class="btn ghost sm" data-nav="feedback">All feedback<svg><use href="#i-arrow"/></svg></button></div>
+            <div class="rows" id="dashRecent"></div>
+          </div>
         </div>
         <div class="stack">
           <div class="panel">
-            <div class="panel-head"><h2>Fix this first</h2></div>
-            <div id="dashFix" class="muted">Finish a round to get your first fix.</div>
+            <div class="panel-head"><h2>Weekly goal</h2><button class="linkbtn" id="goalEdit">Edit</button></div>
+            <div id="dashGoal"></div>
           </div>
           <div class="panel">
-            <div class="panel-head"><h2>Setup</h2></div>
-            <ul class="checks" id="dashChecks"></ul>
+            <div class="panel-head"><h2>Practice calendar</h2><span class="muted small" id="calStreak"></span></div>
+            <div id="dashCal"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Feedback highlights</h2></div>
+            <div id="dashHighlights"></div>
           </div>
         </div>
       </div>
@@ -92,18 +136,18 @@
     <section class="view" id="view-interviews" hidden>
       <header class="page-head">
         <div>
-          <div class="crumb">Interviews</div>
-          <h1>Start your next interview</h1>
-          <p class="lede">Pick a mode, set your context and let’s practise.</p>
+          <div class="crumb">Interview practice</div>
+          <h1>Start your next <em class="hl">interview</em></h1>
+          <p class="lede">Realistic practice. Real feedback. Be ready.</p>
         </div>
-        <button class="btn ghost sm" data-nav="feedback">View past rounds<svg><use href="#i-arrow"/></svg></button>
+        <button class="btn ghost pill-btn" data-nav="feedback">View past rounds<svg><use href="#i-arrow"/></svg></button>
       </header>
 
       <div class="setup-grid">
         <div class="stack">
           <div class="modes" role="radiogroup" aria-label="Mode">
             <button class="mode" role="radio" aria-checked="true" id="modeGeneral">
-              <span class="mode-ic"><svg><use href="#i-sparkle"/></svg></span>
+              <span class="mode-ic"><svg><use href="#i-wand"/></svg></span>
               <span class="mode-tx"><b>General practice</b><small>Pick any rounds and a company style. Starts right away.</small></span>
               <span class="mode-check"><svg><use href="#i-check"/></svg></span>
             </button>
@@ -113,71 +157,111 @@
             </button>
           </div>
 
-          <div class="panel">
-            <h2>Your context</h2>
-            <div class="form-grid">
-              <label class="field"><span>Company style</span><select id="company"></select></label>
-              <label class="field"><span>Interviewer style</span>
-                <select id="temper">
-                  <option value="supportive">Supportive — gives hints</option>
-                  <option value="realistic">Realistic — like a real panel</option>
-                  <option value="barraiser">Bar-raiser — hard, rarely hints</option>
-                </select>
-              </label>
-              <label class="field span-2"><span>Interviewers</span>
-                <select id="panel"><option value="">Mixed — a different interviewer each round</option></select>
-                <small class="muted" id="panelPeople"></small>
-              </label>
-              <label class="field"><span>Level</span><select id="level"></select></label>
-              <label class="field"><span>Coding language</span>
-                <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select>
-              </label>
-            </div>
-
-            <div class="field" style="margin-top:18px">
-              <span>Rounds <small class="muted" id="roundCount"></small></span>
-              <div class="chips" id="roundList" role="group" aria-label="Rounds"></div>
-            </div>
-
-            <div class="drops">
-              <div class="drop" id="dropResume">
-                <svg class="drop-ic"><use href="#i-upload"/></svg>
-                <div class="drop-tx"><b>Resume</b><span id="resumeMsg">Drop a PDF, Word or text file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
-                <input type="file" id="resumeFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
-              </div>
-              <div class="drop" id="dropJd">
-                <svg class="drop-ic"><use href="#i-upload"/></svg>
-                <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <button type="button" class="linkbtn" data-choose>Choose a file</button> or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
-                <input type="file" id="jdFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
+          <section class="panel step">
+            <span class="step-n">1</span>
+            <div class="step-body">
+              <header class="step-head"><h2>Set your context</h2><p>Tell us what you want. The panel tailors every round to it.</p></header>
+              <div class="form-grid">
+                <label class="field"><span>Company style</span>
+                  <span class="sel"><svg><use href="#i-building"/></svg><select id="company"></select></span>
+                  <small class="hint">Sets tone, question style and how you’re scored.</small></label>
+                <label class="field"><span>Interviewer style</span>
+                  <span class="sel"><svg><use href="#i-user"/></svg>
+                  <select id="temper">
+                    <option value="supportive">Supportive — gives hints</option>
+                    <option value="realistic">Realistic — like a real panel</option>
+                    <option value="barraiser">Bar-raiser — hard, rarely hints</option>
+                  </select></span>
+                  <small class="hint">Real follow-ups and interruptions, at the level you pick.</small></label>
+                <label class="field span-2"><span>Interviewers</span>
+                  <span class="sel"><svg><use href="#i-users"/></svg><select id="panel"><option value="">Mixed — a different interviewer each round</option></select></span>
+                  <small class="hint" id="panelPeople"></small>
+                </label>
+                <label class="field"><span>Level</span><span class="sel"><svg><use href="#i-chart"/></svg><select id="level"></select></span></label>
+                <label class="field"><span>Coding language</span>
+                  <span class="sel"><svg><use href="#i-code"/></svg>
+                  <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select></span>
+                </label>
               </div>
             </div>
-            <textarea id="resume" class="paste" rows="6" placeholder="Resume text" aria-label="Resume text" hidden></textarea>
-            <textarea id="jd" class="paste" rows="5" placeholder="Job description text" aria-label="Job description text" hidden></textarea>
+          </section>
 
-            <label class="field" style="margin-top:18px"><span>Anything else the panel should know? <small class="muted">(optional)</small></span>
-              <textarea id="extra" rows="2" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea>
+          <section class="panel step">
+            <span class="step-n">2</span>
+            <div class="step-body">
+              <header class="step-head"><h2>Choose your rounds <small id="roundCount"></small></h2><p>Pick the rounds you want to practise. They run in this order.</p></header>
+              <div class="tiles" id="roundList" role="group" aria-label="Rounds"></div>
+            </div>
+          </section>
+
+          <section class="panel step">
+            <span class="step-n">3</span>
+            <div class="step-body">
+              <header class="step-head"><h2>Add your resume</h2><p>Every loop starts with a resume check. The job description is optional.</p></header>
+              <div class="drops">
+                <div class="drop" id="dropResume">
+                  <span class="drop-ic"><svg><use href="#i-upload"/></svg></span>
+                  <div class="drop-tx"><b>Resume</b><span id="resumeMsg">Drop a PDF, Word or text file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
+                  <input type="file" id="resumeFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
+                </div>
+                <div class="drop" id="dropJd">
+                  <span class="drop-ic"><svg><use href="#i-doc-check"/></svg></span>
+                  <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <button type="button" class="linkbtn" data-choose>Choose a file</button> or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
+                  <input type="file" id="jdFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
+                </div>
+              </div>
+              <textarea id="resume" class="paste" rows="6" placeholder="Resume text" aria-label="Resume text" hidden></textarea>
+              <textarea id="jd" class="paste" rows="5" placeholder="Job description text" aria-label="Job description text" hidden></textarea>
+            </div>
+          </section>
+
+          <section class="panel step step-inline">
+            <span class="step-n">4</span>
+            <label class="step-body" for="extra">
+              <header class="step-head"><h2>Additional details <small>(optional)</small></h2></header>
             </label>
+            <span class="sel note-field"><textarea id="extra" rows="1" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea><svg><use href="#i-pen"/></svg></span>
+          </section>
 
-            <div class="start-row">
-              <label class="field"><span>Round length</span>
-                <select id="roundLen">
-                  <option value="">Real length (per round)</option>
-                  <option value="10">10 minutes each</option>
-                  <option value="20">20 minutes each</option>
-                  <option value="30">30 minutes each</option>
-                </select>
-              </label>
-              <div class="field"><span>Duration</span><div class="readout" id="duration">—</div></div>
-              <button class="btn primary lg" id="startBtn">Start interview<svg><use href="#i-arrow"/></svg></button>
-            </div>
-            <p class="form-msg" id="startMsg" role="status"></p>
+          <div class="launch">
+            <section class="panel step step-inline">
+              <span class="step-n">5</span>
+              <div class="step-body"><header class="step-head"><h2>Interview settings</h2></header></div>
+              <div class="launch-fields">
+                <label class="field"><span>Round length</span>
+                  <span class="sel"><svg><use href="#i-clock"/></svg>
+                  <select id="roundLen">
+                    <option value="">Real length (per round)</option>
+                    <option value="10">10 minutes each</option>
+                    <option value="20">20 minutes each</option>
+                    <option value="30">30 minutes each</option>
+                  </select></span>
+                </label>
+                <div class="field"><span>Total duration</span><div class="readout"><svg><use href="#i-hourglass"/></svg><span id="duration">—</span></div></div>
+              </div>
+            </section>
+            <button class="btn primary xl" id="startBtn"><svg class="play"><use href="#i-play"/></svg>Start interview<svg><use href="#i-arrow"/></svg></button>
           </div>
+          <p class="form-msg" id="startMsg" role="status"></p>
         </div>
 
         <aside class="stack loop-card">
           <div class="panel">
-            <h2>Your loop</h2>
+            <h2 class="card-title"><span class="ct-ic"><svg><use href="#i-shield"/></svg></span>Your interview loop</h2>
             <ol class="timeline" id="agenda"></ol>
+          </div>
+          <div class="panel">
+            <h2 class="card-title"><span class="ct-ic"><svg><use href="#i-sparkle"/></svg></span>What to expect</h2>
+            <ul class="expect">
+              <li><span class="ex-ic"><svg><use href="#i-chat"/></svg></span><div><b>Real conversations</b><span>Interviewers ask follow-ups and push back.</span></div></li>
+              <li><span class="ex-ic"><svg><use href="#i-chart"/></svg></span><div><b>Detailed feedback</b><span>A rubric score, gaps and what to practise next.</span></div></li>
+              <li><span class="ex-ic"><svg><use href="#i-target"/></svg></span><div><b>Pitched at your level</b><span>Questions and the bar match the level you pick.</span></div></li>
+              <li><span class="ex-ic"><svg><use href="#i-mic"/></svg></span><div><b>Voice or text</b><span>Answer out loud, or type if you prefer.</span></div></li>
+            </ul>
+          </div>
+          <div class="panel tip">
+            <span class="tip-ic"><svg><use href="#i-bulb"/></svg></span>
+            <div><b>Tip</b><p>Start with 2–3 rounds. You get sharper feedback than doing the whole loop at once.</p></div>
           </div>
         </aside>
       </div>
@@ -188,7 +272,7 @@
       <header class="page-head">
         <div>
           <button class="crumb link" id="readyBack"><svg><use href="#i-back"/></svg>Interviews</button>
-          <h1>Get ready</h1>
+          <h1>Get <em class="hl">ready</em></h1>
           <p class="lede" id="readySub"></p>
         </div>
       </header>
@@ -239,14 +323,17 @@
 
     <!-- ============ RESUME CHECK ============ -->
     <section class="view" id="view-resume" hidden>
-      <header class="page-head"><div><div class="crumb">Resume check</div><h1>How an ATS reads your resume</h1>
+      <header class="page-head"><div><div class="crumb">Resume check</div><h1>How an ATS reads your <em class="hl">resume</em></h1>
         <p class="lede">Reads your file the way applicant tracking systems do, scores it against a job posting, then runs an AI screen like the ones Workday and iCIMS now use. With a posting, the extracted resume text and the posting go to Claude through your Claude Code login.</p></div></header>
       <div class="stack">
         <div class="panel">
           <div class="drops">
             <div class="drop" id="atsDrop">
-              <svg class="drop-ic"><use href="#i-upload"/></svg>
-              <div class="drop-tx"><b>Resume file</b><span id="atsMsg"></span></div>
+              <div class="drop-row">
+                <span class="drop-ic"><svg><use href="#i-upload"/></svg></span>
+                <div class="drop-tx"><b>Resume file</b><span id="atsMsg"></span></div>
+              </div>
+              <div class="ats-preview" id="atsPreview" hidden></div>
               <input type="file" id="atsFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
             </div>
             <label class="field"><span>Job description <small class="muted">(optional, for the match score and AI screen)</small></span>
@@ -264,7 +351,7 @@
 
     <!-- ============ DOSSIERS ============ -->
     <section class="view" id="view-dossiers" hidden>
-      <header class="page-head"><div><div class="crumb">Dossiers</div><h1>Company dossiers</h1>
+      <header class="page-head"><div><div class="crumb">Dossiers</div><h1>Company <em class="hl">dossiers</em></h1>
         <p class="lede">Onsite will research how a company interviews right now, from recent candidate reports, then run that loop.</p></div></header>
       <div class="empty-state panel">
         <span class="empty-ic"><svg><use href="#i-building"/></svg></span>
@@ -275,7 +362,7 @@
 
     <!-- ============ FEEDBACK ============ -->
     <section class="view" id="view-feedback" hidden>
-      <header class="page-head"><div><div class="crumb">Feedback</div><h1>Your rounds</h1>
+      <header class="page-head"><div><div class="crumb">Feedback</div><h1>Your <em class="hl">rounds</em></h1>
         <p class="lede">Every finished round, with its written feedback.</p></div></header>
       <div class="panel"><div class="rows" id="history"></div></div>
     </section>
@@ -291,7 +378,7 @@
 
     <!-- ============ SETTINGS ============ -->
     <section class="view" id="view-settings" hidden>
-      <header class="page-head"><div><div class="crumb">Settings</div><h1>Settings</h1>
+      <header class="page-head"><div><div class="crumb">Settings</div><h1>Your <em class="hl">setup</em></h1>
         <p class="lede">Everything runs on this machine. Model calls go through your own Claude Code login.</p></div></header>
       <div class="settings">
         <div class="panel">
@@ -375,6 +462,7 @@
         <div class="room-meta">
           <label class="room-mic" title="Microphone"><svg><use href="#i-mic"/></svg><select id="roomMic" class="sm" aria-label="Microphone"></select></label>
           <span class="timer" id="timer"><i class="rec"></i><b id="timerText">00:00</b> <span id="timerLabel">remaining</span></span>
+          <button class="btn ghost sm rail-btn" id="railBtn" aria-pressed="true" aria-controls="rail" title="Hide round context"><svg><use href="#i-panel"/></svg><span>Context</span></button>
           <button class="btn ghost danger sm" id="termBtn" title="Stop now, no feedback, nothing saved">Terminate</button>
         </div>
       </header>
@@ -411,19 +499,25 @@
         <div class="work">
           <div class="tabs" role="tablist">
             <button class="tab" role="tab" data-tab="editor" aria-selected="true"><svg><use href="#i-code"/></svg>Editor</button>
-            <button class="tab" role="tab" data-tab="notes" aria-selected="false"><svg><use href="#i-pen"/></svg>Whiteboard</button>
-            <button class="tab" role="tab" data-tab="shared" aria-selected="false"><svg><use href="#i-user"/></svg>From interviewer<i class="tab-dot" id="sharedDot" hidden></i></button>
+            <button class="tab" role="tab" data-tab="board" aria-selected="false"><svg><use href="#i-network"/></svg>Whiteboard</button>
+            <button class="tab" role="tab" data-tab="notes" aria-selected="false"><svg><use href="#i-pen"/></svg>Notes</button>
+            <button class="tab" role="tab" data-tab="shared" aria-selected="false" hidden><svg><use href="#i-user"/></svg>From interviewer<i class="tab-dot" id="sharedDot" hidden></i></button>
           </div>
           <div class="pane" data-pane="editor">
-            <div class="pane-bar"><span class="lang-tag" id="edLang"></span><span class="muted" id="edHint">The interviewer sees this when you send.</span>
+            <div class="pane-bar"><select id="edLang" class="sm lang-pick" aria-label="Editor language"></select><span class="muted" id="edHint">The interviewer sees this when you send.</span>
               <span class="run-btns" id="runBtns" hidden><button class="btn sm" id="runBtn"><svg><use href="#i-play"/></svg>Run</button><button class="btn primary sm" id="submitBtn">Submit</button></span>
               <button class="btn ghost sm" id="sendWork">Share now</button></div>
-            <div class="editor"><div class="gutter" id="gutter">1</div><textarea id="code" spellcheck="false" aria-label="Code editor"></textarea></div>
+            <div class="editor" id="code"></div>
             <div class="run-out" id="runOut" hidden></div>
           </div>
+          <div class="pane" data-pane="board" hidden>
+            <div class="pane-bar"><span class="muted">Boxes, arrows and their labels reach the interviewer as text when you send.</span><button class="btn ghost sm" id="sendWork2">Share now</button>
+              <button class="btn ghost sm max-btn" id="boardMax" aria-pressed="false" title="Fill the window"><svg><use href="#i-expand"/></svg><span>Maximise</span></button></div>
+            <div class="board" id="board"><p class="board-msg muted">Loading the whiteboard…</p></div>
+          </div>
           <div class="pane" data-pane="notes" hidden>
-            <div class="pane-bar"><span class="muted">Design notes, diagrams as text, scratch work.</span><button class="btn ghost sm" id="sendWork2">Share now</button></div>
-            <textarea class="notes" id="notes" aria-label="Whiteboard"></textarea>
+            <div class="pane-bar"><span class="muted">Requirements, estimates, scratch work.</span><button class="btn ghost sm" id="sendWork3">Share now</button></div>
+            <textarea class="notes" id="notes" aria-label="Notes"></textarea>
           </div>
           <div class="pane" data-pane="shared" hidden>
             <div class="pane-bar"><select id="sharedPick" class="sm"></select></div>
@@ -431,7 +525,7 @@
           </div>
         </div>
 
-        <aside class="rail">
+        <aside class="rail" id="rail">
           <div class="panel tight">
             <h3>Round context</h3>
             <div class="ctx-title"><span class="room-ic sm" id="ctxIc">D</span><div><b id="ctxCompany"></b><span class="tag" id="ctxRound"></span></div></div>
@@ -455,6 +549,7 @@
 <div class="sr-only" id="srLive" aria-live="polite"></div>
 
 <script src="ipc.js"></script>
+<script src="vendor/editor.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

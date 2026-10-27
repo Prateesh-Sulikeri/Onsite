@@ -52,12 +52,16 @@ pub struct RoundRow {
 pub struct HistoryItem {
     pub round_id: i64,
     pub loop_id: i64,
+    pub round_key: String,
     pub name: String,
     pub company: String,
+    pub minutes: i64,
     pub started_at: String,
     pub ended_at: Option<String>,
     pub overall: Option<i64>,
     pub decision: Option<String>,
+    /// The parsed feedback, for the dashboard's skill and weakness tracking.
+    pub report: Option<Value>,
 }
 
 fn now() -> String {
@@ -265,7 +269,7 @@ impl Store {
 
     pub fn history(&self, limit: i64) -> Result<Vec<HistoryItem>> {
         let mut st = self.conn.prepare(
-            "SELECT r.id, r.loop_id, r.name, l.config, r.started_at, r.ended_at, rep.data
+            "SELECT r.id, r.loop_id, r.name, l.config, r.started_at, r.ended_at, rep.data, r.round_key, r.minutes
              FROM rounds r JOIN loops l ON l.id = r.loop_id LEFT JOIN reports rep ON rep.round_id = r.id
              ORDER BY r.id DESC LIMIT ?1",
         )?;
@@ -278,22 +282,27 @@ impl Store {
                 r.get::<_, String>(4)?,
                 r.get::<_, Option<String>>(5)?,
                 r.get::<_, Option<String>>(6)?,
+                r.get::<_, String>(7)?,
+                r.get::<_, i64>(8)?,
             ))
         })?;
         let mut out = Vec::new();
         for row in rows {
-            let (round_id, loop_id, name, config, started_at, ended_at, data) = row?;
+            let (round_id, loop_id, name, config, started_at, ended_at, data, round_key, minutes) = row?;
             let config: Value = serde_json::from_str(&config).unwrap_or_default();
             let data: Option<Value> = data.and_then(|d| serde_json::from_str(&d).ok());
             out.push(HistoryItem {
                 round_id,
                 loop_id,
+                round_key,
                 name,
                 company: config["company_name"].as_str().unwrap_or_default().to_string(),
+                minutes,
                 started_at,
                 ended_at,
                 overall: data.as_ref().and_then(|d| d["overall"].as_i64()),
                 decision: data.as_ref().and_then(|d| d["decision"].as_str().map(String::from)),
+                report: data,
             });
         }
         Ok(out)
@@ -323,6 +332,8 @@ mod tests {
         s.save_report(id, Some(&json!({"overall": 64, "decision": "Hire"})), "raw2").unwrap();
         let h = s.history(10).unwrap();
         assert_eq!((h[0].overall, h[0].decision.as_deref(), h[0].company.as_str()), (Some(64), Some("Hire"), "Google"));
+        assert_eq!((h[0].round_key.as_str(), h[0].minutes), ("coding", 45));
+        assert_eq!(h[0].report.as_ref().unwrap()["overall"], 64);
         assert_eq!(s.report(id).unwrap().unwrap().1, "raw2");
         assert_eq!(s.loop_round_ids(loop_id).unwrap(), vec![id]);
 

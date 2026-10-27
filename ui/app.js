@@ -46,6 +46,9 @@ const TIPS = {
   hm: ["Show how you prioritise under pressure.", "Be specific about what you want next.", "Bring two sharp questions about the team."],
 };
 
+const ROUND_ICONS = {resume:"doc-check", project:"folder", fundamentals:"gear", coding:"code", comprehension:"search",
+  lld:"layers", sysdesign:"network", behavioral:"user", hm:"chart"};
+
 /* ---------------- shell ---------------- */
 function nav(view){
   $$(".view").forEach(v => v.hidden = v.id !== "view-" + view);
@@ -112,23 +115,254 @@ async function refreshStatus(){
 setInterval(() => { if (!session) refreshStatus(); }, 15000);
 
 /* ---------------- dashboard ---------------- */
+/* Everything here is computed from saved rounds and their feedback JSON. Dimension scores are 1–4. */
+const DAY = 864e5;
+const dayKey = d => { const x = new Date(d); return `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`; };
+const weekStart = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
+const roundName = k => (CAT && CAT.ROUNDS[k] && CAT.ROUNDS[k].name) || k;
+const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+function ago(iso){
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / DAY);
+  return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+}
+const tookMinutes = x => x.ended_at ? Math.max(1, Math.round((new Date(x.ended_at) - new Date(x.started_at)) / 6e4)) : null;
+/* Assessed dimensions of one reviewed round: [{name, score, evidence}]. */
+const dimsOf = x => ((x.report && x.report.dimensions) || []).filter(d => d && d.name && Number.isFinite(d.score));
+
+/* Per-skill history across rounds, oldest first. */
+function skillStats(reviewed){
+  const by = new Map();
+  reviewed.slice().reverse().forEach(x => dimsOf(x).forEach(d => {
+    let s = by.get(d.name);
+    if (!s) by.set(d.name, s = {name: d.name, pts: [], kinds: new Map()});
+    s.pts.push({score: d.score, evidence: d.evidence || "", round: x});
+    s.kinds.set(x.round_key, (s.kinds.get(x.round_key) || 0) + 1);
+  }));
+  return [...by.values()].map(s => {
+    const scores = s.pts.map(p => p.score);
+    const recent = scores.slice(-3), before = scores.slice(0, -3);
+    return {...s, n: scores.length, avg: avg(scores),
+      trend: before.length ? avg(recent) - avg(before) : null,
+      low: s.pts.filter(p => p.score <= 2), high: s.pts.filter(p => p.score >= 3),
+      kind: [...s.kinds.entries()].sort((a, b) => b[1] - a[1])[0][0]};
+  });
+}
+
+let DASH = {cal: null, goal: null, h: []};
 async function renderDashboard(){
-  let h = [];
+  const hr = new Date().getHours();
+  $("#dashHello").textContent = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+  let h = [], goal = {};
   try{ h = await api.invoke("history"); }catch(e){}
-  $("#dashRecent").innerHTML = h.length ? h.slice(0, 5).map(rowHtml).join("") : `<div class="none">No rounds yet. Your first one takes about a minute to set up.</div>`;
-  bindRows("#dashRecent");
-  const latest = h.find(x => x.overall != null);
-  if (latest){
-    const rep = await api.invoke("get_report", {roundId: latest.round_id}).catch(() => null);
-    if (rep && rep.fix_first) $("#dashFix").innerHTML = `<p>${esc(rep.fix_first)}</p><p class="muted" style="margin-top:8px">From ${esc(latest.name)}, ${esc(new Date(latest.started_at).toLocaleDateString())}</p>`;
+  try{ goal = await api.invoke("get_goal"); }catch(e){}
+  DASH.h = h; DASH.goal = goal;
+  if (!DASH.cal){ const n = new Date(); DASH.cal = new Date(n.getFullYear(), n.getMonth(), 1); }
+  const reviewed = h.filter(x => x.overall != null);
+  const skills = skillStats(reviewed);
+  renderContinue(h);
+  renderProgress(h, goal);
+  renderSkills(skills);
+  renderTrend(reviewed);
+  renderNext(skills, h, goal);
+  renderRecent(h);
+  renderGoal(h, goal);
+  renderCal();
+  renderHighlights(skills);
+  refreshStatus();
+}
+
+function renderContinue(h){
+  const b = $("#dashContinue"), last = h[0];
+  if (!last){ b.dataset.nav = "resume"; b.onclick = null; return; }
+  delete b.dataset.nav;
+  const reviewed = last.overall != null;
+  b.querySelector(".action-ic").innerHTML = icon(ROUND_ICONS[last.round_key] || "chat");
+  b.querySelector(".action-tx").innerHTML = `<b>${reviewed ? "Review your last round" : "Get feedback on your last round"}</b>
+    <small>${esc(last.name)}${last.company ? " · " + esc(shortName(last.company)) : ""} · ${esc(ago(last.started_at))}${reviewed ? ` · ${last.overall}` : ""}</small>`;
+  b.onclick = () => openInterview(last.loop_id, {focus: last.round_id});
+}
+
+function weekCounts(h){
+  const from = weekStart().getTime(), c = {};
+  h.forEach(x => { if (new Date(x.started_at).getTime() >= from) c[x.round_key] = (c[x.round_key] || 0) + 1; });
+  return c;
+}
+function renderProgress(h, goal){
+  const done = weekCounts(h);
+  const ws = weekStart(), we = new Date(ws.getTime() + 6 * DAY);
+  const f = d => d.toLocaleDateString([], {day: "numeric", month: "short"});
+  $("#dashWeekRange").textContent = `${f(ws)} – ${f(we)}`;
+  const keys = [...new Set([...Object.keys(goal), ...Object.keys(done)])];
+  const target = Object.values(goal).reduce((a, n) => a + n, 0);
+  const total = Object.values(done).reduce((a, n) => a + n, 0);
+  const met = Object.entries(goal).reduce((a, [k, n]) => a + Math.min(n, done[k] || 0), 0);
+  const pct = target ? Math.round(met / target * 100) : 0;
+  $("#dashProgress").innerHTML = `
+    <div class="prog">
+      <div class="ring sm" style="--v:${pct}" role="img" aria-label="${met} of ${target} goal rounds done"><div><div><b>${total}</b><small>${target ? `of ${target}` : "rounds"}</small></div></div></div>
+      <ul class="prog-list">${keys.length ? keys.map(k => {
+        const n = done[k] || 0, t = goal[k];
+        return `<li class="${t && n >= t ? "met" : ""}">${icon(ROUND_ICONS[k] || "chat")}<span>${esc(roundName(k))}</span><b>${n}${t ? `<small> / ${t}</small>` : ""}</b></li>`;
+      }).join("") : `<li class="none">No rounds yet this week.</li>`}</ul>
+    </div>`;
+}
+
+function trendHtml(t){
+  if (t == null) return `<span class="trend na" title="Needs 4 scored rounds">—</span>`;
+  if (Math.abs(t) < 0.25) return `<span class="trend flat" title="Last 3 vs earlier: steady">→</span>`;
+  return `<span class="trend ${t > 0 ? "up" : "down"}" title="Last 3 rounds vs earlier: ${t > 0 ? "+" : ""}${t.toFixed(1)}">${t > 0 ? "↑" : "↓"} ${Math.abs(t).toFixed(1)}</span>`;
+}
+function renderSkills(skills){
+  const el = $("#dashSkills");
+  if (!skills.length){ el.innerHTML = `<p class="muted">Scores per skill appear after your first round with feedback. Each round grades 4–5 skills from its rubric.</p>`; return; }
+  const top = skills.slice().sort((a, b) => b.n - a.n || a.avg - b.avg).slice(0, 6);
+  el.innerHTML = `<ul class="skills">${top.map(s => `
+    <li title="${esc(`Mostly from ${roundName(s.kind)} rounds`)}">
+      <span class="sk-name">${esc(s.name)}</span>
+      <span class="sk-bar"><i class="${s.avg >= 3 ? "hi" : s.avg >= 2.5 ? "mid" : "lo"}" style="width:${s.avg / 4 * 100}%"></i></span>
+      <b>${s.avg.toFixed(1)}</b>${trendHtml(s.trend)}<span class="sk-n">${s.n}</span>
+    </li>`).join("")}</ul>`;
+}
+
+function spark(vals){
+  const w = 220, hgt = 56, pad = 4, n = vals.length;
+  const x = i => n === 1 ? w / 2 : pad + i * (w - 2 * pad) / (n - 1);
+  const y = v => hgt - pad - v / 100 * (hgt - 2 * pad);
+  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${hgt}" preserveAspectRatio="none" aria-hidden="true">
+    <line x1="0" x2="${w}" y1="${y(70)}" y2="${y(70)}" class="spark-bar"/>
+    <polyline points="${pts}"/>${vals.map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="${i === n - 1 ? 3.5 : 2.2}"/>`).join("")}</svg>`;
+}
+function renderTrend(reviewed){
+  const vals = reviewed.slice(0, 10).reverse().map(x => x.overall);
+  const el = $("#dashTrend");
+  if (!vals.length){ el.innerHTML = `<h2>Score trend</h2><p class="muted">Your overall score per round, plotted once you have feedback.</p>`; return; }
+  const last = vals.slice(-5), prev = vals.slice(-10, -5);
+  const a = Math.round(avg(last));
+  let line;
+  if (prev.length >= 2){
+    const d = a - Math.round(avg(prev));
+    line = `Last ${last.length}: average <b>${a}</b>, ${d === 0 ? "level with" : `${d > 0 ? "up" : "down"} ${Math.abs(d)} on`} the ${prev.length} before.`;
+  } else line = `Average <b>${a}</b> over ${vals.length} round${vals.length > 1 ? "s" : ""}. ${Math.max(0, 7 - vals.length)} more to compare against.`;
+  el.innerHTML = `<h2>Score trend</h2>${spark(vals)}<p class="muted small">${line} Dashed line: 70, the usual hire bar.</p>`;
+}
+
+/* Evidence-based pick: the weakest skill seen in 2+ rounds, else the goal's biggest gap, else the latest report's advice. */
+function renderNext(skills, h, goal){
+  const el = $("#dashNext");
+  const weak = skills.filter(s => s.n >= 2 && s.low.length >= 2).sort((a, b) => a.avg - b.avg)[0];
+  let key = null, why = "", quote = "";
+  if (weak){
+    key = weak.kind;
+    why = `<b>${esc(weak.name)}</b> scored 2/4 or lower in ${weak.low.length} of your ${weak.n} rounds that graded it.`;
+    quote = weak.low[weak.low.length - 1].evidence;
+  } else {
+    const done = weekCounts(h);
+    const gap = Object.entries(goal).map(([k, n]) => [k, n - (done[k] || 0)]).filter(([, r]) => r > 0).sort((a, b) => b[1] - a[1])[0];
+    const latest = h.find(x => x.report && (x.report.practice_next || []).length);
+    if (gap){ key = gap[0]; why = `${gap[1]} ${esc(roundName(gap[0]))} round${gap[1] > 1 ? "s" : ""} left on this week’s goal. No skill is weak in 2+ rounds yet.`; }
+    else if (latest){ key = latest.round_key; why = `From your last feedback (${esc(latest.name)}):`; quote = latest.report.practice_next[0]; }
   }
-  await refreshStatus();
-  const checks = [
-    [SETTINGS && SETTINGS.claude ? "ok" : "bad", "Claude Code", SETTINGS && SETTINGS.claude ? "Found" : "Not found"],
-    [!VS.up ? "bad" : VS.loaded ? "ok" : "warn", "VoiceStudio", !VS.up ? "Not running" : VS.loaded ? (VS.device ? VS.device.replace(/^\w+ \((.*)\)$/, "$1") : "Ready") : "Loading voice"],
-    [SETTINGS && SETTINGS.voice.enabled ? "ok" : "warn", "Spoken interviews", SETTINGS && SETTINGS.voice.enabled ? "On" : "Off"],
-  ];
-  $("#dashChecks").innerHTML = checks.map(([k, n, s]) => `<li class="${k}"><i class="dot"></i>${esc(n)}<span>${esc(s)}</span></li>`).join("");
+  if (!key){ el.innerHTML = `<h2>Practise next</h2><p class="muted">After two rounds with feedback, this points at the skill that keeps scoring low and the round that trains it.</p>`; return; }
+  el.innerHTML = `<h2>Practise next</h2>
+    <div class="next-pick"><span class="row-ic">${icon(ROUND_ICONS[key] || "chat")}</span><div><b>${esc(roundName(key))}</b><p>${why}</p>${quote ? `<q>${esc(quote)}</q>` : ""}</div></div>
+    <button class="btn primary sm" id="dashGo">Set up this round${icon("arrow")}</button>`;
+  $("#dashGo").onclick = () => { selectRounds([key]); saveCfg(); nav("interviews"); };
+}
+
+function renderRecent(h){
+  const el = $("#dashRecent");
+  if (!h.length){ el.innerHTML = `<div class="none">No rounds yet. Your first one takes about a minute to set up.</div>`; return; }
+  el.innerHTML = h.slice(0, 6).map(x => {
+    const weakest = dimsOf(x).sort((a, b) => a.score - b.score)[0];
+    const mins = tookMinutes(x);
+    return `<button class="row-item recent" data-round-id="${x.round_id}" data-loop-id="${x.loop_id}">
+      <span class="row-ic">${icon(ROUND_ICONS[x.round_key] || "chat")}</span>
+      <span class="row-tx"><b>${esc(x.name)}</b><span>${esc(shortName(x.company) || "General")} · ${mins ? `${mins} of ${x.minutes} min` : `${x.minutes} min`}${weakest && weakest.score <= 2 ? ` · <em class="weak">Weakest: ${esc(weakest.name)} ${weakest.score}/4</em>` : ""}</span></span>
+      <span class="recent-date">${esc(new Date(x.started_at).toLocaleDateString([], {day: "numeric", month: "short"}))}</span>
+      ${x.overall != null ? `<span class="pill ${scoreClass(x.overall) === "hi" ? "ok" : scoreClass(x.overall) === "mid" ? "warn" : "bad"}">${x.overall}</span>` : `<span class="pill">No feedback</span>`}
+    </button>`;
+  }).join("");
+  bindRows("#dashRecent");
+}
+
+function renderGoal(h, goal, editing = false){
+  const el = $("#dashGoal"), done = weekCounts(h);
+  const btn = $("#goalEdit");
+  btn.textContent = editing ? "Cancel" : "Edit";
+  btn.onclick = () => renderGoal(h, DASH.goal, !editing);
+  if (editing){
+    el.innerHTML = `<ul class="goal-edit">${Object.keys(CAT.ROUNDS).map(k => `
+      <li><span>${esc(roundName(k))}</span><span class="stepper"><button class="btn ghost sm" data-k="${k}" data-d="-1" aria-label="Fewer">−</button><b data-v="${k}">${goal[k] || 0}</b><button class="btn ghost sm" data-k="${k}" data-d="1" aria-label="More">+</button></span></li>`).join("")}</ul>
+      <div class="btn-row"><button class="btn primary sm" id="goalSave">Save goal</button></div>`;
+    const draft = {...goal};
+    el.querySelectorAll("[data-d]").forEach(b => b.onclick = () => {
+      const k = b.dataset.k; draft[k] = Math.max(0, Math.min(14, (draft[k] || 0) + Number(b.dataset.d)));
+      el.querySelector(`[data-v="${k}"]`).textContent = draft[k];
+    });
+    $("#goalSave").onclick = async () => {
+      try{ await api.invoke("set_goal", {goal: draft}); DASH.goal = await api.invoke("get_goal"); toast("Goal saved."); renderDashboard(); }
+      catch(e){ toast(errText(e), "err"); }
+    };
+    return;
+  }
+  const items = Object.entries(goal);
+  if (!items.length){ el.innerHTML = `<p class="muted">No goal set. <button class="linkbtn" id="goalSet">Set rounds per week</button></p>`; $("#goalSet").onclick = () => renderGoal(h, goal, true); return; }
+  const target = items.reduce((a, [, n]) => a + n, 0);
+  const met = items.reduce((a, [k, n]) => a + Math.min(n, done[k] || 0), 0);
+  el.innerHTML = `
+    <p class="goal-line">${target} rounds this week<span>${met} / ${target}</span></p>
+    <div class="bar"><i style="width:${met / target * 100}%"></i></div>
+    <ul class="goal-list">${items.map(([k, n]) => {
+      const d = Math.min(n, done[k] || 0);
+      return `<li class="${d >= n ? "done" : ""}"><i class="tick">${d >= n ? icon("check") : ""}</i>${n} ${esc(roundName(k))}${n > 1 ? ` <small>${d} of ${n}</small>` : ""}</li>`;
+    }).join("")}</ul>
+    <p class="muted small">${met >= target ? "Goal met. Nice work." : `${target - met} to go. Resets Monday.`}</p>`;
+}
+
+function renderCal(){
+  const m = DASH.cal, h = DASH.h;
+  const perDay = new Map();
+  h.forEach(x => { const k = dayKey(x.started_at); perDay.set(k, (perDay.get(k) || 0) + 1); });
+  // Streak: consecutive days with a round, ending today (or yesterday, if today is still open).
+  let streak = 0, d = new Date(); d.setHours(0, 0, 0, 0);
+  if (!perDay.has(dayKey(d))) d = new Date(d.getTime() - DAY);
+  while (perDay.has(dayKey(d))){ streak++; d = new Date(d.getTime() - DAY); }
+  $("#calStreak").textContent = streak ? `${streak}-day streak` : "";
+  const first = (m.getDay() + 6) % 7, days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  const today = dayKey(new Date());
+  let cells = "";
+  for (let i = 0; i < first; i++) cells += `<span></span>`;
+  let monthCount = 0;
+  for (let i = 1; i <= days; i++){
+    const k = dayKey(new Date(m.getFullYear(), m.getMonth(), i)), n = perDay.get(k) || 0;
+    monthCount += n;
+    cells += `<span class="day${k === today ? " today" : ""}${n ? " has" : ""}" title="${n ? `${n} round${n > 1 ? "s" : ""}` : ""}">${i}${n ? `<i></i>` : ""}</span>`;
+  }
+  $("#dashCal").innerHTML = `
+    <div class="cal-head"><button class="btn ghost sm" id="calPrev" aria-label="Previous month">‹</button><b>${m.toLocaleDateString([], {month: "long", year: "numeric"})}</b><button class="btn ghost sm" id="calNext" aria-label="Next month">›</button></div>
+    <div class="cal">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(w => `<span class="wd">${w}</span>`).join("")}${cells}</div>
+    <p class="muted small">${monthCount ? `${monthCount} round${monthCount > 1 ? "s" : ""} this month.` : "No rounds this month."} A dot marks a day you practised.</p>`;
+  $("#calPrev").onclick = () => { DASH.cal = new Date(m.getFullYear(), m.getMonth() - 1, 1); renderCal(); };
+  $("#calNext").onclick = () => { DASH.cal = new Date(m.getFullYear(), m.getMonth() + 1, 1); renderCal(); };
+}
+
+/* Strengths and mistakes that repeat across rounds, each with the latest evidence from the feedback. */
+function renderHighlights(skills){
+  const el = $("#dashHighlights");
+  const weak = skills.filter(s => s.low.length >= 2).sort((a, b) => b.low.length - a.low.length || a.avg - b.avg).slice(0, 3);
+  const strong = skills.filter(s => s.high.length >= 2 && s.avg >= 3).sort((a, b) => b.high.length - a.high.length).slice(0, 2);
+  if (!weak.length && !strong.length){
+    el.innerHTML = `<p class="muted">${skills.length ? "Nothing repeats yet. A skill shows here once it scores low (or high) in two rounds." : "Once you have feedback on two rounds, repeated strengths and mistakes show here, with the interviewer’s own words."}</p>`;
+    return;
+  }
+  const item = (s, good) => {
+    const p = (good ? s.high : s.low).at(-1);
+    return `<li class="${good ? "good" : "bad"}"><span class="hl-ic">${icon(good ? "check" : "target")}</span><div>
+      <b>${esc(s.name)}</b><small>${good ? "Strong" : "Low"} in ${(good ? s.high : s.low).length} of ${s.n} rounds</small>
+      ${p.evidence ? `<q>${esc(p.evidence)}</q>` : ""}</div></li>`;
+  };
+  el.innerHTML = `<ul class="highlights">${weak.map(s => item(s, false)).join("")}${strong.map(s => item(s, true)).join("")}</ul>`;
 }
 
 /* ---------------- setup ---------------- */
@@ -141,7 +375,7 @@ function initSetup(){
   fillSelect($("#level"), CAT.LEVELS, v => v);
   $("#panel").innerHTML += PANELS.map(p => `<option value="${esc(p.id)}">${esc(p.name)} — the same five people every time</option>`).join("");
   $("#roundList").innerHTML = Object.entries(CAT.ROUNDS).map(([k,r]) =>
-    `<button type="button" class="chip" data-round="${esc(k)}" aria-pressed="false" title="${esc(r.blurb)}">${esc(r.name)} <span class="min">${r.min}m</span></button>`).join("");
+    `<button type="button" class="chip tile" data-round="${esc(k)}" aria-pressed="false" title="${esc(r.blurb)}"><span class="tile-ic">${icon(ROUND_ICONS[k] || "chat")}</span><span class="tile-tx"><b>${esc(r.name)}</b><span class="min">${r.min} min</span></span><span class="tile-check">${icon("check")}</span></button>`).join("");
   const c = LS.get("onsite.cfg", {company:"auto", level:"sde2", lang:"Java", temper:"realistic", roundLen:"", rounds:["resume","coding","sysdesign","behavioral"]});
   cfgFields.forEach(f => {
     const el = $("#"+f); if (c[f] == null) return;
@@ -230,8 +464,8 @@ function roundMinutes(k){ return Number($("#roundLen").value) || CAT.ROUNDS[k].m
 function renderAgenda(){
   if (!CAT) return;
   const rs = selectedRounds();
-  $$("#roundList .chip").forEach(b => b.querySelector(".min").textContent = `${roundMinutes(b.dataset.round)}m`);
-  $("#roundCount").textContent = rs.length ? `· ${rs.length} selected` : "";
+  $$("#roundList .chip").forEach(b => b.querySelector(".min").textContent = `${roundMinutes(b.dataset.round)} min`);
+  $("#roundCount").textContent = rs.length ? `${rs.length} selected` : "";
   if (!rs.length){
     $("#agenda").innerHTML = `<li><span class="empty">Pick at least one round.</span></li>`;
     $("#duration").textContent = "—"; $("#startBtn").disabled = true; return;
@@ -306,15 +540,17 @@ async function openRoom(index){
   const codes = ["coding", "comprehension", "lld", "fundamentals"].includes(k);
   $("#ctxChips").innerHTML = [codes ? loop.setup.lang : null, temperLabel(loop.setup.temperament) + " interviewer", CAT.LEVELS[loop.setup.level]].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("");
   $("#tips").innerHTML = (TIPS[k] || []).map(t => `<li>${esc(t)}</li>`).join("");
-  $("#transcript").innerHTML = ""; $("#answer").value = ""; autosize(); hint(""); $("#turnInfo").textContent = "";
-  $("#code").value = ""; $("#notes").value = notesTemplate(k); updateGutter();
-  $("#edLang").textContent = loop.setup.lang;
+  $("#transcript").innerHTML = ""; $("#answer").value = ""; hint(""); $("#turnInfo").textContent = "";
+  s.lang = loop.setup.lang; s.buffers = {};
+  ED.setLang(s.lang); ED.set(""); $("#edLang").value = s.lang;
+  $("#notes").value = notesTemplate(k);
+  if (BOARD) BOARD.reset();
   $("#wrapBanner").hidden = true;
-  $("#sharedDot").hidden = true;
+  $("#sharedDot").hidden = true; $('.tab[data-tab="shared"]').hidden = true;
   applyVoiceUi();
   fillRoomMic();
   showProblem(null);
-  renderShared(); selectTab(CAT.ROUNDS[k].tab === "shared" ? "editor" : CAT.ROUNDS[k].tab);
+  renderShared(); selectTab(startTab(k));
   buildWaves();
   setPhase("thinking");
   s.pendingEl = addMsg("iv", "", true);
@@ -349,6 +585,8 @@ function enterRoom(s){
   s.startedAt = Date.now();
   nav("room");
   startTimer();
+  // The board may have loaded while the room was hidden; let it measure itself now.
+  if (BOARD && !$('[data-pane="board"]').hidden) BOARD.refresh();
 }
 
 /* ---------------- preparing (between Get ready and the call) ---------------- */
@@ -442,7 +680,7 @@ async function leaveRound(){
     return;
   }
   deadRounds.add(s.roundId);
-  return api.invoke("end_round", {roundId: s.roundId, workspace: {code: $("#code").value, notes: $("#notes").value}}).catch(e => api.log("error", `end_round: ${errText(e)}`));
+  return api.invoke("end_round", {roundId: s.roundId, workspace: currentWorkspace(s)}).catch(e => api.log("error", `end_round: ${errText(e)}`));
 }
 
 /* phases: thinking | speaking | cutting | listening | hearing | transcribing | idle | muted | closed
@@ -523,7 +761,6 @@ function toBox(text, msg){
   const a = $("#answer");
   const cur = a.value.trimEnd();
   a.value = cur ? cur + " " + text : text;
-  autosize();
   a.focus({preventScroll:true});
   a.setSelectionRange(a.value.length, a.value.length);
   if (msg) hint(msg);
@@ -565,7 +802,7 @@ api.listen("round", ev => {
       break;
     case "code":
       s.shared.push({lang: ev.lang || "code", code: ev.code});
-      renderShared(); $("#sharedDot").hidden = false;
+      renderShared(); $("#sharedDot").hidden = false; $('.tab[data-tab="shared"]').hidden = false;
       if (s.key === "coding" || s.key === "comprehension") selectTab("shared");
       break;
     case "turn_done":
@@ -651,7 +888,7 @@ function deliverVoice(raw){
   if (s.fromHeld && $("#answer").value.trim()){
     // They muted mid-answer, then unmuted and kept going: send both halves together.
     text = $("#answer").value.trim() + " " + text;
-    $("#answer").value = ""; autosize(); s.fromHeld = false; hint("");
+    $("#answer").value = ""; s.fromHeld = false; hint("");
   }
   if (s.busy || s.roundId === null){
     clearDraft();
@@ -694,9 +931,11 @@ function failPending(message, extra = ""){
   s.pendingEl = null; s.live = "";
 }
 
-function currentWorkspace(){
-  const notes = $("#notes").value;
-  return {code: $("#code").value, notes: notes.trim() === notesTemplate(session.key).trim() ? "" : notes};
+/* Editor code, plus the notes (unless still the template) and a text reading of the drawing. */
+function currentWorkspace(s = session){
+  const notes = $("#notes").value.trim() === notesTemplate(s.key).trim() ? "" : $("#notes").value;
+  const board = BOARD ? BOARD.text() : "";
+  return {code: ED.get(), notes: [notes, board && `Diagram (read from the drawing):\n${board}`].filter(Boolean).join("\n\n")};
 }
 
 async function sendAnswer({text, force = false, fromVoice = false} = {}){
@@ -719,7 +958,7 @@ async function sendAnswer({text, force = false, fromVoice = false} = {}){
       if (force) toast("Nothing new in the workspace to share.");
       return;
     }
-    if (typed){ $("#answer").value = ""; autosize(); s.fromHeld = false; hint(""); }
+    if (typed){ $("#answer").value = ""; s.fromHeld = false; hint(""); }
     if (typed && s.voiceOn) api.invoke("voice_cancel_listen").catch(() => {});
     clearDraft();
     addMsg("me", turn.text || "(shared workspace)", false, false, turn.shared_workspace);
@@ -739,13 +978,12 @@ async function sendAnswer({text, force = false, fromVoice = false} = {}){
   }
 }
 $("#sendBtn").onclick = () => sendAnswer();
-$("#sendWork").onclick = $("#sendWork2").onclick = () => sendAnswer({force: true});
+$("#sendWork").onclick = $("#sendWork2").onclick = $("#sendWork3").onclick = () => sendAnswer({force: true});
 $("#answer").addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); sendAnswer(); }
 });
-function autosize(){ const a = $("#answer"); a.style.height = "auto"; a.style.height = Math.min(160, a.scrollHeight) + "px"; }
+// The answer box sizes itself to its text (CSS field-sizing), up to 160px.
 $("#answer").addEventListener("input", () => {
-  autosize();
   const s = session, a = $("#answer");
   if (!a.value.trim()){ s && (s.fromHeld = false); hint(""); }
   // Typing means "I'll write this one": close the mic so it doesn't send speech under the typed answer.
@@ -776,9 +1014,16 @@ function showProblem(p){
     ${ex}
     <h3>Constraints</h3><ul class="cons">${p.constraints.map(c => `<li><code>${esc(c)}</code></li>`).join("")}</ul>
     <p class="muted prob-foot">${p.hidden} hidden tests${p.runnable ? " plus one full-size test run on Submit" : ""}. ${p.topics.length ? "Topics: " + esc(p.topics.join(", ")) : ""}</p>
-    ${p.runnable ? "" : `<p class="form-msg err">Run isn’t available for ${esc(loop.setup.lang)} yet. Use Java, Python, C++ or JavaScript to run tests.</p>`}`;
-  if (p.starter && !$("#code").value.trim()){ $("#code").value = p.starter; updateGutter(); }
+    <p class="form-msg err" id="probRunNote"></p>`;
+  setRunnable(p.runnable);
+  if (p.starter && !ED.get().trim()) ED.set(p.starter);
   selectTab("editor");
+}
+function setRunnable(on){
+  $("#runBtns").hidden = !on;
+  const note = $("#probRunNote"); if (!note) return;
+  note.hidden = on;
+  note.textContent = on ? "" : `Run isn’t available for ${session.lang} yet. Switch the editor to Java, Python, C++ or JavaScript to run tests.`;
 }
 /* Drag (or arrow keys on) the bar between problem and conversation. The share is remembered. */
 const PROB_SHARE = "onsite.probShare";
@@ -813,7 +1058,7 @@ async function runCode(submit){
   const out = $("#runOut"); out.hidden = false;
   out.innerHTML = `<div class="run-head"><span class="muted">${submit ? "Submitting… compiling and running every test." : "Running the examples…"}</span></div>`;
   try{
-    const r = await api.invoke("run_code", {roundId: s.roundId, code: $("#code").value, submit});
+    const r = await api.invoke("run_code", {roundId: s.roundId, code: ED.get(), submit});
     if (session === s) out.innerHTML = runHtml(r, submit);
   }catch(e){
     if (session === s) out.innerHTML = `<div class="run-head bad">${esc(errText(e))}</div>`;
@@ -931,41 +1176,91 @@ function showSnippet(i){
   $("#sharedCode").innerHTML = s.code.split("\n").map((l,n) => `<span class="ln">${n+1}</span>${esc(l)}`).join("\n");
 }
 $("#sharedPick").onchange = e => showSnippet(Number(e.target.value));
+/* Rounds that are drawn (architecture, classes) open on the whiteboard; the catalog's "notes" tab
+   means the text notes for talk-only rounds. Code shown by the interviewer opens the editor first. */
+const BOARD_ROUNDS = new Set(["project", "lld", "sysdesign", "wbtest"]); // wbtest: TEMP whiteboard test round
+function startTab(k){
+  const tab = CAT.ROUNDS[k].tab;
+  return tab === "shared" ? "editor" : tab === "notes" && BOARD_ROUNDS.has(k) ? "board" : tab;
+}
 function selectTab(name){
   $$(".tab").forEach(t => { const on = t.dataset.tab === name; t.setAttribute("aria-selected", on); t.tabIndex = on ? 0 : -1; });
   $$(".pane").forEach(p => p.hidden = p.dataset.pane !== name);
   if (name === "shared") $("#sharedDot").hidden = true;
+  if (name !== "board") setBoardMax(false);
+  if (name === "board") loadBoard().then(b => b.refresh(), () => {});
 }
+/* Maximise: the whiteboard fills the window. The call keeps running; voice works as usual. */
+function setBoardMax(on){
+  const pane = $('[data-pane="board"]'), b = $("#boardMax");
+  if (pane.classList.contains("maxed") === on) return;
+  pane.classList.toggle("maxed", on);
+  b.setAttribute("aria-pressed", String(on));
+  b.title = on ? "Back to the call" : "Fill the window";
+  b.querySelector("use").setAttribute("href", on ? "#i-shrink" : "#i-expand");
+  b.querySelector("span").textContent = on ? "Restore" : "Maximise";
+  if (BOARD) BOARD.refresh();
+}
+$("#boardMax").onclick = () => setBoardMax(!$('[data-pane="board"]').classList.contains("maxed"));
 $$(".tab").forEach(t => t.onclick = () => selectTab(t.dataset.tab));
 $(".tabs").addEventListener("keydown", e => {
   if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-  const tabs = $$(".tab"), i = tabs.indexOf(document.activeElement); if (i < 0) return;
+  const tabs = $$(".tab").filter(t => !t.hidden), i = tabs.indexOf(document.activeElement); if (i < 0) return;
   const n = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
   selectTab(n.dataset.tab); n.focus(); e.preventDefault();
 });
 
-function updateGutter(){
-  const n = $("#code").value.split("\n").length;
-  $("#gutter").textContent = Array.from({length:n}, (_,i) => i+1).join("\n");
-  $("#gutter").scrollTop = $("#code").scrollTop;
+/* Code editor (CodeMirror, ui/vendor/editor.js). Each language keeps its own code, like LeetCode. */
+const ED = OnsiteEditor.create($("#code"), {lang: "Java"});
+$("#edLang").innerHTML = $("#lang").innerHTML;
+$("#edLang").onchange = async e => {
+  const s = session, lang = e.target.value;
+  if (!s || lang === s.lang) return;
+  const prev = s.lang;
+  s.buffers[prev] = ED.get();
+  let info = {starter: "", runnable: false};
+  try{ info = await api.invoke("set_round_lang", {roundId: s.roundId, lang}); }
+  catch(err){ if (session === s) e.target.value = prev; toast(errText(err), "err"); return; }
+  if (session !== s) return;
+  s.lang = lang;
+  ED.setLang(lang);
+  ED.set(s.buffers[lang] ?? info.starter);
+  const chip = $$("#ctxChips span").find(x => x.textContent === prev); if (chip) chip.textContent = lang;
+  if (s.problem){ s.problem.runnable = info.runnable; setRunnable(info.runnable); $("#runOut").hidden = true; }
+  ED.focus();
+};
+
+/* Whiteboard (Excalidraw, ui/vendor/whiteboard.js). About 2 MB, so it loads the first time it's opened. */
+let BOARD = null, boardLoad = null;
+function loadBoard(){
+  return boardLoad ||= (async () => {
+    window.EXCALIDRAW_ASSET_PATH = new URL("vendor/excalidraw/", location.href).href;
+    const css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "vendor/whiteboard/whiteboard.css";
+    document.head.append(css);
+    try{ await import("./vendor/whiteboard/whiteboard.js"); }
+    catch(e){
+      boardLoad = null;
+      $("#board").innerHTML = `<p class="board-msg err">The whiteboard didn’t load. Use the Notes tab instead.</p>`;
+      api.log("error", `whiteboard failed to load: ${errText(e)}`);
+      throw e;
+    }
+    $("#board").innerHTML = "";
+    return BOARD = OnsiteBoard.mount($("#board"));
+  })();
 }
-$("#code").addEventListener("input", updateGutter);
-$("#code").addEventListener("scroll", () => $("#gutter").scrollTop = $("#code").scrollTop);
-$("#code").addEventListener("keydown", e => {
-  const ta = e.target;
-  if (e.key === "Tab" && !e.shiftKey){
-    // Esc first, then Tab, leaves the editor (keyboard users aren't trapped).
-    if (ta.dataset.escaped){ delete ta.dataset.escaped; return; }
-    e.preventDefault(); ta.setRangeText("    ", ta.selectionStart, ta.selectionEnd, "end"); updateGutter();
-  } else if (e.key === "Escape"){
-    ta.dataset.escaped = "1";
-  } else if (e.key === "Enter"){
-    const s = ta.selectionStart; const lineStart = ta.value.lastIndexOf("\n", s-1) + 1;
-    const indent = (ta.value.slice(lineStart, s).match(/^\s*/)||[""])[0];
-    const extra = /[{(\[:]\s*$/.test(ta.value.slice(lineStart, s)) ? "    " : "";
-    e.preventDefault(); ta.setRangeText("\n" + indent + extra, s, ta.selectionEnd, "end"); updateGutter();
-  } else delete ta.dataset.escaped;
-});
+
+/* The round context rail on the right: shown by default, hidden with the Context button. */
+const RAIL = "onsite.rail";
+function setRail(on){
+  $(".room-body").classList.toggle("no-rail", !on);
+  const b = $("#railBtn");
+  b.setAttribute("aria-pressed", String(on));
+  b.title = on ? "Hide round context" : "Show round context";
+  if (BOARD && !$('[data-pane="board"]').hidden) BOARD.refresh();
+}
+setRail(LS.get(RAIL, true));
+$("#railBtn").onclick = () => { const on = $(".room-body").classList.contains("no-rail"); setRail(on); LS.set(RAIL, on); };
 
 /* ---------------- feedback + report ---------------- */
 const decClass = d => /no hire|reject/i.test(d) ? "d-no" : /lean|borderline|more data/i.test(d) ? "d-lean" : "d-hire";
@@ -1275,8 +1570,18 @@ function fileToB64(f){
     r.readAsDataURL(f);
   });
 }
+/* The parsed text shows inside the file box once that file has been checked; it replaces the old empty space. */
+let ATS_LAST = null;
+const SECTION_RE = /^(summary|profile|objective|experience|work experience|professional experience|employment|education|skills|technical skills|projects|certifications?|achievements|awards|publications|languages|interests|contact)\b/i;
+function parsedHtml(text){
+  return String(text || "").split("\n").map(l => {
+    const t = l.trim();
+    const head = t && t.length <= 40 && (SECTION_RE.test(t) || (t === t.toUpperCase() && /[A-Z]{3}/.test(t)));
+    return head ? `<b class="pv-h">${esc(t)}</b>` : esc(l);
+  }).join("\n");
+}
 function renderAtsInput(){
-  const drop = $("#atsDrop"), msg = $("#atsMsg");
+  const drop = $("#atsDrop"), msg = $("#atsMsg"), pv = $("#atsPreview");
   const pasted = words($("#resume").value);
   drop.classList.toggle("filled", !!RESUME_FILE || pasted > 0);
   msg.innerHTML = RESUME_FILE
@@ -1284,6 +1589,13 @@ function renderAtsInput(){
     : pasted
       ? `Using the ${pasted}-word resume text from interview setup. Layout checks need the file: <button type="button" class="linkbtn" data-choose>choose the PDF or Word file</button>`
       : `Drop the exact PDF or Word file you send to employers, or <button type="button" class="linkbtn" data-choose>choose a file</button>`;
+  const shown = ATS_LAST && ATS_LAST.preview && (!RESUME_FILE || ATS_LAST.file.name === RESUME_FILE.name);
+  drop.classList.toggle("has-preview", !!shown);
+  pv.hidden = !shown;
+  if (shown){
+    const cut = ATS_LAST.file.words > words(ATS_LAST.preview) + 5;
+    pv.innerHTML = `<div class="pv-head"><b>What the ATS reads</b><span>in reading order${cut ? ", first 4,000 characters" : ""}</span></div><pre>${parsedHtml(ATS_LAST.preview)}</pre>`;
+  }
 }
 function initAts(){
   const drop = $("#atsDrop"), input = $("#atsFile");
@@ -1293,6 +1605,7 @@ function initAts(){
     catch(e){ toast(errText(e), "err"); }
   };
   drop.onclick = e => {
+    if (e.target.closest("#atsPreview")) return;
     const b = e.target.closest("[data-clear]");
     if (b){ rememberResumeFile(null); return; }
     input.click();
@@ -1335,6 +1648,7 @@ function ring(n, label, has = true){
   return `<div class="ats-ring"><div class="ring" style="--v:${has ? n : 0}; --ring-c:${has ? ringColor(n) : "var(--surface-3)"}" role="img" aria-label="${esc(label)}: ${has ? `${n} of 100` : "not scored"}"><div><div><b>${has ? n : "—"}</b><small>of 100</small></div></div></div><span>${esc(label)}</span></div>`;
 }
 function renderAts(r, saved){
+  ATS_LAST = r; renderAtsInput();
   const job = r.job, sub = r.matched.sub_scores;
   const passing = r.ats.filter(a => a.passes).length;
   const f = r.file;
@@ -1391,7 +1705,6 @@ function renderAts(r, saved){
         <div class="panel"><h2>${job ? "Match score" : "Structure score"}</h2><div class="dims">${dims}</div></div>
       </div>
       ${kws}
-      <details class="panel ats-raw"><summary><b>What the ATS sees</b> <span class="muted">— the text exactly as extracted, in reading order</span></summary><pre>${esc(r.preview)}</pre></details>
     </div>`;
   if (!job || r.extractability === "none") return;
   if (r.screen) renderAiScreen(r.screen);

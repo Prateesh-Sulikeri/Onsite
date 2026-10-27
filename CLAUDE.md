@@ -223,6 +223,20 @@ Port from `ui/onsite-artifact-reference.html`. Keep: setup screen with General v
 loop agenda, round picker, research progress card (spinner, % bar, 6-step checklist, live log, sources
 count), call room (avatar with speaking ring, live caption, transcript, composer, workspace tabs:
 editor / whiteboard / code from interviewer), report screen, loop verdict, history.
+Look: "night violet" (owner's mockup, 2026-10-27). The backdrop is `ui/assets/twilight.webp` (from the owner's
+`public/images/Twilight Mountains and Glowing Horizon.png`; Tauri serves only `ui/`), shown as the fixed background of `.main`.
+Every color token on `:root` in `app.css` is sampled from it: navy neutrals hue 266, violet accent hue 290,
+`--warm` (sun peach) and `--warm-2` (horizon magenta) used sparingly. Setup is numbered steps 1–5 with round tiles
+(icons in `ROUND_ICONS`, app.js). Keep new screens on these tokens; don't add colors outside them.
+Third-party UI code lives in `ui/vendor/`, built by `ui-vendor/` (`npm install && npm run build`, esbuild; the app has no
+build step). `editor.js` = CodeMirror 6 (Java/Python/C++/JS/TS/Go, bracket closing, auto-indent, word + keyword
+completion, parser syntax-error lint), loaded by index.html. `whiteboard/` = Excalidraw 0.18 as split ES modules,
+`import()`ed the first time the Whiteboard tab opens; `OnsiteBoard.describe()` turns the drawing into text (shapes,
+containment, arrows with labels, loose text) that is sent inside the workspace `notes`. Editor colours: `--syn-*` tokens.
+Dashboard: computed in app.js from `history` (each row carries round_key, minutes and the report JSON). Skill scores are
+the reports' 1–4 rubric `dimensions` grouped by name; "Practise next" and highlights need a skill low/high in 2+ rounds.
+Weekly goal = settings `weekly_goal` (`get_goal`/`set_goal`, round key → rounds per week). No placeholder numbers.
+`build.rs` watches `icons/`: without it a new logo never reached the exe/taskbar until a clean build.
 Remove everything artifact-specific: `window.claude.*`, `sample`, `db`, `mcp` host bridge,
 browser SpeechRecognition, Win+H dictation hacks. Replace with Tauri `invoke` and `listen`.
 Prompt text and the round/company/level catalog live in `prompts/` and are loaded by Rust, not

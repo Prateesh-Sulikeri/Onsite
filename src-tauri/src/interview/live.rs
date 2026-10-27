@@ -630,6 +630,23 @@ pub async fn run_code(app: &AppHandle, round_id: i64, code: String, submit: bool
     Ok(report)
 }
 
+/// The candidate switched editor language mid-round. Returns that language's starter code
+/// ("" when the round has no problem) and whether Run works in it.
+pub async fn set_round_lang(app: &AppHandle, round_id: i64, lang: String) -> Result<Value> {
+    let state = app.state::<AppState>();
+    let mut rounds = state.rounds.lock().await;
+    let r = rounds.get_mut(&round_id).ok_or_else(|| AppError::NotFound("This round is not running.".into()))?;
+    let runner = Lang::from_name(&lang);
+    let starter = r.question.as_ref().zip(runner).map(|(q, l)| runner::starter(q, l)).unwrap_or_default();
+    tracing::info!(round_id, from = %r.lang, to = %lang, "editor language changed");
+    r.lang = lang;
+    // A fresh starter is not worth sending until they edit it.
+    if !starter.is_empty() {
+        r.last_ws.code = starter.clone();
+    }
+    Ok(json!({ "starter": starter, "runnable": runner.is_some() }))
+}
+
 /// Returned by `send_answer` while the interviewer is still replying.
 pub const BUSY: &str = "The interviewer is still talking. Send again when they finish.";
 

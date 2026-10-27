@@ -1,0 +1,2 @@
+import{a as e,b as i,c as o,d as t,e as n,g as u,k as d,x as l,y as s}from"./chunk-VO2MYB2R.js";var c=class extends s{static{e(this,"GitGraphTokenBuilder")}constructor(){super(["gitGraph"])}},p={parser:{TokenBuilder:e(()=>new c,"TokenBuilder"),ValueConverter:e(()=>new l,"ValueConverter")}};function h(G=n){let r=t(o(G),u),a=t(i({shared:r}),d,p);return r.ServiceRegistry.register(a),{shared:r,GitGraph:a}}e(h,"createGitGraphServices");export{p as a,h as b};
+/*! For license information please see chunk-J6QZGPR6.js.LEGAL.txt */

@@ -138,6 +138,12 @@ pub async fn run_code(app: AppHandle, round_id: i64, code: String, submit: bool)
     live::run_code(&app, round_id, code, submit).await
 }
 
+/// The editor language picker in the call room.
+#[tauri::command]
+pub async fn set_round_lang(app: AppHandle, round_id: i64, lang: String) -> Result<Value> {
+    live::set_round_lang(&app, round_id, lang).await
+}
+
 /// Deletes a finished round with its transcript and feedback.
 #[tauri::command]
 pub async fn delete_round(state: State<'_, AppState>, round_id: i64) -> Result<()> {
@@ -150,6 +156,19 @@ pub async fn delete_round(state: State<'_, AppState>, round_id: i64) -> Result<(
 #[tauri::command]
 pub fn history(state: State<AppState>) -> Result<Vec<HistoryItem>> {
     state.store.lock().unwrap().history(100)
+}
+
+/// Rounds per week by round key, e.g. {"coding": 2, "sysdesign": 1}. Shown on the dashboard.
+#[tauri::command]
+pub fn get_goal(state: State<AppState>) -> Result<Value> {
+    let goal = state.store.lock().unwrap().get_setting::<Value>("weekly_goal")?;
+    Ok(goal.unwrap_or_else(|| serde_json::json!({"coding": 2, "sysdesign": 1, "behavioral": 1})))
+}
+
+#[tauri::command]
+pub fn set_goal(state: State<AppState>, goal: std::collections::BTreeMap<String, u32>) -> Result<()> {
+    let goal: std::collections::BTreeMap<_, _> = goal.into_iter().filter(|(k, n)| *n > 0 && state.catalog.rounds.contains_key(k)).collect();
+    state.store.lock().unwrap().set_setting("weekly_goal", &goal)
 }
 
 #[derive(Serialize)]
