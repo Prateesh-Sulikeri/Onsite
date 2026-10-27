@@ -58,6 +58,7 @@ function nav(view){
   if (view !== "ready") stopMonitor();
   if (view === "feedback") renderHistory();
   if (view === "settings") renderSettings();
+  if (view === "resume") openAts();
 }
 document.addEventListener("click", async e => {
   const t = e.target.closest("[data-nav]");
@@ -180,18 +181,27 @@ function hookDrop(dropSel, inputSel, textSel, msgSel, label){
       : ta.hidden ? initial : `Type or paste the ${lower} below, or <button type="button" class="linkbtn" data-choose>choose a file</button>`;
   };
   const load = async f => {
-    if (!TEXT_FILE.test(f.name) && f.type && !f.type.startsWith("text/")){
-      toast(`That file isn’t plain text. Use a .txt or .md file, or paste the ${lower}.`, "err"); return;
-    }
-    try{ ta.value = (await f.text()).trim(); ta.hidden = true; saveCfg(); show(); }
-    catch(e){ toast(`Couldn’t read that file. Paste the ${lower} instead.`, "err"); }
     input.value = "";
+    if (TEXT_FILE.test(f.name) || (f.type || "").startsWith("text/")){
+      try{ ta.value = (await f.text()).trim(); ta.hidden = true; saveCfg(); show(); }
+      catch(e){ toast(`Couldn’t read that file. Paste the ${lower} instead.`, "err"); }
+      if (label === "Resume") rememberResumeFile(null);
+      return;
+    }
+    // PDF, Word, RTF: Rust reads the text out of it.
+    msgEl.textContent = `Reading ${f.name}…`;
+    try{
+      const file = await fileToB64(f);
+      const doc = await api.invoke("read_document", {name: file.name, data: file.data});
+      ta.value = doc.text; ta.hidden = true; saveCfg(); show();
+      if (label === "Resume") rememberResumeFile(file);
+    }catch(e){ show(); toast(errText(e), "err"); }
   };
   drop.onclick = e => {
     const b = e.target.closest("[data-paste],[data-edit],[data-clear],[data-choose]");
     if (b && b.matches("[data-paste]")){ ta.hidden = false; show(); ta.focus(); return; }
     if (b && b.matches("[data-edit]")){ ta.hidden = !ta.hidden; show(); if (!ta.hidden) ta.focus(); return; }
-    if (b && b.matches("[data-clear]")){ ta.value = ""; ta.hidden = true; saveCfg(); show(); drop.querySelector("[data-choose]").focus(); return; }
+    if (b && b.matches("[data-clear]")){ ta.value = ""; ta.hidden = true; saveCfg(); show(); if (label === "Resume") rememberResumeFile(null); drop.querySelector("[data-choose]").focus(); return; }
     input.click();
   };
   input.onchange = () => input.files[0] && load(input.files[0]);
@@ -1161,6 +1171,143 @@ function renderInterview(fb, focus){
   if (focus){ const t = $(`#rf-${focus}`); if (t) t.scrollIntoView(); }
 }
 
+/* ---------------- resume check (ATS) ---------------- */
+const MAX_FILE = 10 * 1024 * 1024;
+let RESUME_FILE = LS.get("onsite.resumeFile", null);   // {name, data(base64), size} — the last resume file, for layout checks
+function rememberResumeFile(file){
+  RESUME_FILE = file;
+  LS.set("onsite.resumeFile", file);
+  if (!$("#view-resume").hidden) renderAtsInput();
+}
+function fileToB64(f){
+  if (f.size > MAX_FILE) return Promise.reject("That file is over 10 MB. A resume should be far smaller.");
+  return new Promise((ok, bad) => {
+    const r = new FileReader();
+    r.onload = () => ok({name: f.name, size: f.size, data: String(r.result).replace(/^data:[^,]*,/, "")});
+    r.onerror = () => bad("Couldn’t read that file.");
+    r.readAsDataURL(f);
+  });
+}
+function renderAtsInput(){
+  const drop = $("#atsDrop"), msg = $("#atsMsg");
+  const pasted = words($("#resume").value);
+  drop.classList.toggle("filled", !!RESUME_FILE || pasted > 0);
+  msg.innerHTML = RESUME_FILE
+    ? `${esc(RESUME_FILE.name)} · ${Math.max(1, Math.round(RESUME_FILE.size / 1024))} KB. <button type="button" class="linkbtn" data-choose>Choose another</button> · <button type="button" class="linkbtn" data-clear>Remove</button>`
+    : pasted
+      ? `Using the ${pasted}-word resume text from interview setup. Layout checks need the file: <button type="button" class="linkbtn" data-choose>choose the PDF or Word file</button>`
+      : `Drop the exact PDF or Word file you send to employers, or <button type="button" class="linkbtn" data-choose>choose a file</button>`;
+}
+function initAts(){
+  const drop = $("#atsDrop"), input = $("#atsFile");
+  const load = async f => {
+    input.value = "";
+    try{ rememberResumeFile(await fileToB64(f)); $("#atsStatus").textContent = ""; }
+    catch(e){ toast(errText(e), "err"); }
+  };
+  drop.onclick = e => {
+    const b = e.target.closest("[data-clear]");
+    if (b){ rememberResumeFile(null); return; }
+    input.click();
+  };
+  input.onchange = () => input.files[0] && load(input.files[0]);
+  drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+  drop.ondragleave = e => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); };
+  drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) load(f); };
+  $("#atsJd").addEventListener("input", () => LS.set("onsite.atsJd", $("#atsJd").value));
+  $("#atsRun").onclick = runAts;
+}
+let atsShown = false;
+async function openAts(){
+  renderAtsInput();
+  const jd = $("#atsJd");
+  if (!jd.value.trim()) jd.value = LS.get("onsite.atsJd", "") || $("#jd").value;
+  if (atsShown) return;
+  try{
+    const last = await api.invoke("ats_last");
+    if (last && !atsShown){ atsShown = true; renderAts(last, true); }
+  }catch(e){}
+}
+async function runAts(){
+  const btn = $("#atsRun"), st = $("#atsStatus");
+  const jd = $("#atsJd").value.trim();
+  const text = $("#resume").value;
+  if (!RESUME_FILE && !text.trim()){ st.className = "form-msg err"; st.textContent = "Add your resume file first."; return; }
+  btn.disabled = true; btn.classList.add("is-busy"); btn.setAttribute("aria-busy", "true");
+  st.className = "form-msg"; st.textContent = jd ? "Reading the file and the posting… (the posting takes Claude ~10 s the first time)" : "Reading the file…";
+  try{
+    const args = RESUME_FILE ? {name: RESUME_FILE.name, data: RESUME_FILE.data, text: null, jd} : {name: null, data: null, text, jd};
+    const r = await api.invoke("ats_check", args);
+    st.textContent = "";
+    atsShown = true;
+    renderAts(r, false);
+  }catch(e){ st.className = "form-msg err"; st.textContent = errText(e); }
+  finally{ btn.disabled = false; btn.classList.remove("is-busy"); btn.removeAttribute("aria-busy"); }
+}
+const ringColor = n => n >= 70 ? "var(--ok)" : n >= 50 ? "var(--warn)" : "var(--bad)";
+function ring(n, label, has = true){
+  return `<div class="ats-ring"><div class="ring" style="--v:${has ? n : 0}; --ring-c:${has ? ringColor(n) : "var(--surface-3)"}" role="img" aria-label="${esc(label)}: ${has ? `${n} of 100` : "not scored"}"><div><div><b>${has ? n : "—"}</b><small>of 100</small></div></div></div><span>${esc(label)}</span></div>`;
+}
+function renderAts(r, saved){
+  const job = r.job, sub = r.matched.sub_scores;
+  const passing = r.ats.filter(a => a.passes).length;
+  const f = r.file;
+  const facts = [f.kind_label, f.pages ? `${f.pages} page${f.pages > 1 ? "s" : ""}` : null, `${f.words} words`, r.experience_years != null ? `${r.experience_years} years of dated experience` : null].filter(Boolean).join(" · ");
+  const headline = r.extractability === "none" ? "An ATS can't read any text in this file."
+    : r.extractability === "partial" ? `Part of this file can't be read. Passes ${passing} of 6 simulated ATSs.`
+    : `Passes ${passing} of 6 simulated ATSs${job ? ` for ${job.role || "this posting"}` : ""}.`;
+  const when = saved ? ` · Checked ${new Date(r.checked_at).toLocaleString([], {dateStyle: "medium", timeStyle: "short"})}` : "";
+  const [first, ...rest] = r.tips;
+  const dot = s => s === "pass" ? "ok" : s === "warn" ? "warn" : "bad";
+  const checks = r.checks.map(c => `<li class="${dot(c.status)}"><i class="dot"></i><div><b>${esc(c.title)}</b>${c.detail ? `<small>${esc(c.detail)}</small>` : ""}</div></li>`).join("");
+  const ats = r.ats.map(a => `
+    <div class="ats-card">
+      <div class="ats-top"><div><b>${esc(a.name)}</b><small>${esc(a.vendor)}</small></div><span class="score ${scoreClass(a.score)}">${a.score}</span></div>
+      <span class="pill ${a.passes ? "ok" : "bad"}">${a.passes ? "Likely through" : "Likely filtered"} · needs ${a.passing}</span>
+      <p class="muted">${esc(a.note)}</p>
+      ${a.issues.length ? `<ul class="list">${a.issues.map(i => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}
+    </div>`).join("");
+  const chip = k => {
+    const kind = k.exact ? "ok" : k.alias || k.stem ? "warn" : "bad";
+    const how = k.exact ? "Found as written" : k.alias ? `Only as “${k.alias}”. Exact-match ATSs miss it.` : k.stem ? "Found in another word form" : "Not in your resume";
+    return `<span class="kw ${kind}" title="${esc(how)}">${k.required ? "<i>must</i>" : ""}${esc(k.term)}</span>`;
+  };
+  const kws = r.keywords.length ? `
+    <div class="panel"><h2>Keywords from the posting</h2>
+      <div class="kws">${r.keywords.map(chip).join("")}</div>
+      <p class="muted kw-key"><span class="kw ok">found</span><span class="kw warn">other spelling or form</span><span class="kw bad">missing</span> Hover a term for details.</p>
+    </div>` : "";
+  const dim = (name, v, note) => `<div class="dim${v == null ? " na" : ""}"><div class="dim-top">${esc(name)}<span>${v == null ? "not scored" : Math.round(v)}</span></div><div class="bar${v == null ? " na" : ""}"><i style="width:${v ?? 0}%"></i></div><p>${esc(note)}</p></div>`;
+  const dims = [
+    dim("Keyword match", sub.keyword_match, "Posting terms found word for word. 40% of the match score."),
+    dim("Skills coverage", sub.skills_coverage, "Required and preferred skills found. 20%."),
+    dim("Job title", sub.title_match, job && job.role ? `“${job.role}” under your name scores 100, in the summary 75. 15%.` : "Needs a posting with a title. 15%."),
+    dim("Sections", sub.section_completeness, "Contact details, Summary, Experience, Education, Skills. 15%."),
+    dim("Date format", sub.date_consistency, "Share of dates written the same way. 10%."),
+  ].join("");
+  $("#atsOut").innerHTML = `
+    <div class="stack">
+      <div class="panel ats-head">
+        ${ring(r.parse_score, "Readable")}
+        ${ring(r.matched.overall, job ? "Job match" : "Structure")}
+        <div>
+          <h2>${esc(headline)}</h2>
+          <p class="muted">${esc(r.file.name)} · ${esc(facts)}${esc(when)}</p>
+          <p class="muted small">Simulated from each product’s public behaviour. Real ATSs don’t publish their scoring, and many recruiters search rather than auto-reject. Scoring follows the open-source Resume-Matcher and ats-screener projects.</p>
+        </div>
+      </div>
+      ${first ? `<div class="fix"><span class="fix-ic">${icon("bulb")}</span><div><b>Fix this first</b>${esc(first)}</div></div>` : ""}
+      ${rest.length ? `<div class="panel"><h2>Then</h2><ul class="list">${rest.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
+      <div class="ats-grid">${ats}</div>
+      <div class="cols">
+        <div class="panel"><h2>Can it be parsed?</h2><ul class="checks ats-checks">${checks}</ul></div>
+        <div class="panel"><h2>${job ? "Match score" : "Structure score"}</h2><div class="dims">${dims}</div></div>
+      </div>
+      ${kws}
+      <details class="panel ats-raw"><summary><b>What the ATS sees</b> <span class="muted">— the text exactly as extracted, in reading order</span></summary><pre>${esc(r.preview)}</pre></details>
+    </div>`;
+}
+
 /* ---------------- settings ---------------- */
 const describe = loc => !loc ? "Not found yet" : loc.kind === "windows" ? loc.exe : "WSL: claude";
 async function renderSettings(){
@@ -1443,6 +1590,7 @@ $("#roomMic").addEventListener("change", () => {
   try{ CAT = await api.invoke("get_catalog"); }
   catch(e){ document.body.innerHTML = `<div class="view"><div class="panel"><h2>Onsite couldn’t start</h2><p class="form-msg err">${esc(errText(e))}</p></div></div>`; return; }
   initSetup();
+  initAts();
   await refreshStatus();
   if (SETTINGS && !SETTINGS.claude) api.invoke("detect_claude").then(refreshStatus).catch(() => {});
   nav("dashboard");

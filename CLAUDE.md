@@ -164,6 +164,19 @@ Tables: `settings`, `dossiers`, `research_jobs` (status, progress, log, raw_outp
 `loops`, `rounds` (transcript JSON, workspace snapshots, claude session id), `reports`.
 Reports and transcripts must survive app restarts. Export/import dossiers as JSON files.
 
+### ats/ — resume check
+- Reads the resume file the way an ATS parser does, scores it, and simulates six ATS products. Nav: "Resume check".
+- File type comes from the bytes, not the name: PDF (`pdf-extract`/lopdf, layout boxes from a custom `OutputDev`),
+  .docx (zip + quick-xml; tables, text boxes, `mc:Fallback` skipped, headers/footers kept apart), .rtf, UTF-8/16 text,
+  .html. Old .doc, images, .odt/.pages, password PDFs are refused with a plain message. Owner-only-locked PDFs open.
+- Checks and the match score are ported from Resume-Matcher (`services/ats.py`, `ats_parse/`, Apache-2.0); the six
+  profiles (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors) follow ats-screener (MIT). All deterministic.
+- Claude only reads the job description (`prompts/ats_job.md`, no tools, interviewer model, ~7 s), never the resume.
+  Result cached in `settings` under `ats_job:<sha256>`; bump `CACHE_VERSION` in `ats/job.rs` when the prompt changes.
+- The interview setup's resume/JD drops also take PDF/Word/RTF via `read_document`.
+- Offline CLI: `cargo run --example ats_check -- resume.pdf [job.json] [--json]`. Fixtures + sources: `tests/fixtures/ats/`.
+- If the app is running, `onsite.exe` is locked: test with `--target-dir target/ats-test`.
+
 ### mcp/ (phase 3)
 Expose a small MCP server (rmcp crate, stdio) so Claude Code in a terminal can:
 `list_dossiers`, `get_dossier`, `request_research(company, role, jd)`, `list_reports`, `get_report`.

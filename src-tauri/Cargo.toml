@@ -29,3 +29,10 @@ futures-util = "0.3.34"
 tokio-tungstenite = "0.30.0"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream", "multipart"] }
 csv = "1"
+pdf-extract = "0.12.1"
+quick-xml = "0.42"
+sha2 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+regex = "1"
+base64 = "0.23"
+unicode-normalization = "0.1"

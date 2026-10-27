@@ -314,3 +314,34 @@ pub fn voice_set_devices(state: State<AppState>, input: String, output: String, 
     }
     Ok(())
 }
+
+#[derive(Serialize)]
+pub struct ResumeText {
+    pub kind: crate::ats::extract::Kind,
+    pub kind_label: &'static str,
+    pub text: String,
+    pub pages: Option<usize>,
+    pub words: usize,
+}
+
+/// Text out of a resume or job description file (PDF, .docx, .rtf, .txt, .md), for the interview setup.
+#[tauri::command]
+pub async fn read_document(name: String, data: String) -> Result<ResumeText> {
+    let doc = crate::ats::read_file(name, &data).await?;
+    if doc.text.split_whitespace().count() < 5 {
+        return Err(AppError::Invalid("No text came out of that file. If it's a scan, export it as a text PDF or .docx.".into()));
+    }
+    Ok(ResumeText { kind: doc.kind, kind_label: doc.kind.label(), words: doc.text.split_whitespace().count(), pages: doc.page_count, text: doc.text })
+}
+
+/// Resume check. Send the file (`name` + base64 `data`) when there is one; else `text`.
+#[tauri::command]
+pub async fn ats_check(state: State<'_, AppState>, name: Option<String>, data: Option<String>, text: Option<String>, jd: String) -> Result<crate::ats::Report> {
+    crate::ats::run(&state, name, data, text, &jd).await
+}
+
+/// The last resume check, if any.
+#[tauri::command]
+pub fn ats_last(state: State<AppState>) -> Result<Option<Value>> {
+    state.store.lock().unwrap().get_setting(crate::ats::LAST_KEY)
+}

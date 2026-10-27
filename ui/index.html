@@ -34,6 +34,7 @@
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+    <symbol id="i-doc-check" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/></symbol>
     <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0zM8 21h8"/></symbol>
   </defs>
 </svg>
@@ -48,6 +49,7 @@
     <nav class="nav">
       <button class="nav-item" data-nav="dashboard"><svg><use href="#i-home"/></svg><span>Dashboard</span></button>
       <button class="nav-item" data-nav="interviews"><svg><use href="#i-chat"/></svg><span>Interviews</span></button>
+      <button class="nav-item" data-nav="resume"><svg><use href="#i-doc-check"/></svg><span>Resume check</span></button>
       <button class="nav-item" data-nav="dossiers"><svg><use href="#i-folder"/></svg><span>Dossiers</span></button>
       <button class="nav-item" data-nav="feedback"><svg><use href="#i-chart"/></svg><span>Feedback</span></button>
       <button class="nav-item" data-nav="settings"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
@@ -140,13 +142,13 @@
             <div class="drops">
               <div class="drop" id="dropResume">
                 <svg class="drop-ic"><use href="#i-upload"/></svg>
-                <div class="drop-tx"><b>Resume <small>(optional)</small></b><span id="resumeMsg">Drop a .txt or .md file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
-                <input type="file" id="resumeFile" accept=".txt,.md" hidden>
+                <div class="drop-tx"><b>Resume <small>(optional)</small></b><span id="resumeMsg">Drop a PDF, Word or text file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
+                <input type="file" id="resumeFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
               </div>
               <div class="drop" id="dropJd">
                 <svg class="drop-ic"><use href="#i-upload"/></svg>
                 <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <button type="button" class="linkbtn" data-choose>Choose a file</button> or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
-                <input type="file" id="jdFile" accept=".txt,.md" hidden>
+                <input type="file" id="jdFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
               </div>
             </div>
             <textarea id="resume" class="paste" rows="6" placeholder="Resume text" aria-label="Resume text" hidden></textarea>
@@ -219,6 +221,31 @@
           <button class="btn primary lg" id="readyJoin">Join interview<svg><use href="#i-arrow"/></svg></button>
           <label class="check"><input type="checkbox" id="readyEvery"><span>Check before every round</span></label>
         </aside>
+      </div>
+    </section>
+
+    <!-- ============ RESUME CHECK ============ -->
+    <section class="view" id="view-resume" hidden>
+      <header class="page-head"><div><div class="crumb">Resume check</div><h1>How an ATS reads your resume</h1>
+        <p class="lede">Reads your file the way applicant tracking systems do, then scores it against a job posting. Your resume stays on this computer. Only the job description goes to Claude.</p></div></header>
+      <div class="stack">
+        <div class="panel">
+          <div class="drops">
+            <div class="drop" id="atsDrop">
+              <svg class="drop-ic"><use href="#i-upload"/></svg>
+              <div class="drop-tx"><b>Resume file</b><span id="atsMsg"></span></div>
+              <input type="file" id="atsFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
+            </div>
+            <label class="field"><span>Job description <small class="muted">(optional, for the match score)</small></span>
+              <textarea id="atsJd" rows="4" placeholder="Paste the posting. Without it you get the parsing checks only."></textarea>
+            </label>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="atsRun"><svg><use href="#i-doc-check"/></svg>Check resume</button>
+            <span class="form-msg" id="atsStatus" role="status"></span>
+          </div>
+        </div>
+        <div id="atsOut"></div>
       </div>
     </section>
 

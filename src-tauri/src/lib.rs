@@ -1,3 +1,4 @@
+pub mod ats;
 pub mod bank;
 pub mod brain;
 pub mod catalog;
@@ -184,6 +185,9 @@ pub fn run() {
             commands::audio_devices,
             commands::mic_monitor_start,
             commands::mic_monitor_stop,
+            commands::read_document,
+            commands::ats_check,
+            commands::ats_last,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Onsite");
