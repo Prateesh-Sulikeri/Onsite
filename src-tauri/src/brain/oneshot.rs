@@ -1,5 +1,7 @@
-//! One-shot jobs (reports, verdicts, health check, research): prompt on stdin, stream-json out.
+//! One-shot jobs (reports, verdicts, health check, research). Claude Code: prompt on stdin,
+//! stream-json out. Provider APIs: one request (research: with web search).
 
+use super::chat::{api_once, Backend};
 use super::locate::{isolation_args, ClaudeLocation, Tools};
 use super::parse::extract_json;
 use super::stream::{parse_line, StreamEvent};
@@ -23,17 +25,35 @@ const JOB_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 
 /// Runs one prompt to completion. `on_event` sees every parsed event (for progress).
 pub async fn run_once(
-    loc: &ClaudeLocation,
+    backend: &Backend,
     prompt: &str,
     tools: Tools,
     model: &str,
     on_event: impl FnMut(&StreamEvent) + Send,
 ) -> Result<OneShot> {
-    run_once_with_timeout(loc, prompt, tools, model, JOB_TIMEOUT, on_event).await
+    run_once_with_timeout(backend, prompt, tools, model, JOB_TIMEOUT, on_event).await
 }
 
-/// Like `run_once`, but kills the job after `limit` (research jobs need far longer).
+/// Like `run_once`, but gives up after `limit` (research jobs need far longer).
 pub async fn run_once_with_timeout(
+    backend: &Backend,
+    prompt: &str,
+    tools: Tools,
+    model: &str,
+    limit: Duration,
+    on_event: impl FnMut(&StreamEvent) + Send,
+) -> Result<OneShot> {
+    match backend {
+        Backend::Cli(loc) => run_cli(loc, prompt, tools, model, limit, on_event).await,
+        Backend::Api(client) => {
+            let started = Instant::now();
+            let text = api_once(client, JOB_SYSTEM_PROMPT, prompt, tools == Tools::Web, model, limit, on_event).await?;
+            Ok(OneShot { json: extract_json(&text), text, duration_ms: started.elapsed().as_millis() as u64, model: model.to_string() })
+        }
+    }
+}
+
+async fn run_cli(
     loc: &ClaudeLocation,
     prompt: &str,
     tools: Tools,

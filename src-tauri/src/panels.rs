@@ -29,6 +29,15 @@ pub struct InterviewerSummary {
     pub id: String,
     pub name: String,
     pub role: String,
+    pub traits: Vec<String>,
+    pub style: String,
+    /// 1-5.
+    pub strictness: u64,
+    pub backstory: String,
+    /// e.g. "male, middle-aged, indian accent (north indian English), moderate pitch, measured pace".
+    pub voice: String,
+    /// Round keys this person runs on their panel.
+    pub rounds: Vec<String>,
 }
 
 /// One interviewer, as the round needs them.
@@ -48,6 +57,30 @@ pub struct Persona {
 
 fn s(v: &Value) -> String {
     v.as_str().unwrap_or_default().to_string()
+}
+
+/// "moderate" + "pitch" → "moderate pitch"; empty stays empty.
+fn with(v: &str, what: &str) -> String {
+    if v.is_empty() { String::new() } else { format!("{v} {what}") }
+}
+
+fn build_persona(panel: &Value, iv: &Value) -> Persona {
+    let name = s(&iv["name"]);
+    let (instruct, states) = voice_design(&iv["voice"]);
+    Persona {
+        id: s(&iv["id"]),
+        first_name: name.split_whitespace().next().unwrap_or(&name).to_string(),
+        name,
+        role: s(&iv["role"]),
+        panel_name: s(&panel["name"]),
+        voice_instruct: instruct,
+        voice_states: states,
+        speed_factor: match s(&iv["voice"]["pace"]).as_str() {
+            "brisk" => 1.05,
+            "relaxed" | "measured" => 0.96,
+            _ => 1.0,
+        },
+    }
 }
 
 fn joined(v: &Value) -> String {
@@ -86,7 +119,32 @@ impl Panels {
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .map(|i| InterviewerSummary { id: s(&i["id"]), name: s(&i["name"]), role: s(&i["role"]) })
+                    .map(|i| {
+                        let v = &i["voice"];
+                        let voice = [s(&v["gender"]), s(&v["age"]), s(&v["accent"]), with(&s(&v["pitch"]), "pitch"), with(&s(&v["pace"]), "pace")]
+                            .into_iter()
+                            .filter(|x| !x.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let rounds = p["round_owner"]
+                            .as_object()
+                            .into_iter()
+                            .flatten()
+                            .filter(|(_, owner)| **owner == i["id"])
+                            .map(|(k, _)| k.clone())
+                            .collect();
+                        InterviewerSummary {
+                            id: s(&i["id"]),
+                            name: s(&i["name"]),
+                            role: s(&i["role"]),
+                            traits: i["personality"]["traits"].as_array().into_iter().flatten().map(s).collect(),
+                            style: s(&i["personality"]["communication_style"]),
+                            strictness: i["personality"]["strictness"].as_u64().unwrap_or(3),
+                            backstory: s(&i["backstory"]),
+                            voice,
+                            rounds,
+                        }
+                    })
                     .collect(),
                 round_owner: p["round_owner"].clone(),
             })
@@ -107,21 +165,14 @@ impl Panels {
 
     pub fn persona(&self, panel_id: &str, round_key: &str) -> Option<Persona> {
         let (panel, iv) = self.interviewer(panel_id, round_key)?;
-        let name = s(&iv["name"]);
-        let (instruct, states) = voice_design(&iv["voice"]);
-        Some(Persona {
-            id: s(&iv["id"]),
-            first_name: name.split_whitespace().next().unwrap_or(&name).to_string(),
-            name,
-            role: s(&iv["role"]),
-            panel_name: s(&panel["name"]),
-            voice_instruct: instruct,
-            voice_states: states,
-            speed_factor: match s(&iv["voice"]["pace"]).as_str() {
-                "brisk" => 1.05,
-                "relaxed" | "measured" => 0.96,
-                _ => 1.0,
-            },
+        Some(build_persona(panel, iv))
+    }
+
+    /// Any interviewer on any panel, by id (for voice previews in Settings).
+    pub fn persona_by_id(&self, id: &str) -> Option<Persona> {
+        self.raw["panels"].as_array()?.iter().find_map(|panel| {
+            let iv = panel["interviewers"].as_array()?.iter().find(|i| i["id"] == id)?;
+            Some(build_persona(panel, iv))
         })
     }
 

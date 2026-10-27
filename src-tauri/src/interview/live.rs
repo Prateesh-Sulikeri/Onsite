@@ -3,7 +3,7 @@
 use super::report::{enough_to_review, metrics, report_prompt, round_summary, verdict_prompt, ReportInput};
 use super::{candidate_message, interviewer_prompt, opening_excerpt, opening_message, pick_opener, session_block, LoopSetup, PlannedRound, PromptTemplates, Workspace};
 use crate::bank::{Question, Test};
-use crate::brain::{prompts, run_once, ClaudeSession, SessionConfig, SessionEvent, Tools};
+use crate::brain::{prompts, run_once, Session, SessionConfig, SessionEvent, Tools};
 use crate::runner::{self, Kind, Lang};
 use crate::error::{AppError, Result};
 use crate::store::Turn;
@@ -20,7 +20,7 @@ use tokio::sync::{mpsc, oneshot};
 const REPLY_STALE: Duration = Duration::from_secs(120);
 
 pub struct ActiveRound {
-    session: ClaudeSession,
+    session: Session,
     /// The DSA problem for a coding round, from the local bank.
     question: Option<Question>,
     /// Full-size tests for Submit, built once per round.
@@ -189,13 +189,13 @@ async fn wait_claude(
     let fail = |m: &str| {
         prep(app, "claude", "fail", m);
         prep(app, "question", "off", "");
-        AppError::Claude(m.to_string())
+        AppError::Ai(m.to_string())
     };
     prep(app, "claude", "run", "Starting the interviewer");
     match tokio::time::timeout(Duration::from_secs(60), started).await {
         Ok(Ok(Ok(model))) => prep(app, "claude", "ok", &model),
         Ok(Ok(Err(m))) if !m.is_empty() => return Err(fail(&m)),
-        _ => return Err(fail("Claude Code didn't start. Run the health check in Settings.")),
+        _ => return Err(fail("The interviewer didn't start. Run the health check in Settings.")),
     }
     prep(app, "question", "run", "Writing the first question");
     let m = match tokio::time::timeout(Duration::from_secs(150), reply).await {
@@ -208,7 +208,7 @@ async fn wait_claude(
         Err(_) => "No reply after two and a half minutes.".to_string(),
     };
     prep(app, "question", "fail", &m);
-    Err(AppError::Claude(m))
+    Err(AppError::Ai(m))
 }
 
 /// Waits for the interviewer's voice, speech recognition and the mic. Returns `go` when the
@@ -270,6 +270,18 @@ async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, 
 }
 
 pub fn create_loop(state: &AppState, setup: &LoopSetup) -> Result<i64> {
+    let mut setup = setup.clone();
+    if !setup.dossier_id.is_empty() {
+        let raw = state.store.lock().unwrap().dossier(&setup.dossier_id)?.ok_or_else(|| AppError::NotFound("That dossier is gone. Pick another one.".into()))?;
+        let full = crate::dossier::Dossier::from_value(&raw, &state.catalog.round_keys()).map_err(AppError::Invalid)?;
+        let picks: Vec<usize> = if setup.dossier_rounds.is_empty() { (0..full.process.len()).collect() } else { setup.dossier_rounds.clone() };
+        let d = full.with_rounds(&picks);
+        setup.rounds = d.process.iter().map(|r| r.kind.clone()).collect();
+        // The dossier sets the style; level and the rest stay as picked.
+        setup.company = "auto".into();
+        setup.dossier = Some(d);
+    }
+    let setup = &setup;
     setup.validate(&state.catalog, &state.panels)?;
     let mut config = serde_json::to_value(setup)?;
     config["company_name"] = json!(setup.company_name(&state.catalog));
@@ -294,19 +306,23 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     let templates = PromptTemplates {
         interviewer: prompts::load(&state.prompts_dir, "interviewer.md")?,
         persona_block: prompts::load(&state.prompts_dir, "persona_block.md").unwrap_or_default(),
+        dossier_block: prompts::load(&state.prompts_dir, "dossier_block.md").unwrap_or_default(),
     };
     let mut system_prompt = interviewer_prompt(&templates, cat, &state.panels, &setup, index);
     let question = (plan.key == "coding")
         .then(|| {
             let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-            state.bank.pick(difficulty_for(&setup.level), &[], &setup.company, &Default::default(), seed).cloned()
+            // A company loop asks a problem its candidates reported, when the bank has one.
+            let reported = setup.dossier.as_ref().and_then(|d| d.process.get(index)).map(|r| r.questions.as_slice()).unwrap_or_default();
+            state.bank.match_reported(reported, seed).or_else(|| state.bank.pick(difficulty_for(&setup.level), &[], &setup.company, &Default::default(), seed)).cloned()
         })
         .flatten();
     if let Some(q) = &question {
         tracing::info!(id = %q.id, difficulty = %q.difficulty, "coding question");
         system_prompt.push_str(&problem_block(q));
     }
-    // Claude Code has no temperature flag, and the same prompt opens the same way every time.
+    // Claude Code has no temperature flag (and newer API models drop it), so the same prompt
+    // opens the same way every time.
     // So each session gets a starting point not used lately, and sees how recent ones opened.
     let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
     let opener = {
@@ -340,8 +356,8 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     }
     // A newer start (or cancel_start) bumps this; the loader below then gives up.
     let me = state.prep_gen.fetch_add(1, Ordering::SeqCst) + 1;
-    prep(app, "claude", "run", "Finding Claude Code");
-    let location = match state.claude_location().await {
+    prep(app, "claude", "run", "Connecting to the AI model");
+    let backend = match state.backend().await {
         Ok(l) => l,
         Err(e) => {
             prep(app, "claude", "fail", &e.to_string());
@@ -368,7 +384,7 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     });
 
     let cfg = SessionConfig {
-        location,
+        backend,
         model: settings.interviewer_model.clone(),
         system_prompt: system_prompt.clone(),
         resume: None,
@@ -479,9 +495,9 @@ fn fail_first(
     }
 }
 
-async fn spawn_session(app: &AppHandle, round_id: i64, cfg: SessionConfig, log: Arc<RoundLog>, first: Option<FirstReply>) -> Result<ClaudeSession> {
+async fn spawn_session(app: &AppHandle, round_id: i64, cfg: SessionConfig, log: Arc<RoundLog>, first: Option<FirstReply>) -> Result<Session> {
     let (tx, mut rx) = mpsc::unbounded_channel::<SessionEvent>();
-    let session = ClaudeSession::start(round_id, cfg, tx).await?;
+    let session = Session::start(round_id, cfg, tx).await?;
     let app = app.clone();
     tokio::spawn(async move {
         let (mut started, mut reply) = match first {
@@ -507,7 +523,7 @@ async fn spawn_session(app: &AppHandle, round_id: i64, cfg: SessionConfig, log: 
                     state.voice.turn_done(round_id, false);
                     fail_first(&mut started, &mut reply, message);
                 }
-                SessionEvent::Exited { .. } => fail_first(&mut started, &mut reply, "Claude Code quit before its first reply."),
+                SessionEvent::Exited { .. } => fail_first(&mut started, &mut reply, "The interviewer stopped before its first reply."),
                 SessionEvent::TurnDone { text, ttft_ms, ended, .. } => {
                     if let Some(tx) = reply.take() {
                         let _ = tx.send(Ok(()));
@@ -559,7 +575,7 @@ pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, ws: Works
         tracing::warn!(round_id, ?resume, "claude session died; restarting");
         let restarted = async {
             let cfg = SessionConfig {
-                location: state.claude_location().await?,
+                backend: state.backend().await?,
                 model: r.model.clone(),
                 system_prompt: r.cfg_prompt.clone(),
                 resume,
@@ -579,7 +595,7 @@ pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, ws: Works
         // Not delivered: attach the workspace again next time.
         r.last_ws = prev_ws;
         tracing::error!(round_id, "could not reach the interviewer: {e}");
-        return Err(AppError::Claude("Could not reach the interviewer. Try again.".into()));
+        return Err(AppError::Ai("Could not reach the interviewer. Try again.".into()));
     }
 
     let turn = Turn {
@@ -722,8 +738,8 @@ pub async fn generate_report(app: &AppHandle, round_id: i64) -> Result<Value> {
             metrics: &m,
         },
     );
-    let location = state.claude_location().await?;
-    let out = run_once(&location, &prompt, Tools::None, &state.settings().report_model, |_| {}).await?;
+    let backend = state.backend().await?;
+    let out = run_once(&backend, &prompt, Tools::None, &state.settings().report_model, |_| {}).await?;
     tracing::info!(round_id, ms = out.duration_ms, model = %out.model, "report generated");
     let mut report = out.json.clone().filter(Value::is_object).ok_or_else(|| {
         // Keep the raw text for debugging, but never overwrite a good earlier report.
@@ -732,7 +748,7 @@ pub async fn generate_report(app: &AppHandle, round_id: i64) -> Result<Value> {
             let _ = store.save_report(round_id, None, &out.text);
         }
         tracing::warn!(round_id, raw = %out.text.chars().take(500).collect::<String>(), "report JSON did not parse");
-        AppError::Claude("The report came back in the wrong format. Try again.".into())
+        AppError::Ai("The report came back in the wrong format. Try again.".into())
     })?;
     report["metrics"] = serde_json::to_value(&m)?;
     state.store.lock().unwrap().save_report(round_id, Some(&report), &out.text)?;
@@ -758,9 +774,9 @@ pub async fn loop_verdict(app: &AppHandle, loop_id: i64) -> Result<Value> {
     let cat = &state.catalog;
     let template = prompts::load(&state.prompts_dir, "verdict.md")?;
     let prompt = verdict_prompt(&template, &setup.company_for_prompt(cat), cat.levels.get(&setup.level).unwrap_or(&setup.level), &summaries);
-    let location = state.claude_location().await?;
-    let out = run_once(&location, &prompt, Tools::None, &state.settings().report_model, |_| {}).await?;
-    let verdict = out.json.filter(Value::is_object).ok_or_else(|| AppError::Claude("The verdict came back in the wrong format.".into()))?;
+    let backend = state.backend().await?;
+    let out = run_once(&backend, &prompt, Tools::None, &state.settings().report_model, |_| {}).await?;
+    let verdict = out.json.filter(Value::is_object).ok_or_else(|| AppError::Ai("The verdict came back in the wrong format.".into()))?;
     state.store.lock().unwrap().set_loop_verdict(loop_id, &verdict)?;
     Ok(verdict)
 }

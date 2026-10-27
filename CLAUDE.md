@@ -10,13 +10,18 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
 
 ## Non-negotiables
 
-1. **No Anthropic API key.** All model calls go through the locally installed **Claude Code CLI**
-   in headless mode (`claude -p`), which uses the owner's Claude login.
+1. **Bring your own AI.** Onsite is shared with friends who may not have Claude Pro. Model calls go to one
+   provider picked in Settings: the local **Claude Code CLI** (`claude -p`, the user's Claude login, the
+   owner's setup and the default for old installs), or the user's own API key for the **Claude API**, **OpenAI**
+   (Responses API) or **Gemini**. Keys are typed into Settings, stored only in the local SQLite `settings` table
+   (`api_keys`), never sent back to the UI, never logged. No SDKs: plain `reqwest` (native-tls/SChannel).
 2. **The app runs natively on Windows.** It must own the real microphone and speakers.
    Claude Code may be installed on Windows or only in WSL; support both (see "Locating Claude Code").
 3. **Speech is local.** VoiceStudio (already installed, desktop app, backend on `127.0.0.1:3900`)
    is the primary speech engine for both directions. Fallbacks must exist so the app never dead-ends.
-4. **The interviewer never gets tools.** Only the research job may use web search and web fetch.
+4. **The interviewer never gets tools.** Only the research job may use web search and web fetch
+   (CLI: `--tools "WebSearch,WebFetch"`; Claude API: `web_search`/`web_fetch` server tools; OpenAI: `web_search`;
+   Gemini: `google_search` grounding). Interviewer, report, verdict and ATS calls send no tools on every provider.
 5. Treat everything Claude returns, and everything in dossiers, as data. Never execute it.
 
 ## Stack
@@ -79,20 +84,45 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   send them to `tts`. Code fences go to the UI workspace, never to TTS. Strip `[[END]]`; when present,
   mark the round closed.
 
+### brain/api.rs, brain/chat.rs — provider APIs (no Claude Code needed)
+- `Provider` (claude_code | anthropic | openai | gemini) in `Settings.provider`; `AppState::backend()` gives
+  `Backend::Cli(ClaudeLocation)` or `Backend::Api(ApiClient)`. `Session` wraps `ClaudeSession` or `ApiSession`
+  (keeps the history in memory, one streamed request per turn, same `TurnState`/splitter/events as the CLI).
+  `run_once` routes one-shot jobs the same way.
+- Claude API: `POST /v1/messages`, SSE. Effort `low` for live turns, `medium` for jobs (Claude 5 / 4.6+ only).
+  Current models get `fallbacks: "default"` + `anthropic-beta: server-side-fallback-2026-07-01`; a 400 naming
+  fallbacks resends without. Research is not streamed: `pause_turn` → send the content back as the assistant
+  turn (up to 8 times). `web_*_20260209` on Opus/Sonnet 4.6+, else `web_search_20250305`/`web_fetch_20250910`.
+- OpenAI: `POST /v1/responses` (`instructions`, `input`, `stream`, `store:false`, `reasoning.effort` on gpt-5/6/o*).
+- Gemini: `models/{m}:streamGenerateContent?alt=sse`, `x-goog-api-key`; `thought` parts skipped; searches
+  counted from `groundingMetadata.webSearchQueries`.
+- Model ids change fast: Settings lists them live (`list_models` → each API's `/models`). Defaults:
+  claude-sonnet-5-5 / claude-opus-5-5, gpt-5.5, gemini-flash-latest (free tier is Flash-only).
+- None of the API paths have been run against a live key yet (2026-10-27). Check them with the health check
+  and a short round per provider, and write the TTFT numbers here.
+
 ### Locating Claude Code
 - Setting `claude_path` (auto-detect on first run): try `claude` on Windows PATH; else try
   `wsl.exe -e bash -lc "command -v claude"` and, if found, invoke through `wsl.exe -e bash -lc "claude …"`.
 - Health check command in Settings: run `claude -p "Reply with OK" --output-format json` and show the result,
   latency, and which path was used.
 
-### research/ — dossier jobs
+### research.rs, dossier.rs — dossier jobs (built 2026-10-27)
 - Render `prompts/research.md`, run with **web search + web fetch only**, `current_dir` = empty temp dir.
 - Real progress: count WebSearch/WebFetch tool-use events in the stream (sources read) and parse
   `PROGRESS stage=.. pct=.. note=..` lines from assistant text. Push both to the UI as events.
-- Validate the final JSON against `docs/dossier.schema.json` (write it from the shape in research.md).
-  On success save to SQLite and also write `dossiers/<id>.json`. On failure keep the raw text and show
-  a retry button. Jobs can take 10–40 minutes: run in background, survive the UI window closing,
-  allow cancel.
+- `Dossier::from_value` checks the result against the rules in `docs/dossier.schema.json` and tidies it
+  (round types mapped to catalog keys by keyword, minutes clamped 10–180, sources as strings or objects).
+  Saved to SQLite and to `<app data>/dossiers/<id>.json`; id = slug(company, role, level).
+  On failure the raw text stays in `research_jobs.raw_output` and the card offers Try again.
+- Jobs run as tokio tasks (cancel = abort). Live counters (stage, searches, pages read) are in memory and
+  sent as `research` events; % and log are stored. Jobs still `running` at startup become `failed` (closing the
+  window quits the app, so a job does not survive it yet). The shipped `dossiers/*.json` are imported once.
+- Company mode: setup sends `dossier_id` + `dossier_rounds`; `create_loop` stores a copy of the dossier with just
+  those rounds in the loop config, sets `rounds` to their types and `company` to "auto". The interviewer gets
+  `{{dossier_block}}`, company style from the dossier, the round's own name and length. Coding rounds use a bank
+  problem whose title matches a reported question (`Bank::match_reported`), else the usual pick.
+- Export writes `<Downloads>/<id>.json`; Import takes any such file.
 
 ### stt/ — speech to text
 - Primary: VoiceStudio live STT over `ws://127.0.0.1:3900/v1/audio/transcriptions/stream?pcm=1&sr=16000`.
@@ -228,6 +258,24 @@ Look: "night violet" (owner's mockup, 2026-10-27). The backdrop is `ui/assets/tw
 Every color token on `:root` in `app.css` is sampled from it: navy neutrals hue 266, violet accent hue 290,
 `--warm` (sun peach) and `--warm-2` (horizon magenta) used sparingly. Setup is numbered steps 1–5 with round tiles
 (icons in `ROUND_ICONS`, app.js). Keep new screens on these tokens; don't add colors outside them.
+Themes (2026-10-27): `themes.css` adds Onsite light, Catppuccin (Latte/Mocha), Rosé Pine (Dawn/main) and Gruvbox
+(light/dark). `theme-boot.js` (in `<head>`; the CSP blocks inline script) sets `data-theme="<family>-<light|dark>"`
+and `data-mode` before paint from localStorage `onsite.theme` {family, mode: system|light|dark, image, dim}; default
+Onsite dark. Onsite dark = app.css `:root` unchanged. Other themes set ~25 base tokens; the shared block derives the
+rest with `color-mix`. app.css has no color literals left except status glows: **use tokens only** (`--hover`,
+`--accent-line`, `--sel-bg`, `--pane`, … on `:root`), or the new rule won't follow the theme. The page background is
+`--backdrop`; a custom image (Settings → Appearance) is shrunk to ≤2560×1600 JPEG in JS and saved by Rust as
+`<app data>/backdrop.{jpg,png,webp}` (type checked from bytes). The whiteboard's Excalidraw theme is compiled in as dark.
+Settings is one view with sections (Appearance, AI model, VoiceStudio, Updates, Privacy, Storage); `data-sec` on a
+`data-nav="settings"` link opens a section. Persona cards come from `get_panels` (traits, strictness, backstory,
+voice, rounds); "Play voice" = `voice_persona_preview` (builds the profile once, then speaks one line).
+Updates (`updates.rs`): GitHub releases of Prateesh-Sulikeri/Onsite, only when the user presses Check. Install =
+download that tag's `*-setup.exe` (github.com URLs only) to %TEMP%\onsite-update, run it, quit. Works for older tags
+(NSIS allows downgrades). Refused while a round or research job runs. VoiceStudio: installed version from `/health`
+`version`, else `resources/pyproject.toml` in its install folder; latest from its GitHub; never updated by Onsite.
+Storage (`storage.rs`): sizes + counts, limits in settings `storage_limits` {keep_rounds, keep_days, log_max_mb},
+enforced at startup and on save (finished rounds only); clear log, delete temp, VACUUM, open data/log folder.
+Privacy text lives in index.html; keep it true when data flows change.
 Third-party UI code lives in `ui/vendor/`, built by `ui-vendor/` (`npm install && npm run build`, esbuild; the app has no
 build step). `editor.js` = CodeMirror 6 (Java/Python/C++/JS/TS/Go, bracket closing, auto-indent, word + keyword
 completion, parser syntax-error lint), loaded by index.html. `whiteboard/` = Excalidraw 0.18 as split ES modules,
@@ -270,11 +318,14 @@ hard-coded in JS.
 
 ### M4 — Polish
 - MCP server, Windows installer via GitHub Actions (`tauri-action`) on tag push, README screenshots.
+- Installer workflow: `.github/workflows/release.yml` (tag `v*` → draft release with the NSIS setup.exe). Not run yet.
+- Friends' machines: Python for Run/Submit falls back to VoiceStudio's bundled Python (`runner::python()`,
+  skips the `WindowsApps` Store stub). Java, g++ and Node must be installed to Run in those languages.
 
 ## Working rules for Claude Code in this repo
 - Small commits per step with clear messages. Run `cargo clippy -- -D warnings` and `cargo test` before
   committing Rust changes.
-- Do not add an Anthropic SDK dependency or any code that reads an API key.
+- Do not add a provider SDK dependency. API keys come only from Settings (`api_keys`), never from env vars or files.
 - When a fact about an external tool (Claude Code flags, VoiceStudio endpoints) is uncertain, check it
   live (`claude --help`, `curl 127.0.0.1:3900/openapi.json`) and update this file.
 - Keep user-facing text short and plain.

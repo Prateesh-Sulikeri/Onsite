@@ -16,6 +16,7 @@ const LS = {
 let CAT = null;          // catalog from prompts/catalog.json
 let SETTINGS = null;     // Rust Settings
 let VS = {up:false, loaded:false, profiles:[]};
+let AIKEYS = {};         // provider id → a key is saved
 let loop = null;         // {id, setup, count}
 let session = null;      // the live round
 let timerI = null;
@@ -60,8 +61,9 @@ function nav(view){
   if (view === "interviews") renderAgenda();
   if (view !== "ready") stopMonitor();
   if (view === "feedback") renderHistory();
-  if (view === "settings") renderSettings();
+  if (view === "settings"){ renderSettings(); setSection(SET_SEC); }
   if (view === "resume") openAts();
+  if (view === "dossiers") renderDossiersView();
 }
 document.addEventListener("click", async e => {
   const t = e.target.closest("[data-nav]");
@@ -77,6 +79,7 @@ document.addEventListener("click", async e => {
       if (!$("#view-dashboard").hidden) renderDashboard();
     });
   }
+  if (t.dataset.sec) SET_SEC = t.dataset.sec;
   nav(t.dataset.nav);
 });
 
@@ -104,11 +107,26 @@ function toast(msg, kind = ""){
 /* Screen-reader-only announcements (the transcript itself is not live: streaming would flood it). */
 function announce(text){ const el = $("#srLive"); el.textContent = ""; setTimeout(() => el.textContent = text, 30); }
 
+/* What runs the interviewer. Model ids for the APIs come from the provider's live list. */
+const PROVIDERS = {
+  claude_code: {name: "Claude Code"},
+  anthropic: {name: "Claude API", key: "Claude API key", hint: "Create one at console.anthropic.com, under API keys. It starts with sk-ant-.",
+    models: {"claude-sonnet-5-5": "Sonnet 5.5 — fast replies", "claude-opus-5-5": "Opus 5.5 — best judgment", "claude-haiku-5-5": "Haiku 5.5 — fastest, cheapest"}},
+  openai: {name: "OpenAI", key: "OpenAI API key", hint: "Create one at platform.openai.com, under API keys. ChatGPT Plus doesn’t cover API use, so add a little credit there."},
+  gemini: {name: "Gemini", key: "Gemini API key", hint: "Get a free key at aistudio.google.com (Get API key). The free tier is enough for practice, with daily limits.",
+    models: {"gemini-flash-latest": "Gemini Flash (latest) — free tier"}},
+};
+const provider = () => (SETTINGS && SETTINGS.provider) || "claude_code";
+function aiReady(){ const p = provider(); return p === "claude_code" ? !!(SETTINGS && SETTINGS.claude) : !!AIKEYS[p]; }
+
 async function refreshStatus(){
   try{ SETTINGS = await api.invoke("get_settings"); }catch(e){}
+  try{ AIKEYS = await api.invoke("ai_keys"); }catch(e){}
   try{ VS = await api.invoke("voice_status"); }catch(e){ VS = {up:false, loaded:false, profiles:[]}; }
-  const cl = $("#sysClaude"); cl.className = "sys " + (SETTINGS && SETTINGS.claude ? "ok" : "bad");
-  cl.title = SETTINGS && SETTINGS.claude ? "Claude Code found" : "Claude Code not found";
+  const cl = $("#sysClaude"), name = PROVIDERS[provider()].name;
+  cl.className = "sys " + (aiReady() ? "ok" : "bad");
+  $("#sysClaudeName").textContent = name;
+  cl.title = aiReady() ? `${name} connected` : `${name} isn’t set up. Open Settings.`;
   const vs = $("#sysVoice"); vs.className = "sys " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
   vs.title = !VS.up ? "VoiceStudio is not running" : VS.loaded ? "VoiceStudio ready" : "VoiceStudio is loading its voice model";
 }
@@ -120,6 +138,12 @@ const DAY = 864e5;
 const dayKey = d => { const x = new Date(d); return `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`; };
 const weekStart = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
 const roundName = k => (CAT && CAT.ROUNDS[k] && CAT.ROUNDS[k].name) || k;
+/* Round i of the current loop. A company loop keeps the company's own round names and lengths. */
+function loopRound(i){
+  const k = loop.setup.rounds[i];
+  const d = (loop.setup.dossierRounds || [])[i] || ((loop.setup.dossier || {}).process || [])[i];
+  return {key: k, name: d ? d.name : roundName(k), minutes: Number(loop.setup.minutes) || (d ? d.minutes : CAT.ROUNDS[k].min)};
+}
 const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 function ago(iso){
   const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / DAY);
@@ -368,22 +392,26 @@ function renderHighlights(skills){
 /* ---------------- setup ---------------- */
 const cfgFields = ["company","panel","level","lang","temper","resume","jd","extra","roundLen"];
 let PANELS = [];
+let MODE = "general";    // "general" or "company"
+let DOSSIERS = [];       // researched dossiers, newest first
+const DEFAULT_ROUNDS = ["resume", "coding", "sysdesign", "behavioral"];
 function fillSelect(sel, obj, label){ sel.innerHTML = Object.entries(obj).map(([k,v]) => `<option value="${esc(k)}">${esc(label(v))}</option>`).join(""); }
 
 function initSetup(){
   fillSelect($("#company"), CAT.COMPANIES, v => v.name);
   fillSelect($("#level"), CAT.LEVELS, v => v);
+  fillSelect($("#rqLevel"), CAT.LEVELS, v => v);
   $("#panel").innerHTML += PANELS.map(p => `<option value="${esc(p.id)}">${esc(p.name)} — the same five people every time</option>`).join("");
-  $("#roundList").innerHTML = Object.entries(CAT.ROUNDS).map(([k,r]) =>
-    `<button type="button" class="chip tile" data-round="${esc(k)}" aria-pressed="false" title="${esc(r.blurb)}"><span class="tile-ic">${icon(ROUND_ICONS[k] || "chat")}</span><span class="tile-tx"><b>${esc(r.name)}</b><span class="min">${r.min} min</span></span><span class="tile-check">${icon("check")}</span></button>`).join("");
-  const c = LS.get("onsite.cfg", {company:"auto", level:"sde2", lang:"Java", temper:"realistic", roundLen:"", rounds:["resume","coding","sysdesign","behavioral"]});
+  const c = LS.get("onsite.cfg", {company:"auto", level:"sde2", lang:"Java", temper:"realistic", roundLen:"", rounds:DEFAULT_ROUNDS});
   cfgFields.forEach(f => {
     const el = $("#"+f); if (c[f] == null) return;
     // A saved value the catalog no longer has would blank the select; keep the default instead.
     if (el.tagName === "SELECT" && ![...el.options].some(o => o.value === String(c[f]))) return;
     el.value = c[f];
   });
-  selectRounds(c.rounds || []);
+  $("#rqLevel").value = $("#level").value;
+  setMode(c.mode === "company" ? "company" : "general", false);
+  loadDossiers();
   renderPanelPeople();
   $("#panel").addEventListener("change", renderPanelPeople);
   $("#roundList").onclick = e => {
@@ -397,12 +425,71 @@ function initSetup(){
   hookDrop("#dropJd", "#jdFile", "#jd", "#jdMsg", "Job description");
 }
 function selectRounds(keys){ $$("#roundList .chip").forEach(b => b.setAttribute("aria-pressed", keys.includes(b.dataset.round))); }
-function selectedRounds(){ return $$('#roundList .chip[aria-pressed="true"]').map(b => b.dataset.round); }
+const pickedTiles = () => $$('#roundList .chip[aria-pressed="true"]');
+function selectedRounds(){ return pickedTiles().map(b => b.dataset.round); }
 function saveCfg(){
+  const old = LS.get("onsite.cfg", {});
   const c = {}; cfgFields.forEach(f => c[f] = $("#"+f).value);
-  c.rounds = selectedRounds();
+  c.mode = MODE;
+  c.dossier = $("#dossier").value || old.dossier || "";
+  // Company tiles are the dossier's rounds; keep the general picks for when they switch back.
+  c.rounds = MODE === "general" ? selectedRounds() : (old.rounds || []);
   LS.set("onsite.cfg", c);
 }
+
+/* ---- General vs Company-specific ---- */
+function setMode(m, save = true){
+  MODE = m;
+  $("#modeGeneral").setAttribute("aria-checked", m === "general");
+  $("#modeCompany").setAttribute("aria-checked", m === "company");
+  $("#companyField").hidden = m === "company";
+  $("#dossierField").hidden = m !== "company";
+  $("#roundsTitle").textContent = m === "company" ? "Rounds in this loop" : "Choose your rounds";
+  $("#roundsLede").textContent = m === "company" ? "As candidates reported them, in order. Untick any you want to skip." : "Pick the rounds you want to practise. They run in this order.";
+  renderTiles();
+  if (save) saveCfg();
+  renderAgenda();
+}
+$("#modeGeneral").onclick = () => setMode("general");
+$("#modeCompany").onclick = () => setMode("company");
+function currentDossier(){ return MODE === "company" ? DOSSIERS.find(d => d.id === $("#dossier").value) || null : null; }
+
+const tileHtml = (key, name, min, attrs) =>
+  `<button type="button" class="chip tile" data-round="${esc(key)}" data-name="${esc(name)}" data-min="${Number(min) || 45}" ${attrs} aria-pressed="false"><span class="tile-ic">${icon(ROUND_ICONS[key] || "chat")}</span><span class="tile-tx"><b>${esc(name)}</b><span class="min">${Number(min) || 45} min</span></span><span class="tile-check">${icon("check")}</span></button>`;
+function renderTiles(){
+  if (MODE === "general"){
+    $("#roundList").innerHTML = Object.entries(CAT.ROUNDS).map(([k,r]) => tileHtml(k, r.name, r.min, `title="${esc(r.blurb)}"`)).join("");
+    selectRounds(LS.get("onsite.cfg", {rounds: DEFAULT_ROUNDS}).rounds || []);
+    return;
+  }
+  const d = currentDossier();
+  $("#roundList").innerHTML = d
+    ? d.process.map((r, i) => tileHtml(r.type, r.name, r.minutes, `data-di="${i}" title="${esc(r.what || "")}"`)).join("")
+    : `<p class="hint">No dossier yet. <button type="button" class="linkbtn" data-nav="dossiers">Research a company</button> to get its real loop.</p>`;
+  $$("#roundList .chip").forEach(b => b.setAttribute("aria-pressed", "true"));
+}
+async function loadDossiers(){
+  try{ DOSSIERS = await api.invoke("list_dossiers"); }catch(e){ DOSSIERS = []; }
+  const sel = $("#dossier"), keep = sel.value || LS.get("onsite.cfg", {}).dossier;
+  sel.innerHTML = DOSSIERS.length
+    ? DOSSIERS.map(d => `<option value="${esc(d.id)}">${esc(d.company)} — ${esc(d.role)}</option>`).join("")
+    : `<option value="">No dossiers yet</option>`;
+  if (DOSSIERS.some(d => d.id === keep)) sel.value = keep;
+  sel.disabled = !DOSSIERS.length;
+  renderDossierHint();
+  if (MODE === "company"){ renderTiles(); renderAgenda(); }
+}
+function renderDossierHint(){
+  const d = DOSSIERS.find(x => x.id === $("#dossier").value);
+  $("#dossierHint").innerHTML = d
+    ? `${d.process.length} rounds · ${(d.sources || []).length} sources · researched ${esc(String(d.preparedAt || "").slice(0, 10))} · <button type="button" class="linkbtn" data-nav="dossiers">See it</button>`
+    : `<button type="button" class="linkbtn" data-nav="dossiers">Research a company</button> to make one.`;
+}
+$("#dossier").addEventListener("change", () => {
+  const d = currentDossier();
+  if (d && CAT.LEVELS[d.level]) $("#level").value = d.level;
+  renderDossierHint(); renderTiles();
+});
 const TEXT_FILE = /\.(txt|md|markdown|text)$/i;
 function hookDrop(dropSel, inputSel, textSel, msgSel, label){
   const drop = $(dropSel), input = $(inputSel), ta = $(textSel), msgEl = $(msgSel);
@@ -459,33 +546,40 @@ function renderPanelPeople(){
   const panel = PANELS.find(p => p.id === $("#panel").value);
   $("#panelPeople").textContent = panel ? panel.interviewers.map(iv => `${iv.name} (${iv.role})`).join(" · ") : "Names rotate. Pick a panel to meet the same people every time.";
 }
-function roundMinutes(k){ return Number($("#roundLen").value) || CAT.ROUNDS[k].min; }
+function tileMinutes(b){ return Number($("#roundLen").value) || Number(b.dataset.min); }
 
 function renderAgenda(){
   if (!CAT) return;
-  const rs = selectedRounds();
-  $$("#roundList .chip").forEach(b => b.querySelector(".min").textContent = `${roundMinutes(b.dataset.round)} min`);
-  $("#roundCount").textContent = rs.length ? `${rs.length} selected` : "";
-  if (!rs.length){
-    $("#agenda").innerHTML = `<li><span class="empty">Pick at least one round.</span></li>`;
+  $$("#roundList .chip").forEach(b => b.querySelector(".min").textContent = `${tileMinutes(b)} min`);
+  const on = pickedTiles();
+  $("#roundCount").textContent = on.length ? `${on.length} selected` : "";
+  if (!on.length){
+    const why = MODE === "company" && !currentDossier() ? "Pick a dossier first." : "Pick at least one round.";
+    $("#agenda").innerHTML = `<li><span class="empty">${why}</span></li>`;
     $("#duration").textContent = "—"; $("#startBtn").disabled = true; return;
   }
   $("#startBtn").disabled = starting;
-  const total = rs.reduce((a, k) => a + roundMinutes(k), 0);
+  const total = on.reduce((a, b) => a + tileMinutes(b), 0);
   $("#duration").textContent = total >= 60 ? `${Math.floor(total/60)} h${total%60 ? " " + total%60 + " min" : ""}` : `${total} min`;
-  $("#agenda").innerHTML = rs.map((k,i) => `<li><span class="n">${i+1}</span><div><b>${esc(CAT.ROUNDS[k].name)}</b><span>${roundMinutes(k)} min · with ${esc(persona(i))}</span></div></li>`).join("");
+  $("#agenda").innerHTML = on.map((b,i) => `<li><span class="n">${i+1}</span><div><b>${esc(b.dataset.name)}</b><span>${tileMinutes(b)} min · with ${esc(persona(i))}</span></div></li>`).join("");
 }
 
 $("#startBtn").onclick = async () => {
   const rounds = selectedRounds(); if (!rounds.length || starting) return;
   saveCfg();
+  const d = currentDossier(), on = pickedTiles();
   const setup = {
-    rounds, company: $("#company").value, level: $("#level").value, temperament: $("#temper").value,
-    lang: $("#lang").value, resume: $("#resume").value, jd: $("#jd").value, notes: $("#extra").value,
+    rounds, company: d ? "auto" : $("#company").value, level: $("#level").value, temperament: $("#temper").value,
+    lang: $("#lang").value, resume: $("#resume").value, jd: $("#jd").value.trim() || (d && d.jd) || "", notes: $("#extra").value,
     minutes: Number($("#roundLen").value) || null,
     panel: $("#panel").value,
+    // Company mode: Rust copies the dossier into the loop. The rest is for this screen only.
+    dossier_id: d ? d.id : "", dossier_rounds: d ? on.map(b => Number(b.dataset.di)) : [],
+    dossier_company: d ? d.company : "", dossierRounds: on.map(b => ({name: b.dataset.name, minutes: Number(b.dataset.min)})),
   };
   const btn = $("#startBtn"), m = $("#startMsg");
+  if (MODE === "company" && !d){ m.className = "form-msg err"; m.innerHTML = `Pick a dossier, or <button type="button" class="linkbtn" data-nav="dossiers">research a company</button> first.`; return; }
+  if (!aiReady()){ m.className = "form-msg err"; m.innerHTML = `Connect an AI model first. <button type="button" class="linkbtn" data-nav="settings" data-sec="models">Open Settings</button>`; return; }
   if (!words(setup.resume)){ m.className = "form-msg err"; m.textContent = "Add your resume. Every interview starts with a resume check."; return; }
   btn.disabled = true; btn.setAttribute("aria-busy", "true"); btn.classList.add("is-busy");
   m.className = "form-msg"; m.textContent = "Checking your resume…";
@@ -511,7 +605,10 @@ function notesTemplate(k){
 }
 /* "Indian fintech (Razorpay, …)" reads as "Indian fintech" in titles. */
 const shortName = n => /^inferred from jd$/i.test(String(n || "").trim()) ? "General" : String(n || "").replace(/\s*\(.*\)\s*$/, "");
-function companyLabel(setup){ return setup.company === "auto" ? "General" : shortName((CAT.COMPANIES[setup.company] || {}).name || setup.company); }
+function companyLabel(setup){
+  const dc = setup.dossier_company || (setup.dossier && setup.dossier.company);
+  if (dc) return dc;
+  return setup.company === "auto" ? "General" : shortName((CAT.COMPANIES[setup.company] || {}).name || setup.company); }
 function temperLabel(v){ const o = [...$("#temper").options].find(o => o.value === v); return o ? o.text.split(" —")[0] : v; }
 
 async function startRound(index){
@@ -526,17 +623,17 @@ async function openRoom(index){
   const who = interviewerFor(index, loop.setup.rounds[index], loop.setup.panel);
   const name = who.name;
   const voiceOn = !!(SETTINGS && SETTINGS.voice.enabled && VS.up);
-  const s = session = {roundId: null, index, key: k, persona: name, minutes: roundMinutes(k), startedAt: Date.now(),
+  const s = session = {roundId: null, index, key: k, name: loopRound(index).name, persona: name, minutes: loopRound(index).minutes, startedAt: Date.now(),
              shared: [], closed: false, busy: true, pendingEl: null, live: "", draftEl: null,
              voiceOn, muted: false, phase: "thinking", heldBase: null, fromHeld: false, transcribeT: null, abandoned: false};
   // The room fills in behind the loader, so the first question streams in while voice loads.
   openPrep(index, who);
   const comp = companyLabel(loop.setup);
   $("#roomIc").textContent = $("#ctxIc").textContent = comp[0];
-  $("#roomTitle").textContent = `${comp} — ${CAT.ROUNDS[k].name}`;
+  $("#roomTitle").textContent = `${comp} — ${s.name}`;
   $("#roomSub").textContent = `${CAT.LEVELS[loop.setup.level]} · ${s.minutes} minutes · round ${index+1} of ${loop.count} · with ${who.full ? `${who.full}, ${who.role}` : name}`;
   $("#ctxCompany").textContent = comp === "General" ? "General practice" : comp;
-  $("#ctxRound").textContent = CAT.ROUNDS[k].name;
+  $("#ctxRound").textContent = s.name;
   const codes = ["coding", "comprehension", "lld", "fundamentals"].includes(k);
   $("#ctxChips").innerHTML = [codes ? loop.setup.lang : null, temperLabel(loop.setup.temperament) + " interviewer", CAT.LEVELS[loop.setup.level]].filter(Boolean).map(x => `<span>${esc(x)}</span>`).join("");
   $("#tips").innerHTML = (TIPS[k] || []).map(t => `<li>${esc(t)}</li>`).join("");
@@ -592,7 +689,7 @@ function enterRoom(s){
 /* ---------------- preparing (between Get ready and the call) ---------------- */
 /* Every line is a real check reported by Rust (`prep` events); the call opens when they're done. */
 const PREP_STEPS = [
-  ["claude", "Claude Code"], ["question", "First question"],
+  ["claude", "AI model"], ["question", "First question"],
   ["voicestudio", "VoiceStudio"], ["voice", "Interviewer’s voice"],
   ["stt", "Live captions"], ["whisper", "Accurate transcript"],
   ["speaker", "Speaker"], ["mic", "Microphone"],
@@ -603,7 +700,7 @@ function openPrep(index, who){
   nav("prep");
   $("#prepIc").textContent = companyLabel(loop.setup)[0];
   $("#prepTitle").textContent = "Getting the room ready";
-  $("#prepSub").textContent = `${CAT.ROUNDS[loop.setup.rounds[index]].name} with ${who.full || who.name}. The call opens when everything below is ready.`;
+  $("#prepSub").textContent = `${loopRound(index).name} with ${who.full || who.name}. The call opens when everything below is ready.`;
   $("#prepList").innerHTML = PREP_STEPS.map(([id, name]) =>
     `<li class="wait" data-step="${id}"><i class="dot"></i><div><b>${esc(name)}</b><small></small></div><span>Waiting</span></li>`).join("");
   msg("#prepMsg", "");
@@ -1115,7 +1212,7 @@ async function endRound(){
   const pending = leaveRound();
   if (s.roundId === null){ nav("interviews"); return; }
   nav("report");
-  $("#repTitle").textContent = CAT.ROUNDS[s.key].name; $("#repSub").textContent = `With ${s.persona}`;
+  $("#repTitle").textContent = s.name || roundName(s.key); $("#repSub").textContent = `With ${s.persona}`;
   $("#repBody").innerHTML = `<div class="panel"><h2>Saving the round…</h2></div>`;
   if (await pending === false){
     toast("You didn’t answer anything, so the round wasn’t saved.");
@@ -1178,7 +1275,7 @@ function showSnippet(i){
 $("#sharedPick").onchange = e => showSnippet(Number(e.target.value));
 /* Rounds that are drawn (architecture, classes) open on the whiteboard; the catalog's "notes" tab
    means the text notes for talk-only rounds. Code shown by the interviewer opens the editor first. */
-const BOARD_ROUNDS = new Set(["project", "lld", "sysdesign", "wbtest"]); // wbtest: TEMP whiteboard test round
+const BOARD_ROUNDS = new Set(["project", "lld", "sysdesign"]);
 function startTab(k){
   const tab = CAT.ROUNDS[k].tab;
   return tab === "shared" ? "editor" : tab === "notes" && BOARD_ROUNDS.has(k) ? "board" : tab;
@@ -1339,7 +1436,7 @@ function renderUnreviewed(round, live, st, seq){
       <h2>Round saved</h2>
       <p class="muted">You gave ${st.answers} answers, ${st.words} words in all. ${hasNext ? "Go on to the next round, or stop here and get feedback on every round so far in one go." : "Get feedback on the whole interview: every round plus the committee decision, on one page."}</p>
       <div class="btn-row">
-        ${hasNext ? `<button class="btn primary" id="nextRound">Next: ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+        ${hasNext ? `<button class="btn primary" id="nextRound">Next: ${esc(loopRound(round.idx+1).name)}${icon("arrow")}</button>` : ""}
         <button class="btn ${hasNext ? "" : "primary"}" id="loopFb">${icon("sparkle")}${hasNext ? "Finish and get interview feedback" : "Get interview feedback"}</button>
         ${inLoop ? `<button class="btn ghost" id="retake">${icon("refresh")}Retake this round</button>` : ""}
         <button class="btn ghost" id="getFeedback">Feedback on this round only</button>
@@ -1391,7 +1488,7 @@ function renderNothing(round, live, st, detail){
         : esc(detail || "The panel needs more of your answers to judge.")} No feedback was generated.</p>
       <div class="btn-row">
         ${inLoop ? `<button class="btn primary" id="retake">${icon("refresh")}Retake this round</button>` : ""}
-        ${hasNext ? `<button class="btn" id="nextRound">Skip to ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+        ${hasNext ? `<button class="btn" id="nextRound">Skip to ${esc(loopRound(round.idx+1).name)}${icon("arrow")}</button>` : ""}
         ${inLoop && round.idx > 0 ? `<button class="btn" id="loopFb">${icon("sparkle")}Get interview feedback</button>` : ""}
         <button class="btn ${inLoop ? "ghost" : "primary"}" data-nav="${inLoop ? "interviews" : "feedback"}">${icon("back")}Back</button>
       </div>
@@ -1465,7 +1562,7 @@ function bindTranscripts(root){
 function renderReport(round, r, live){
   const {inLoop, hasNext} = loopButtons(round, live);
   const actions = `
-    ${hasNext ? `<button class="btn primary" id="nextRound">Next round: ${esc(CAT.ROUNDS[loop.setup.rounds[round.idx+1]].name)}${icon("arrow")}</button>` : ""}
+    ${hasNext ? `<button class="btn primary" id="nextRound">Next round: ${esc(loopRound(round.idx+1).name)}${icon("arrow")}</button>` : ""}
     ${inLoop && loop.count > 1 ? `<button class="btn ${hasNext ? "" : "primary"}" id="loopFb">${icon("scale")}${hasNext ? "Finish and get interview feedback" : "Get interview feedback"}</button>` : ""}
     ${inLoop ? `<button class="btn" id="retake">${icon("refresh")}Retake this round</button>` : ""}`;
   $("#repBody").innerHTML = reportHtml(round, r, actions);
@@ -1538,7 +1635,7 @@ function renderInterview(fb, focus){
   const live = loop && loop.id === fb.loop_id;
   // Retakes add rows with the same idx, so the next round follows the highest one played.
   const next = live ? Math.max(-1, ...rounds.map(r => r.round.idx)) + 1 : -1;
-  const nextBtn = live && next < loop.count ? `<div class="btn-row"><button class="btn primary" id="ifNext">Next round: ${esc(CAT.ROUNDS[loop.setup.rounds[next]].name)}${icon("arrow")}</button></div>` : "";
+  const nextBtn = live && next < loop.count ? `<div class="btn-row"><button class="btn primary" id="ifNext">Next round: ${esc(loopRound(next).name)}${icon("arrow")}</button></div>` : "";
   $("#repBody").innerHTML = `<div class="stack">${verdict}${overview}${nextBtn}${sections}</div>`;
   bindTranscripts($("#repBody"));
   bindStart("#ifNext", next);
@@ -1756,6 +1853,141 @@ function renderAiScreen(s, err){
     </div>`;
 }
 
+/* ---------------- dossiers and research ---------------- */
+const RESEARCH_STEPS = ["Reading your request", "Finding the current process", "Collecting candidate reports",
+  "Pulling out each round’s questions", "Values and interviewer style", "Building the dossier"];
+let JOBS = [];           // research jobs, newest first (Rust JobView)
+let dsOpen = null;       // dossier shown in detail
+async function renderDossiersView(){
+  await loadDossiers();
+  try{ JOBS = await api.invoke("research_jobs"); }catch(e){ JOBS = []; }
+  renderDossierList(); renderDossierDetail(); renderJobs();
+}
+function renderDossierList(){
+  const el = $("#dossierList");
+  if (!DOSSIERS.length){ el.innerHTML = `<p class="muted small">No dossiers yet. Research a company, or import a dossier file a friend shared.</p>`; return; }
+  el.innerHTML = DOSSIERS.map(d => `<button class="row-item" data-ds="${esc(d.id)}" aria-pressed="${d.id === dsOpen}">
+    <span class="row-ic">${esc((d.company || "?")[0])}</span>
+    <span class="row-tx"><b>${esc(d.company)} — ${esc(d.role)}</b><span>${esc([CAT.LEVELS[d.level] || d.level, `${d.process.length} rounds`, `${(d.sources || []).length} sources`, String(d.preparedAt || "").slice(0, 10)].filter(Boolean).join(" · "))}</span></span>
+    ${icon("arrow")}</button>`).join("");
+}
+$("#dossierList").onclick = e => {
+  const b = e.target.closest("[data-ds]"); if (!b) return;
+  dsOpen = dsOpen === b.dataset.ds ? null : b.dataset.ds;
+  renderDossierList(); renderDossierDetail();
+  if (dsOpen) $("#dossierDetail").scrollIntoView({behavior: "smooth", block: "nearest"});
+};
+function renderDossierDetail(){
+  const d = DOSSIERS.find(x => x.id === dsOpen), el = $("#dossierDetail");
+  el.hidden = !d; if (!d) return;
+  const list = xs => `<ul>${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  el.innerHTML = `<div class="panel-head"><h2>${esc(d.company)} — ${esc(d.role)}</h2><div class="ds-actions">
+      <button class="btn primary sm" data-ds-act="use">${icon("play")}Use</button>
+      <button class="btn ghost sm" data-ds-act="export">${icon("download")}Export</button>
+      <button class="btn ghost danger sm" data-ds-act="delete" aria-label="Delete dossier">${icon("trash")}</button></div></div>
+    <div class="ds-body">
+      <p>${esc(d.summary)}</p>
+      <h3>How they interview</h3><p>${esc(d.style)}</p>
+      ${d.values ? `<h3>Values</h3><p>${esc(d.values)}</p>` : ""}
+      <h3>Rounds</h3>
+      ${d.process.map(r => `<div class="ds-round"><b>${esc(r.name)}</b> <span class="muted small">· ${r.minutes} min · ${esc(roundName(r.type))}</span>
+        ${r.what ? `<p>${esc(r.what)}</p>` : ""}${(r.questions || []).length ? list(r.questions) : ""}</div>`).join("")}
+      ${(d.pitfalls || []).length ? `<h3>Where people fail</h3>${list(d.pitfalls)}` : ""}
+      ${(d.sources || []).length ? `<h3>Sources</h3><ul class="ds-sources">${d.sources.map(x => `<li>${esc(x.title ? `${x.title} — ${x.url}` : x.url)}</li>`).join("")}</ul>` : ""}
+    </div>`;
+}
+function useDossier(id){
+  setMode("company");
+  $("#dossier").value = id;
+  $("#dossier").dispatchEvent(new Event("change", {bubbles: true}));
+  nav("interviews");
+}
+$("#dossierDetail").onclick = async e => {
+  const b = e.target.closest("[data-ds-act]"), d = DOSSIERS.find(x => x.id === dsOpen);
+  if (!b || !d) return;
+  const act = b.dataset.dsAct;
+  try{
+    if (act === "use") useDossier(d.id);
+    if (act === "export") toast(`Saved to ${await api.invoke("export_dossier", {id: d.id})}. Send it to a friend to import.`);
+    if (act === "delete"){
+      if (!await ask(`Delete the ${d.company} dossier?`, "Past interviews that used it keep their copy.", "Delete", true)) return;
+      await api.invoke("delete_dossier", {id: d.id});
+      dsOpen = null; renderDossiersView();
+    }
+  }catch(err){ toast(errText(err), "err"); }
+};
+$("#dsImport").onclick = () => $("#dsFile").click();
+$("#dsFile").onchange = async () => {
+  const f = $("#dsFile").files[0]; $("#dsFile").value = ""; if (!f) return;
+  try{
+    const d = await api.invoke("import_dossier", {text: await f.text()});
+    toast(`Imported ${d.company} — ${d.role}.`);
+    dsOpen = d.id; renderDossiersView();
+  }catch(e){ toast(errText(e), "err"); }
+};
+$("#rqForm").onsubmit = async e => {
+  e.preventDefault();
+  const request = {company: $("#rqCompany").value.trim(), role: $("#rqRole").value.trim(), level: $("#rqLevel").value, jd: $("#rqJd").value.trim()};
+  if (!request.company || !request.role){ msg("#rqMsg", "Name the company and the role.", "err"); (request.company ? $("#rqRole") : $("#rqCompany")).focus(); return; }
+  if (!aiReady()){ msg("#rqMsg", `Connect an AI model first. <button type="button" class="linkbtn" data-nav="settings" data-sec="models">Open Settings</button>`, "err"); return; }
+  const b = $("#rqStart"); b.disabled = true;
+  try{
+    await api.invoke("research_start", {request});
+    msg("#rqMsg", "Started. Progress shows below.", "ok");
+    ["#rqCompany", "#rqRole", "#rqJd"].forEach(sel => $(sel).value = "");
+    JOBS = await api.invoke("research_jobs"); renderJobs();
+  }catch(err){ msg("#rqMsg", esc(errText(err)), "err"); }
+  finally{ b.disabled = false; }
+};
+function jobCard(j){
+  const r = j.request || {}, live = j.live || {};
+  const title = `${esc(r.company || "?")} — ${esc(r.role || "")}`;
+  const log = j.log && j.log.trim() ? `<pre class="job-log">${esc(j.log.trim())}</pre>` : "";
+  if (j.status === "running"){
+    const stage = Math.max(1, Math.min(6, live.stage || 1));
+    const pct = Math.max(3, Math.min(99, j.progress || Math.round((stage - 1) / 6 * 100)));
+    const tally = live.searches || live.reads ? `${live.searches} searches · ${live.reads} pages read` : "";
+    return `<div class="panel" data-job="${j.id}">
+      <div class="job-head"><span class="spinner" aria-hidden="true"></span><b>Researching ${title}</b><span class="pct">${pct}%</span></div>
+      <div class="pbar" role="progressbar" aria-label="Research progress" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+      <ul class="job-steps">${RESEARCH_STEPS.map((x, i) => `<li class="${i + 1 < stage ? "done" : i + 1 === stage ? "now" : ""}"><i class="dot"></i>${esc(x)}</li>`).join("")}</ul>
+      <p class="job-meta">${esc([live.note, tally, `started ${ago(j.created_at)}`].filter(Boolean).join(" · "))}</p>
+      ${log}
+      <div class="btn-row"><button class="btn ghost sm" data-job-act="cancel">Cancel</button></div></div>`;
+  }
+  const done = j.status === "done";
+  const pill = done ? `<span class="pill ok">Ready</span>` : j.status === "cancelled" ? `<span class="pill">Cancelled</span>` : `<span class="pill bad">Stopped</span>`;
+  const btns = done && j.dossier_id
+    ? `<button class="btn primary sm" data-job-act="use">${icon("play")}Use this dossier</button>`
+    : `<button class="btn sm" data-job-act="retry">${icon("refresh")}Try again</button>`;
+  return `<div class="panel" data-job="${j.id}"><div class="job-head"><b>${title}</b>${pill}</div>${log}
+    <div class="btn-row">${btns}<button class="btn ghost sm" data-job-act="dismiss">Dismiss</button></div></div>`;
+}
+function renderJobs(){
+  $("#jobList").innerHTML = JOBS.map(jobCard).join("");
+  $$("#jobList .job-log").forEach(p => p.scrollTop = p.scrollHeight);
+}
+$("#jobList").onclick = async e => {
+  const b = e.target.closest("[data-job-act]"); if (!b) return;
+  const id = Number(b.closest("[data-job]").dataset.job), j = JOBS.find(x => x.id === id);
+  try{
+    if (b.dataset.jobAct === "cancel") await api.invoke("research_cancel", {id});
+    if (b.dataset.jobAct === "retry") await api.invoke("research_retry", {id});
+    if (b.dataset.jobAct === "dismiss") await api.invoke("research_dismiss", {id});
+    if (b.dataset.jobAct === "use" && j) return useDossier(j.dossier_id);
+    JOBS = await api.invoke("research_jobs"); renderJobs();
+  }catch(err){ toast(errText(err), "err"); }
+};
+api.listen("research", j => {
+  const i = JOBS.findIndex(x => x.id === j.id);
+  if (i < 0) JOBS.unshift(j); else JOBS[i] = j;
+  if (!$("#view-dossiers").hidden) renderJobs();
+  const who = (j.request || {}).company || "The";
+  if (j.status === "done") toast(`${who} dossier is ready.`);
+  if (j.status === "failed") toast(`Research on ${who} stopped. See Dossiers.`, "err");
+});
+api.listen("dossiers_changed", () => { if (!$("#view-dossiers").hidden) renderDossiersView(); else loadDossiers(); });
+
 /* ---------------- settings ---------------- */
 const describe = loc => !loc ? "Not found yet" : loc.kind === "windows" ? loc.exe : "WSL: claude";
 async function renderSettings(){
@@ -1763,8 +1995,7 @@ async function renderSettings(){
   const s = SETTINGS;
   if (!s){ msg("#saveMsg", "Couldn’t load settings. Restart Onsite.", "err"); return; }
   $("#clPath").textContent = describe(s.claude);
-  const cp = $("#clPill"); cp.className = "pill " + (s.claude ? "ok" : "bad"); cp.textContent = s.claude ? "Found" : "Not found";
-  $("#ivModel").value = s.interviewer_model; $("#repModel").value = s.report_model;
+  renderAi();
   $("#vEnabled").checked = s.voice.enabled;
   $("#vSteps").value = String(s.voice.steps); $("#vSpeed").value = String(s.voice.speed); $("#vPause").value = String(s.voice.pause_ms);
   const vp = $("#vsPill");
@@ -1772,6 +2003,7 @@ async function renderSettings(){
   vp.textContent = !VS.up ? "Not running" : VS.loaded ? "Ready" : "Loading voice model";
   $("#vsInfo").textContent = VS.up ? `VoiceStudio is running${VS.device ? " on " + VS.device : ""}. It speaks for the interviewer and transcribes your answers, locally.` : "VoiceStudio isn’t running. Interviews fall back to typing until it is.";
   $("#vsLaunchRow").hidden = VS.up || !VS.installed;
+  $("#vsVer").textContent = VS.version ? `${VS.version}${VS.up ? "" : " (installed, not running)"}` : (VS.installed ? "Installed" : "Not installed");
   // Only real profiles: VoiceStudio's "default" is a random speaker on every call.
   const profiles = VS.profiles || [];
   let saved = s.voice.voice;
@@ -1798,6 +2030,274 @@ async function renderSettings(){
   if (!saved && profiles.length) saveSettings();
   setTesting(false);
 }
+/* ---- sections ---- */
+let SET_SEC = LS.get("onsite.setSec", "appearance");
+function setSection(sec){
+  if (!$(`.set-sec[data-sec="${sec}"]`)) sec = "appearance";
+  SET_SEC = sec; LS.set("onsite.setSec", sec);
+  $$(".set-sec").forEach(x => x.hidden = x.dataset.sec !== sec);
+  $$("#setNav button").forEach(b => b.dataset.sec === sec ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  $("#saveMsg").hidden = !["models", "voice"].includes(sec);
+  if (sec === "appearance") renderAppearance();
+  if (sec === "voice") renderPersonas();
+  if (sec === "updates") renderUpdates();
+  if (sec === "storage") renderStorage();
+}
+$("#setNav").onclick = e => { const b = e.target.closest("button[data-sec]"); if (b) setSection(b.dataset.sec); };
+
+/* ---- appearance ---- */
+/* Swatches are the themes' own palette colors (bg, panel, accent, text), as in themes.css. */
+const THEMES = {
+  onsite:     {name: "Onsite",     dark: ["#16122b", "#221d3d", "#8b5cf6", "#f3f0ff"], light: ["#f3f1fa", "#ffffff", "#6a3de8", "#1c1633"]},
+  catppuccin: {name: "Catppuccin", dark: ["#1e1e2e", "#313244", "#cba6f7", "#cdd6f4"], light: ["#eff1f5", "#f9fafb", "#8839ef", "#4c4f69"]},
+  rosepine:   {name: "Rosé Pine",  dark: ["#191724", "#26233a", "#c4a7e7", "#e0def4"], light: ["#faf4ed", "#fffaf3", "#907aa9", "#575279"]},
+  gruvbox:    {name: "Gruvbox",    dark: ["#282828", "#3c3836", "#fe8019", "#ebdbb2"], light: ["#fbf1c7", "#f9f5d7", "#af3a03", "#3c3836"]},
+};
+function renderAppearance(){
+  const t = OnsiteTheme.read();
+  const sw = ([bg, panel, accent, ink]) => `<span style="background:${bg}"><i style="background:${accent}"></i><i style="background:${ink}; opacity:.55"></i><i style="background:${panel}"></i></span>`;
+  $("#themeGrid").innerHTML = Object.entries(THEMES).map(([k, v]) =>
+    `<button class="theme-card" role="radio" aria-checked="${t.family === k}" data-family="${k}"><span class="theme-sw">${sw(v.light)}${sw(v.dark)}</span><b>${esc(v.name)}</b></button>`).join("");
+  $$("#modeSeg button").forEach(b => b.setAttribute("aria-checked", b.dataset.mode === t.mode));
+  $("#bgClear").hidden = !t.image; $("#bgDimField").hidden = !t.image;
+  $("#bgDim").value = t.dim; $("#bgDimVal").textContent = `${t.dim}%`;
+}
+function saveTheme(patch){ OnsiteTheme.save({...OnsiteTheme.read(), ...patch}); renderAppearance(); }
+$("#themeGrid").onclick = e => { const b = e.target.closest("[data-family]"); if (b) saveTheme({family: b.dataset.family}); };
+$("#modeSeg").onclick = e => { const b = e.target.closest("[data-mode]"); if (b) saveTheme({mode: b.dataset.mode}); };
+$("#bgDim").addEventListener("input", () => {
+  const dim = Number($("#bgDim").value);
+  $("#bgDimVal").textContent = `${dim}%`;
+  OnsiteTheme.save({...OnsiteTheme.read(), dim});
+});
+$("#bgPick").onclick = () => $("#bgFile").click();
+/* Shrinks the picture to at most 2560×1600 JPEG before it goes to Rust, so it stays small. */
+function shrinkImage(file){
+  return new Promise((ok, fail) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 2560 / img.naturalWidth, 1600 / img.naturalHeight);
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); fail("That file isn’t an image Onsite can read. Use a JPG, PNG or WebP."); };
+    img.src = url;
+  });
+}
+$("#bgFile").onchange = async () => {
+  const f = $("#bgFile").files[0]; $("#bgFile").value = ""; if (!f) return;
+  msg("#bgMsg", "Saving…");
+  try{
+    const data = await shrinkImage(f);
+    await api.invoke("set_backdrop", {data});
+    OnsiteTheme.setImage(data);
+    saveTheme({image: true});
+    msg("#bgMsg", "");
+  }catch(e){ msg("#bgMsg", esc(errText(e)), "err"); }
+};
+$("#bgClear").onclick = async () => {
+  try{ await api.invoke("clear_backdrop"); OnsiteTheme.setImage(null); saveTheme({image: false}); }
+  catch(e){ msg("#bgMsg", esc(errText(e)), "err"); }
+};
+
+/* ---- interviewers ---- */
+function renderPersonas(){
+  const el = $("#personaGrid");
+  if (!PANELS.length){ el.innerHTML = `<p class="muted small">No interviewer panels found.</p>`; return; }
+  const dots = n => `<span class="strict" title="Strictness ${n} of 5">${[1,2,3,4,5].map(i => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>`;
+  el.innerHTML = PANELS.map(p => `<div class="persona-panel"><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p><div class="persona-grid">${p.interviewers.map(iv => `
+    <article class="persona" data-person="${esc(iv.id)}">
+      <div class="persona-top"><span class="persona-av">${esc(iv.name.split(" ").map(w => w[0]).join("").slice(0, 2))}</span>
+        <div><b>${esc(iv.name)}</b><small>${esc(iv.role)}</small></div></div>
+      <div class="traits">${iv.traits.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+      <p title="${esc(iv.backstory)}">${esc(iv.backstory || iv.style)}</p>
+      <div class="meta">Strictness ${dots(iv.strictness)}<br>${iv.rounds.length ? `Runs: ${esc(iv.rounds.map(roundName).join(", "))}<br>` : ""}Voice: ${esc(iv.voice)}</div>
+      <button class="btn sm" data-play="${esc(iv.id)}">${icon("speaker")}Play voice</button>
+    </article>`).join("")}</div></div>`).join("");
+}
+$("#personaGrid").onclick = async e => {
+  const b = e.target.closest("[data-play]"); if (!b || b.disabled) return;
+  const label = b.innerHTML;
+  b.disabled = true; b.classList.add("is-busy"); b.lastChild.textContent = "Loading voice…";
+  try{ await api.invoke("voice_persona_preview", {id: b.dataset.play}); }
+  catch(err){ toast(errText(err), "err"); }
+  finally{ b.disabled = false; b.classList.remove("is-busy"); b.innerHTML = label; }
+};
+
+/* ---- updates ---- */
+const fmtBytes = n => n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : n >= 1e3 ? `${Math.round(n / 1e3)} KB` : `${n} B`;
+let UPDATES = null;
+async function renderUpdates(){
+  try{ $("#upCurrent").textContent = `v${await api.invoke("app_version")}`; }catch(e){}
+  if (UPDATES) drawReleases();
+}
+function drawReleases(){
+  const u = UPDATES;
+  $("#upLatest").textContent = u.latest || (u.releases.length ? "You have the newest" : "No releases yet");
+  const pill = $("#upPill");
+  pill.className = "pill " + (u.latest ? "warn" : "ok"); pill.textContent = u.latest ? "Update available" : "Up to date";
+  const ib = $("#upInstall");
+  ib.hidden = !u.latest; ib.dataset.tag = u.latest || ""; ib.innerHTML = `${icon("download")}Update to ${esc(u.latest || "")}`;
+  $("#upList").innerHTML = u.releases.length ? u.releases.map(r => {
+    const tagLine = [r.compared === 0 ? `<span class="pill ok">This version</span>` : "", r.prerelease ? `<span class="pill">Pre-release</span>` : ""].join(" ");
+    const action = r.compared === 0 ? "" : !r.installer ? `<span class="muted small">No Windows installer</span>`
+      : `<button class="btn ${r.compared > 0 ? "" : "ghost"} sm" data-install="${esc(r.tag)}">${r.compared > 0 ? "Install" : "Downgrade"}</button>`;
+    return `<div class="ver-row"><div><b>${esc(r.name)}</b> ${tagLine}<br><small>${esc([r.tag !== r.name ? r.tag : "", r.published_at.slice(0, 10), r.size ? fmtBytes(r.size) : ""].filter(Boolean).join(" · "))}</small></div>${action}
+      ${r.notes.trim() ? `<details><summary>Release notes</summary><pre>${esc(r.notes.trim())}</pre></details>` : ""}</div>`;
+  }).join("") : `<p class="muted small">No versions have been published yet.</p>`;
+}
+$("#upCheck").onclick = async () => {
+  const b = $("#upCheck"); b.disabled = true; b.classList.add("is-busy");
+  msg("#upMsg", "Asking GitHub…");
+  const [app, vs] = await Promise.allSettled([api.invoke("check_updates"), api.invoke("voicestudio_version")]);
+  if (app.status === "fulfilled"){ UPDATES = app.value; drawReleases(); msg("#upMsg", ""); }
+  else msg("#upMsg", esc(errText(app.reason)), "err");
+  if (vs.status === "fulfilled"){
+    const v = vs.value, p = $("#vsUpPill");
+    $("#vsInstalled").textContent = v.installed ? `${v.installed}${v.running ? "" : " (not running)"}` : "Not found";
+    $("#vsLatest").textContent = v.latest ? `${v.latest}${v.latest_date ? ` · ${v.latest_date.slice(0, 10)}` : ""}` : (v.note || "Unknown");
+    p.className = "pill " + (v.update_available ? "warn" : v.installed ? "ok" : "bad");
+    p.textContent = v.update_available ? "Update in VoiceStudio" : v.installed ? "Up to date" : "Not installed";
+    $("#vsUpNote").textContent = v.update_available
+      ? `VoiceStudio ${v.latest} is out. Update it from VoiceStudio itself; Onsite doesn’t install it.`
+      : "Onsite doesn’t update VoiceStudio. When there’s a new version, update it from VoiceStudio itself.";
+  }
+  b.disabled = false; b.classList.remove("is-busy");
+};
+async function installVersion(tag){
+  const r = UPDATES && UPDATES.releases.find(x => x.tag === tag);
+  const older = r && r.compared < 0;
+  if (!await ask(older ? `Go back to ${tag}?` : `Update to ${tag}?`,
+    `Onsite downloads the installer from GitHub${r && r.size ? ` (${fmtBytes(r.size)})` : ""}, then closes so it can run. Your data stays.${older ? " An older version may not read data saved by this one." : ""}`,
+    older ? "Downgrade" : "Update")) return;
+  $("#upBar").hidden = false; $("#upBar i").style.width = "0%";
+  msg("#upMsg", "Downloading…");
+  $$("[data-install], #upInstall, #upCheck").forEach(x => x.disabled = true);
+  try{ await api.invoke("install_update", {tag}); msg("#upMsg", "Starting the installer. Onsite will close.", "ok"); }
+  catch(e){ msg("#upMsg", esc(errText(e)), "err"); $("#upBar").hidden = true; }
+  finally{ $$("[data-install], #upInstall, #upCheck").forEach(x => x.disabled = false); }
+}
+$("#upInstall").onclick = () => installVersion($("#upInstall").dataset.tag);
+$("#upList").onclick = e => { const b = e.target.closest("[data-install]"); if (b) installVersion(b.dataset.install); };
+api.listen("update_progress", p => {
+  const pct = p.total ? Math.round(p.received / p.total * 100) : 0;
+  $("#upBar i").style.width = `${pct}%`; $("#upBar").setAttribute("aria-valuenow", pct);
+  msg("#upMsg", `Downloading ${p.tag}… ${fmtBytes(p.received)}${p.total ? ` of ${fmtBytes(p.total)}` : ""}`);
+});
+
+/* ---- storage ---- */
+let STORAGE = null;
+async function renderStorage(){
+  try{ STORAGE = await api.invoke("storage_info"); }
+  catch(e){ $("#stItems").innerHTML = `<p class="form-msg err">${esc(errText(e))}</p>`; return; }
+  const st = STORAGE, c = st.counts;
+  $("#stTotal").textContent = `Onsite uses ${fmtBytes(st.total)}`;
+  $("#stCounts").innerHTML = [[c.rounds, "rounds"], [c.reports, "with feedback"], [c.loops, "interviews"], [c.dossiers, "dossiers"], [c.research_jobs, "research jobs"]]
+    .map(([n, l]) => `<span><b>${n}</b> ${l}</span>`).join("") + (c.oldest_round ? `<span>Oldest round <b>${esc(c.oldest_round.slice(0, 10))}</b></span>` : "");
+  $("#stItems").innerHTML = st.items.map(i => `<div class="st-item${i.ours ? "" : " theirs"}"><b>${esc(i.label)}</b><span class="size">${fmtBytes(i.bytes)}</span><small>${esc(i.note)} · ${esc(i.path)}</small></div>`).join("");
+  $("#stKeepRounds").value = String(st.limits.keep_rounds);
+  $("#stKeepDays").value = String(st.limits.keep_days);
+  $("#stLogMax").value = String(st.limits.log_max_mb);
+  // A saved value that isn't in the list (set elsewhere) still shows.
+  [["#stKeepRounds", st.limits.keep_rounds, "rounds"], ["#stKeepDays", st.limits.keep_days, "days"], ["#stLogMax", st.limits.log_max_mb, "MB"]].forEach(([sel, v, unit]) => {
+    if ($(sel).value !== String(v)){ $(sel).insertAdjacentHTML("beforeend", `<option value="${v}">${v} ${unit}</option>`); $(sel).value = String(v); }
+  });
+}
+$("#stSave").onclick = async () => {
+  const limits = {keep_rounds: Number($("#stKeepRounds").value), keep_days: Number($("#stKeepDays").value), log_max_mb: Number($("#stLogMax").value)};
+  if ((limits.keep_rounds || limits.keep_days) && !await ask("Apply these limits?", "Finished rounds past them are deleted now, with their transcripts and feedback. This can’t be undone.", "Apply", true)) return;
+  try{
+    const n = await api.invoke("set_storage_limits", {limits});
+    msg("#stMsg", n ? `Saved. Deleted ${n} old round${n === 1 ? "" : "s"}.` : "Saved. Nothing needed deleting.", "ok");
+    renderStorage();
+  }catch(e){ msg("#stMsg", esc(errText(e)), "err"); }
+};
+async function cleanUp(cmd, done){
+  try{ const r = await api.invoke(cmd); msg("#stCleanMsg", done(r), "ok"); renderStorage(); }
+  catch(e){ msg("#stCleanMsg", esc(errText(e)), "err"); }
+}
+$("#stClearLog").onclick = () => cleanUp("clear_log", () => "Log cleared.");
+$("#stClearTemp").onclick = () => cleanUp("clear_temp", n => `Freed ${fmtBytes(n)}.`);
+$("#stVacuum").onclick = () => cleanUp("vacuum_db", () => "Database compacted.");
+$("#view-settings").addEventListener("click", async e => {
+  const b = e.target.closest("[data-open]"); if (!b) return;
+  try{ await api.invoke("open_folder", {which: b.dataset.open}); }catch(err){ toast(errText(err), "err"); }
+});
+
+/* ---- AI model ---- */
+const CLI_MODELS = {
+  iv: [["sonnet", "Sonnet — fast replies"], ["opus", "Opus — sharper, slower"], ["haiku", "Haiku — fastest, lighter"]],
+  rep: [["opus", "Opus — best judgment"], ["sonnet", "Sonnet — faster"]],
+};
+const MODELS = {};       // provider → model ids from its API
+function renderAi(){
+  const p = provider(), info = PROVIDERS[p], cli = p === "claude_code";
+  $$("#aiPicks .ai-pick").forEach(b => b.setAttribute("aria-checked", b.dataset.provider === p));
+  $("#aiCli").hidden = !cli; $("#aiKey").hidden = cli;
+  if (!cli){
+    $("#aiKeyLabel").textContent = info.key;
+    $("#aiKeyHint").textContent = info.hint;
+    $("#aiKeyInput").placeholder = AIKEYS[p] ? "Saved. Paste a new key to replace it." : "Paste your key";
+    $("#aiKeyRemove").hidden = !AIKEYS[p];
+  }
+  const cp = $("#clPill"), ok = aiReady();
+  cp.className = "pill " + (ok ? "ok" : "bad");
+  cp.textContent = cli ? (ok ? "Found" : "Not found") : (ok ? "Key saved" : "No key");
+  fillModels(false);
+}
+async function fillModels(fresh){
+  const p = provider();
+  let iv, rep;
+  if (p === "claude_code"){ iv = CLI_MODELS.iv; rep = CLI_MODELS.rep; $("#aiModelHint").textContent = ""; }
+  else {
+    if (AIKEYS[p] && (fresh || !MODELS[p])){
+      try{ MODELS[p] = await api.invoke("list_models"); $("#aiModelHint").textContent = ""; }
+      catch(e){ $("#aiModelHint").textContent = `Couldn’t list models: ${errText(e)}`; }
+    } else if (!AIKEYS[p]) $("#aiModelHint").textContent = "Save a key to see the models it can use.";
+    if (provider() !== p) return;
+    const label = id => (PROVIDERS[p].models || {})[id] || id;
+    iv = rep = (MODELS[p] || []).map(id => [id, label(id)]);
+  }
+  const put = (sel, opts, cur) => {
+    if (cur && !opts.some(o => o[0] === cur)) opts = [[cur, (PROVIDERS[p].models || {})[cur] || cur], ...opts];
+    sel.innerHTML = opts.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+    sel.value = cur;
+  };
+  put($("#ivModel"), iv, SETTINGS.interviewer_model);
+  put($("#repModel"), rep, SETTINGS.report_model);
+}
+$("#aiPicks").onclick = async e => {
+  const b = e.target.closest(".ai-pick"); if (!b || b.dataset.provider === provider()) return;
+  try{
+    SETTINGS = await api.invoke("set_provider", {provider: b.dataset.provider});
+    msg("#clResult", "");
+    renderAi(); refreshStatus();
+    if (b.dataset.provider === "claude_code" && !SETTINGS.claude) $("#clDetect").click();
+    else if (b.dataset.provider !== "claude_code" && !AIKEYS[b.dataset.provider]) $("#aiKeyInput").focus();
+  }catch(e){ toast(errText(e), "err"); }
+};
+async function saveKey(key){
+  const p = provider();
+  try{
+    await api.invoke("set_api_key", {provider: p, key});
+    $("#aiKeyInput").value = "";
+    AIKEYS[p] = !!key; delete MODELS[p];
+    renderAi(); refreshStatus();
+    if (key){ msg("#clResult", "Key saved. Run the health check to test it.", "ok"); fillModels(true); }
+    else msg("#clResult", "Key removed.");
+  }catch(e){ msg("#clResult", esc(errText(e)), "err"); }
+}
+$("#aiKeySave").onclick = () => {
+  const key = $("#aiKeyInput").value.trim();
+  if (!key){ msg("#clResult", "Paste the key first.", "err"); $("#aiKeyInput").focus(); return; }
+  saveKey(key);
+};
+$("#aiKeyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#aiKeySave").click(); });
+$("#aiKeyRemove").onclick = () => saveKey("");
+
 function formVoice(){
   return {...SETTINGS.voice, enabled: $("#vEnabled").checked, voice: $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
 }
@@ -1840,7 +2340,7 @@ $("#clSavePath").onclick = async () => {
 };
 $("#clHealth").onclick = async () => {
   const b = $("#clHealth"); b.disabled = true; b.classList.add("is-busy");
-  msg("#clResult", "Asking Claude to reply with OK…");
+  msg("#clResult", `Asking ${esc(PROVIDERS[provider()].name)} to reply with OK…`);
   try{
     const h = await api.invoke("health_check");
     msg("#clResult", `${h.ok ? "Working" : "Unexpected reply"} · “${esc(h.reply)}” · ${(h.latency_ms/1000).toFixed(1)} s · ${esc(h.model)} · ${esc(h.location)}`, h.ok ? "ok" : "err");
@@ -1955,8 +2455,8 @@ async function openReady(index){
   const who = interviewerFor(index, k, loop.setup.panel);
   const comp = companyLabel(loop.setup);
   $("#readyIc").textContent = comp[0];
-  $("#readyRound").textContent = `${comp} — ${CAT.ROUNDS[k].name}`;
-  $("#readyWho").textContent = `Round ${index+1} of ${loop.count} · ${roundMinutes(k)} minutes · with ${who.full ? `${who.full}, ${who.role}` : who.name}`;
+  $("#readyRound").textContent = `${comp} — ${loopRound(index).name}`;
+  $("#readyWho").textContent = `Round ${index+1} of ${loop.count} · ${loopRound(index).minutes} minutes · with ${who.full ? `${who.full}, ${who.role}` : who.name}`;
   $("#readyEvery").checked = readyEvery();
   renderReadyResume();
   $("#readyJoin").disabled = false; $("#readyJoin").classList.remove("is-busy");
@@ -2054,9 +2554,20 @@ $("#roomMic").addEventListener("change", () => {
   try{ PANELS = await api.invoke("get_panels"); }catch(e){ PANELS = []; }
   try{ CAT = await api.invoke("get_catalog"); }
   catch(e){ document.body.innerHTML = `<div class="view"><div class="panel"><h2>Onsite couldn’t start</h2><p class="form-msg err">${esc(errText(e))}</p></div></div>`; return; }
+  if (OnsiteTheme.read().image) api.invoke("get_backdrop").then(d => { if (d) OnsiteTheme.setImage(d); else OnsiteTheme.save({...OnsiteTheme.read(), image: false}); }).catch(() => {});
   initSetup();
   initAts();
   await refreshStatus();
-  if (SETTINGS && !SETTINGS.claude) api.invoke("detect_claude").then(refreshStatus).catch(() => {});
+  if (SETTINGS && provider() === "claude_code" && !SETTINGS.claude){
+    try{ await api.invoke("detect_claude"); }catch(e){}
+    await refreshStatus();
+  }
+  // First run with nothing to talk to: start on the AI picker.
+  if (!aiReady()){
+    SET_SEC = "models";
+    nav("settings");
+    msg("#clResult", "Connect an AI model to start. Claude Code needs Claude Pro or Max; otherwise paste a Claude, OpenAI or Gemini key.");
+    return;
+  }
   nav("dashboard");
 })();

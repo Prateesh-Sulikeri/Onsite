@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Onsite</title>
 <link rel="icon" href="assets/logo.png">
+<script src="theme-boot.js"></script>
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="themes.css">
 </head>
 <body>
 
@@ -33,6 +35,8 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></symbol>
     <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.7-8.7M16 7l2.5 2.5M14 9l2 2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M3 21v-5h5"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
     <symbol id="i-doc-check" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/></symbol>
@@ -67,8 +71,8 @@
       <button class="nav-item" data-nav="settings"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
     </nav>
     <div class="side-foot">
-      <button class="sys" id="sysClaude" data-nav="settings" title="Claude Code"><i class="dot"></i><span>Claude Code</span></button>
-      <button class="sys" id="sysVoice" data-nav="settings" title="VoiceStudio"><i class="dot"></i><span>VoiceStudio</span></button>
+      <button class="sys" id="sysClaude" data-nav="settings" data-sec="models" title="AI model"><i class="dot"></i><span id="sysClaudeName">AI model</span></button>
+      <button class="sys" id="sysVoice" data-nav="settings" data-sec="voice" title="VoiceStudio"><i class="dot"></i><span>VoiceStudio</span></button>
     </div>
   </aside>
 
@@ -151,9 +155,10 @@
               <span class="mode-tx"><b>General practice</b><small>Pick any rounds and a company style. Starts right away.</small></span>
               <span class="mode-check"><svg><use href="#i-check"/></svg></span>
             </button>
-            <button class="mode" role="radio" aria-checked="false" id="modeCompany" disabled>
+            <button class="mode" role="radio" aria-checked="false" id="modeCompany">
               <span class="mode-ic"><svg><use href="#i-building"/></svg></span>
-              <span class="mode-tx"><b>Company-specific <em class="badge">Soon</em></b><small>Uses a researched dossier of that company’s real, recent interviews.</small></span>
+              <span class="mode-tx"><b>Company-specific</b><small>Runs a company’s real loop, from recent candidate reports.</small></span>
+              <span class="mode-check"><svg><use href="#i-check"/></svg></span>
             </button>
           </div>
 
@@ -162,9 +167,12 @@
             <div class="step-body">
               <header class="step-head"><h2>Set your context</h2><p>Tell us what you want. The panel tailors every round to it.</p></header>
               <div class="form-grid">
-                <label class="field"><span>Company style</span>
+                <label class="field" id="companyField"><span>Company style</span>
                   <span class="sel"><svg><use href="#i-building"/></svg><select id="company"></select></span>
                   <small class="hint">Sets tone, question style and how you’re scored.</small></label>
+                <label class="field" id="dossierField" hidden><span>Company dossier</span>
+                  <span class="sel"><svg><use href="#i-building"/></svg><select id="dossier"></select></span>
+                  <small class="hint" id="dossierHint"></small></label>
                 <label class="field"><span>Interviewer style</span>
                   <span class="sel"><svg><use href="#i-user"/></svg>
                   <select id="temper">
@@ -189,7 +197,7 @@
           <section class="panel step">
             <span class="step-n">2</span>
             <div class="step-body">
-              <header class="step-head"><h2>Choose your rounds <small id="roundCount"></small></h2><p>Pick the rounds you want to practise. They run in this order.</p></header>
+              <header class="step-head"><h2><span id="roundsTitle">Choose your rounds</span> <small id="roundCount"></small></h2><p id="roundsLede">Pick the rounds you want to practise. They run in this order.</p></header>
               <div class="tiles" id="roundList" role="group" aria-label="Rounds"></div>
             </div>
           </section>
@@ -352,11 +360,32 @@
     <!-- ============ DOSSIERS ============ -->
     <section class="view" id="view-dossiers" hidden>
       <header class="page-head"><div><div class="crumb">Dossiers</div><h1>Company <em class="hl">dossiers</em></h1>
-        <p class="lede">Onsite will research how a company interviews right now, from recent candidate reports, then run that loop.</p></div></header>
-      <div class="empty-state panel">
-        <span class="empty-ic"><svg><use href="#i-building"/></svg></span>
-        <h2>Research arrives in the next update</h2>
-        <p class="muted">You’ll name a company and role, and a background job reads 8+ first-hand reports, extracts each round and its real questions, and saves a dossier here. Your Razorpay SDE-2 dossier will be imported then.</p>
+        <p class="lede">How a company interviews right now, from recent candidate reports. Pick one in Company-specific mode to run that loop.</p></div></header>
+      <div class="dossier-grid">
+        <div class="stack">
+          <div class="panel">
+            <div class="panel-head"><h2>Your dossiers</h2>
+              <button class="btn ghost sm" id="dsImport"><svg><use href="#i-upload"/></svg>Import</button>
+              <input type="file" id="dsFile" accept=".json,application/json" hidden></div>
+            <div class="rows" id="dossierList"></div>
+          </div>
+          <div class="panel" id="dossierDetail" hidden></div>
+        </div>
+        <div class="stack">
+          <form class="panel" id="rqForm">
+            <div class="panel-head"><h2>Research a company</h2></div>
+            <div class="form-grid">
+              <label class="field"><span>Company</span><input type="text" id="rqCompany" placeholder="Stripe" autocomplete="off"></label>
+              <label class="field"><span>Role</span><input type="text" id="rqRole" placeholder="Backend engineer" autocomplete="off"></label>
+              <label class="field span-2"><span>Level</span><span class="sel"><svg><use href="#i-chart"/></svg><select id="rqLevel"></select></span></label>
+              <label class="field span-2"><span>Job description <small class="muted">(optional)</small></span><textarea id="rqJd" rows="4" placeholder="Paste the posting. It helps find the right team’s loop."></textarea></label>
+            </div>
+            <div class="btn-row"><button class="btn primary" id="rqStart" type="submit"><svg><use href="#i-search"/></svg>Start research</button></div>
+            <p class="form-msg" id="rqMsg" role="status"></p>
+            <p class="hint">Uses the AI model from Settings, with web search. It reads first-hand reports, pulls out each round and its questions, and saves a dossier. A few minutes on an API key; 10–40 minutes on Claude Code. Keep Onsite open while it runs.</p>
+          </form>
+          <div class="stack" id="jobList"></div>
+        </div>
       </div>
     </section>
 
@@ -379,52 +408,205 @@
     <!-- ============ SETTINGS ============ -->
     <section class="view" id="view-settings" hidden>
       <header class="page-head"><div><div class="crumb">Settings</div><h1>Your <em class="hl">setup</em></h1>
-        <p class="lede">Everything runs on this machine. Model calls go through your own Claude Code login.</p></div></header>
-      <div class="settings">
-        <div class="panel">
-          <div class="panel-head"><h2>Claude Code</h2><span class="pill" id="clPill">Checking…</span></div>
-          <dl class="kv"><dt>Using</dt><dd id="clPath">Not found yet</dd></dl>
-          <label class="field"><span>Path to claude.exe <small class="muted">(leave empty to auto-detect)</small></span>
-            <input type="text" id="clExe" placeholder="C:\Users\you\.local\bin\claude.exe"></label>
-          <div class="btn-row">
-            <button class="btn" id="clDetect"><svg><use href="#i-refresh"/></svg>Detect again</button>
-            <button class="btn" id="clSavePath">Use this path</button>
-            <button class="btn primary" id="clHealth">Run health check</button>
-          </div>
-          <p class="form-msg" id="clResult" role="status"></p>
-          <div class="form-grid" style="margin-top:18px">
-            <label class="field"><span>Interviewer model</span>
-              <select id="ivModel"><option value="sonnet">Sonnet — fast replies</option><option value="opus">Opus — sharper, slower</option><option value="haiku">Haiku — fastest, lighter</option></select></label>
-            <label class="field"><span>Feedback and verdict model</span>
-              <select id="repModel"><option value="opus">Opus — best judgment</option><option value="sonnet">Sonnet — faster</option></select></label>
-          </div>
-        </div>
+        <p class="lede">Voice, code and your history stay on this machine. Model calls go to the AI you connect here.</p></div></header>
+      <div class="set-layout">
+        <nav class="set-nav" aria-label="Settings sections" id="setNav">
+          <button data-sec="appearance"><svg><use href="#i-sparkle"/></svg>Appearance</button>
+          <button data-sec="models"><svg><use href="#i-chat"/></svg>AI model</button>
+          <button data-sec="voice"><svg><use href="#i-mic"/></svg>VoiceStudio</button>
+          <button data-sec="updates"><svg><use href="#i-download"/></svg>Updates</button>
+          <button data-sec="privacy"><svg><use href="#i-shield"/></svg>Privacy</button>
+          <button data-sec="storage"><svg><use href="#i-folder"/></svg>Storage</button>
+        </nav>
+        <div class="set-body">
+          <section class="set-sec" data-sec="appearance" aria-label="Appearance">
+            <div class="panel">
+              <div class="panel-head"><h2>Theme</h2></div>
+              <div class="theme-grid" id="themeGrid" role="radiogroup" aria-label="Theme"></div>
+              <div class="field" style="margin-top:18px"><span>Light or dark</span>
+                <div class="seg" role="radiogroup" aria-label="Light or dark" id="modeSeg">
+                  <button role="radio" data-mode="system">System</button><button role="radio" data-mode="light">Light</button><button role="radio" data-mode="dark">Dark</button>
+                </div>
+                <small class="hint">System follows Windows. The call room and editor follow the theme too; the whiteboard stays dark.</small></div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2>Background image</h2></div>
+              <div class="bg-row">
+                <div class="bg-preview" id="bgPreview" aria-hidden="true"></div>
+                <div class="stack">
+                  <p class="hint">Put your own picture behind every page except the call. It stays on this computer.</p>
+                  <div class="btn-row" style="margin-top:0">
+                    <button class="btn" id="bgPick"><svg><use href="#i-upload"/></svg>Choose image</button>
+                    <button class="btn ghost" id="bgClear" hidden>Use the theme’s</button>
+                    <input type="file" id="bgFile" accept="image/jpeg,image/png,image/webp" hidden>
+                  </div>
+                  <label class="field" id="bgDimField" hidden><span>Dim it so text stays readable <small id="bgDimVal"></small></span>
+                    <input type="range" id="bgDim" min="0" max="85" step="5"></label>
+                  <p class="form-msg" id="bgMsg" role="status"></p>
+                </div>
+              </div>
+            </div>
+          </section>
 
-        <div class="panel">
-          <div class="panel-head"><h2>Voice</h2><span class="pill" id="vsPill">Checking…</span></div>
-          <p class="muted" id="vsInfo">VoiceStudio speaks for the interviewer and transcribes your answers, locally.</p>
-          <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
-          <label class="switch"><input type="checkbox" id="vEnabled"><span class="track"></span><span>Spoken interviews</span></label>
-          <div class="form-grid">
-            <label class="field"><span>Microphone</span><select id="vMic"></select></label>
-            <label class="field"><span>Speaker</span><select id="vSpk"></select></label>
-            <label class="field"><span>Interviewer voice</span><select id="vVoice"></select></label>
-            <label class="field"><span>Voice quality</span>
-              <select id="vSteps"><option value="8">Fast — about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best — slow</option></select></label>
-            <label class="field"><span>Speaking speed</span>
-              <select id="vSpeed"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select></label>
-            <label class="field"><span>Send my answer after I stop talking for</span>
-              <select id="vPause"><option value="1800">1.8 seconds</option><option value="3000">3 seconds</option><option value="5000">5 seconds</option><option value="0">Never — I tap the mic</option></select></label>
-          </div>
-          <div class="btn-row">
-            <button class="btn" id="vTestSpeak"><svg><use href="#i-speaker"/></svg>Test voice</button>
-            <button class="btn" id="vTestMic"><svg><use href="#i-mic"/></svg>Test mic</button>
-            <div class="meter" aria-hidden="true"><i id="vMeter"></i></div>
-          </div>
-          <p class="form-msg" id="vResult" role="status"></p>
-          <p class="muted" id="vLang"></p>
+          <section class="set-sec" data-sec="models" aria-label="AI model" hidden>
+            <div class="panel">
+              <div class="panel-head"><h2>AI model</h2><span class="pill" id="clPill">Checking…</span></div>
+              <p class="hint">Use whichever AI you already have. Only the research job gets web search; the interviewer gets no tools.</p>
+              <div class="ai-picks" role="radiogroup" aria-label="AI model" id="aiPicks">
+                <button class="ai-pick" role="radio" aria-checked="false" data-provider="claude_code"><b>Claude Code</b><small>Claude Pro or Max. Uses your Claude login, no key.</small></button>
+                <button class="ai-pick" role="radio" aria-checked="false" data-provider="anthropic"><b>Claude API key</b><small>Any Claude account. Pay per use.</small></button>
+                <button class="ai-pick" role="radio" aria-checked="false" data-provider="openai"><b>OpenAI key</b><small>ChatGPT models. Billed apart from ChatGPT Plus.</small></button>
+                <button class="ai-pick" role="radio" aria-checked="false" data-provider="gemini"><b>Gemini key</b><small>Free key from Google, with daily limits.</small></button>
+              </div>
+              <div id="aiCli">
+                <dl class="kv"><dt>Using</dt><dd id="clPath">Not found yet</dd></dl>
+                <label class="field"><span>Path to claude.exe <small class="muted">(leave empty to auto-detect)</small></span>
+                  <input type="text" id="clExe" placeholder="C:\Users\you\.local\bin\claude.exe"></label>
+                <div class="btn-row">
+                  <button class="btn" id="clDetect"><svg><use href="#i-refresh"/></svg>Detect again</button>
+                  <button class="btn" id="clSavePath">Use this path</button>
+                </div>
+              </div>
+              <div id="aiKey" hidden>
+                <label class="field"><span id="aiKeyLabel">API key</span>
+                  <input type="password" id="aiKeyInput" autocomplete="off" spellcheck="false"></label>
+                <small class="hint" id="aiKeyHint"></small>
+                <div class="btn-row">
+                  <button class="btn" id="aiKeySave"><svg><use href="#i-key"/></svg>Save key</button>
+                  <button class="btn ghost" id="aiKeyRemove" hidden>Remove key</button>
+                </div>
+              </div>
+              <div class="btn-row"><button class="btn primary" id="clHealth">Run health check</button></div>
+              <p class="form-msg" id="clResult" role="status"></p>
+              <div class="form-grid" style="margin-top:18px">
+                <label class="field"><span>Interviewer model</span><select id="ivModel"></select></label>
+                <label class="field"><span>Feedback, verdict and research model</span><select id="repModel"></select></label>
+              </div>
+              <p class="hint" id="aiModelHint"></p>
+            </div>
+          </section>
+
+          <section class="set-sec" data-sec="voice" aria-label="VoiceStudio" hidden>
+            <div class="panel">
+              <div class="panel-head"><h2>VoiceStudio</h2><span class="pill" id="vsPill">Checking…</span></div>
+              <dl class="kv"><dt>Version</dt><dd id="vsVer">—</dd></dl>
+              <p class="muted" id="vsInfo">VoiceStudio speaks for the interviewer and transcribes your answers, locally.</p>
+              <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
+              <label class="switch"><input type="checkbox" id="vEnabled"><span class="track"></span><span>Spoken interviews</span></label>
+              <div class="form-grid">
+                <label class="field"><span>Microphone</span><select id="vMic"></select></label>
+                <label class="field"><span>Speaker</span><select id="vSpk"></select></label>
+                <label class="field"><span>Interviewer voice</span><select id="vVoice"></select></label>
+                <label class="field"><span>Voice quality</span>
+                  <select id="vSteps"><option value="8">Fast — about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best — slow</option></select></label>
+                <label class="field"><span>Speaking speed</span>
+                  <select id="vSpeed"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select></label>
+                <label class="field"><span>Send my answer after I stop talking for</span>
+                  <select id="vPause"><option value="1800">1.8 seconds</option><option value="3000">3 seconds</option><option value="5000">5 seconds</option><option value="0">Never — I tap the mic</option></select></label>
+              </div>
+              <div class="btn-row">
+                <button class="btn" id="vTestSpeak"><svg><use href="#i-speaker"/></svg>Test voice</button>
+                <button class="btn" id="vTestMic"><svg><use href="#i-mic"/></svg>Test mic</button>
+                <div class="meter" aria-hidden="true"><i id="vMeter"></i></div>
+              </div>
+              <p class="form-msg" id="vResult" role="status"></p>
+              <p class="muted" id="vLang"></p>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2>Interviewers</h2><span class="muted small">Same people, same voices, every session</span></div>
+              <p class="hint">Pick a panel on the interview screen to meet these people. A voice is built in VoiceStudio the first time you play it (5–15 s).</p>
+              <div id="personaGrid"></div>
+            </div>
+          </section>
+
+          <section class="set-sec" data-sec="updates" aria-label="Updates" hidden>
+            <div class="panel">
+              <div class="panel-head"><h2>Onsite</h2><span class="pill" id="upPill">Not checked</span></div>
+              <dl class="kv"><dt>This version</dt><dd id="upCurrent">—</dd><dt>Newest</dt><dd id="upLatest">—</dd></dl>
+              <div class="btn-row">
+                <button class="btn" id="upCheck"><svg><use href="#i-refresh"/></svg>Check for updates</button>
+                <button class="btn primary" id="upInstall" hidden></button>
+              </div>
+              <div class="pbar" id="upBar" hidden role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100"><i></i></div>
+              <p class="form-msg" id="upMsg" role="status"></p>
+              <h3 class="sub-h">All versions</h3>
+              <div class="rows" id="upList"><p class="muted small">Check for updates to see them.</p></div>
+              <p class="hint">Installing a version downloads its installer from GitHub, then closes Onsite so it can run. Your interviews, dossiers and settings stay. An older version may not read data saved by a newer one.</p>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2>VoiceStudio</h2><span class="pill" id="vsUpPill">Not checked</span></div>
+              <dl class="kv"><dt>Installed</dt><dd id="vsInstalled">—</dd><dt>Newest</dt><dd id="vsLatest">—</dd></dl>
+              <p class="hint" id="vsUpNote">Onsite doesn’t update VoiceStudio. When there’s a new version, update it from VoiceStudio itself.</p>
+            </div>
+          </section>
+
+          <section class="set-sec" data-sec="privacy" aria-label="Privacy" hidden>
+            <div class="panel prose">
+              <div class="panel-head"><h2>Privacy</h2><span class="muted small">Plain terms for what Onsite does with your data</span></div>
+              <h3>What stays on this computer</h3>
+              <ul>
+                <li>Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite’s database in your app data folder.</li>
+                <li>Your voice. VoiceStudio and Whisper run locally; audio is never uploaded by Onsite.</li>
+                <li>API keys, stored in the same local database. They are not encrypted, so anyone with access to your Windows account can read them. Remove a key in AI model when you stop using it.</li>
+                <li>The log file, which holds errors and timings, not transcripts or keys.</li>
+              </ul>
+              <h3>What leaves this computer</h3>
+              <ul>
+                <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI or Gemini): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
+                <li><b>Research jobs</b> ask that provider to search the web. The company, role and job description you enter are part of the request.</li>
+                <li><b>Update checks</b> ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
+              </ul>
+              <h3>What Onsite never does</h3>
+              <ul>
+                <li>No accounts, analytics, telemetry, ads or tracking.</li>
+                <li>No data is sent to the Onsite developer.</li>
+                <li>The interviewer gets no tools: it can’t browse, run commands or read your files.</li>
+                <li>Model replies and dossiers are shown and saved as text, never run as code.</li>
+              </ul>
+              <h3>Deleting your data</h3>
+              <ul>
+                <li>Delete single rounds from Feedback, dossiers from Dossiers, and old rounds automatically with the limits in Storage.</li>
+                <li>Uninstalling Onsite leaves your data folder in place. Delete it from Storage → Open data folder to remove everything.</li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="set-sec" data-sec="storage" aria-label="Storage" hidden>
+            <div class="panel">
+              <div class="panel-head"><h2>On this computer</h2><span class="pill" id="stTotal">—</span></div>
+              <div class="st-counts" id="stCounts"></div>
+              <div class="rows" id="stItems"><p class="muted small">Measuring…</p></div>
+              <div class="btn-row">
+                <button class="btn" data-open="data"><svg><use href="#i-folder"/></svg>Open data folder</button>
+                <button class="btn ghost" data-open="log">Open log folder</button>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2>Limits</h2></div>
+              <div class="form-grid">
+                <label class="field"><span>Keep at most</span>
+                  <select id="stKeepRounds"><option value="0">All rounds</option><option value="500">500 rounds</option><option value="200">200 rounds</option><option value="100">100 rounds</option><option value="50">50 rounds</option><option value="20">20 rounds</option></select></label>
+                <label class="field"><span>Delete rounds older than</span>
+                  <select id="stKeepDays"><option value="0">Never</option><option value="365">1 year</option><option value="180">6 months</option><option value="90">3 months</option><option value="30">1 month</option></select></label>
+                <label class="field"><span>Clear the log above</span>
+                  <select id="stLogMax"><option value="5">5 MB</option><option value="20">20 MB</option><option value="50">50 MB</option><option value="100">100 MB</option></select></label>
+              </div>
+              <p class="hint">Limits apply now and every time Onsite starts. A deleted round takes its transcript and feedback with it. Rounds still running are never touched.</p>
+              <div class="btn-row"><button class="btn primary" id="stSave">Apply limits</button></div>
+              <p class="form-msg" id="stMsg" role="status"></p>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2>Clean up</h2></div>
+              <div class="btn-row" style="margin-top:0">
+                <button class="btn" id="stClearLog">Clear the log</button>
+                <button class="btn" id="stClearTemp">Delete temporary files</button>
+                <button class="btn" id="stVacuum">Compact the database</button>
+              </div>
+              <p class="form-msg" id="stCleanMsg" role="status"></p>
+            </div>
+          </section>
+          <p class="form-msg save-msg" id="saveMsg" role="status">Changes save automatically.</p>
         </div>
-        <p class="form-msg save-msg" id="saveMsg" role="status">Changes save automatically.</p>
       </div>
     </section>
 

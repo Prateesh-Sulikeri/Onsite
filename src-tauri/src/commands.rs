@@ -1,6 +1,6 @@
 //! Thin `#[tauri::command]` wrappers. Logic lives in the modules.
 
-use crate::brain::{self, run_once, ClaudeLocation, Tools};
+use crate::brain::{self, run_once, ClaudeLocation, Provider, Tools};
 use crate::catalog::Catalog;
 use crate::error::{AppError, Result};
 use crate::interview::live::{self, RoundInfo};
@@ -62,16 +62,112 @@ pub struct Health {
 
 #[tauri::command]
 pub async fn health_check(state: State<'_, AppState>) -> Result<Health> {
-    let loc = state.claude_location().await?;
+    let backend = state.backend().await?;
     let model = state.settings().interviewer_model;
-    let out = run_once(&loc, "Reply with OK", Tools::None, &model, |_| {}).await?;
+    let out = run_once(&backend, "Reply with OK", Tools::None, &model, |_| {}).await?;
     Ok(Health {
         ok: out.text.trim().trim_end_matches('.').eq_ignore_ascii_case("ok"),
         reply: out.text,
         latency_ms: out.duration_ms,
-        location: loc.describe(),
+        location: backend.describe(),
         model: out.model,
     })
+}
+
+/// Which providers have a key saved. Keys themselves never go back to the UI.
+#[tauri::command]
+pub fn ai_keys(state: State<AppState>) -> std::collections::HashMap<String, bool> {
+    let keys = state.api_keys();
+    Provider::APIS.iter().map(|p| (p.id().to_string(), keys.get(p.id()).is_some_and(|k| !k.is_empty()))).collect()
+}
+
+#[tauri::command]
+pub fn set_api_key(state: State<AppState>, provider: Provider, key: String) -> Result<()> {
+    if provider == Provider::ClaudeCode {
+        return Err(AppError::Invalid("Claude Code uses your Claude login, not a key.".into()));
+    }
+    state.set_api_key(provider, &key)
+}
+
+/// Switches where model calls go and resets both models to that provider's defaults.
+#[tauri::command]
+pub fn set_provider(state: State<AppState>, provider: Provider) -> Result<Settings> {
+    let mut s = state.settings();
+    if s.provider != provider {
+        let (iv, rep) = provider.default_models();
+        s.provider = provider;
+        s.interviewer_model = iv.into();
+        s.report_model = rep.into();
+        state.save_settings(&s)?;
+    }
+    Ok(s)
+}
+
+/// Models the current provider offers (asked live from the API).
+#[tauri::command]
+pub async fn list_models(state: State<'_, AppState>) -> Result<Vec<String>> {
+    match state.backend().await? {
+        brain::Backend::Cli(_) => Ok(["sonnet", "opus", "haiku", "fable"].map(String::from).to_vec()),
+        brain::Backend::Api(c) => c.models().await,
+    }
+}
+
+#[tauri::command]
+pub fn list_dossiers(state: State<AppState>) -> Result<Vec<Value>> {
+    state.store.lock().unwrap().dossiers()
+}
+
+#[tauri::command]
+pub fn delete_dossier(state: State<AppState>, id: String) -> Result<()> {
+    state.store.lock().unwrap().delete_dossier(&id)?;
+    let _ = std::fs::remove_file(state.data_dir.join("dossiers").join(format!("{id}.json")));
+    Ok(())
+}
+
+/// A dossier file someone shared (JSON text). Returns the saved dossier.
+#[tauri::command]
+pub fn import_dossier(state: State<AppState>, text: String) -> Result<crate::dossier::Dossier> {
+    crate::research::import(&state, &text)
+}
+
+/// Writes the dossier as pretty JSON into Downloads, for sharing. Returns the file path.
+#[tauri::command]
+pub fn export_dossier(app: AppHandle, id: String) -> Result<String> {
+    let state = app.state::<AppState>();
+    let d = state.store.lock().unwrap().dossier(&id)?.ok_or_else(|| AppError::NotFound("That dossier is gone.".into()))?;
+    let dir = app.path().download_dir().map_err(|_| AppError::NotFound("No Downloads folder found.".into()))?;
+    let path = dir.join(format!("{}.json", crate::dossier::slug(&id, "", "")));
+    std::fs::write(&path, serde_json::to_string_pretty(&d)?)?;
+    Ok(path.display().to_string())
+}
+
+#[tauri::command]
+pub async fn research_start(app: AppHandle, request: crate::research::ResearchRequest) -> Result<i64> {
+    crate::research::start(&app, request)
+}
+
+#[tauri::command]
+pub fn research_cancel(app: AppHandle, id: i64) {
+    crate::research::cancel(&app, id)
+}
+
+#[tauri::command]
+pub async fn research_retry(app: AppHandle, id: i64) -> Result<i64> {
+    crate::research::retry(&app, id)
+}
+
+/// Removes a finished, failed or cancelled job from the list.
+#[tauri::command]
+pub fn research_dismiss(state: State<AppState>, id: i64) -> Result<()> {
+    if state.research.lock().unwrap().contains_key(&id) {
+        return Err(AppError::Invalid("That research is still running. Cancel it first.".into()));
+    }
+    state.store.lock().unwrap().delete_job(id)
+}
+
+#[tauri::command]
+pub fn research_jobs(state: State<AppState>) -> Result<Vec<crate::research::JobView>> {
+    crate::research::jobs(&state)
 }
 
 #[tauri::command]
@@ -182,6 +278,8 @@ pub struct VoiceStatus {
     pub english: Option<crate::voice::stt::EnglishModel>,
     /// Whisper on the GPU, which writes the text sent to the interviewer.
     pub whisper: crate::voice::whisper::WhisperStatus,
+    /// Installed VoiceStudio version (from the backend, else its install folder). No network.
+    pub version: Option<String>,
 }
 
 fn voicestudio_exe() -> Option<std::path::PathBuf> {
@@ -194,7 +292,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
     let vs = VoiceStudio::new(&state.settings().voice.base_url);
     let installed = voicestudio_exe().is_some();
     let Ok(health) = vs.health().await else {
-        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None, whisper: crate::voice::whisper::status() });
+        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None, whisper: crate::voice::whisper::status(), version: crate::updates::installed_voicestudio() });
     };
     Ok(VoiceStatus {
         up: true,
@@ -204,6 +302,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
         installed,
         english: Some(crate::voice::stt::english_model(&vs).await),
         whisper: crate::voice::whisper::status(),
+        version: health["version"].as_str().map(String::from).or_else(crate::updates::installed_voicestudio),
     })
 }
 
@@ -375,4 +474,99 @@ pub async fn ats_screen(state: State<'_, AppState>, name: Option<String>, data: 
 #[tauri::command]
 pub fn ats_last(state: State<AppState>) -> Result<Option<Value>> {
     state.store.lock().unwrap().get_setting(crate::ats::LAST_KEY)
+}
+
+#[tauri::command]
+pub fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+#[tauri::command]
+pub async fn check_updates(app: AppHandle) -> Result<crate::updates::UpdateInfo> {
+    crate::updates::check(&app).await
+}
+
+/// Downloads that version's installer, starts it and quits. Works for older versions too.
+#[tauri::command]
+pub async fn install_update(app: AppHandle, tag: String) -> Result<()> {
+    crate::updates::install(&app, &tag).await
+}
+
+#[tauri::command]
+pub async fn voicestudio_version(state: State<'_, AppState>) -> Result<crate::updates::VoiceStudioVersion> {
+    Ok(crate::updates::voicestudio(&state).await)
+}
+
+#[tauri::command]
+pub async fn storage_info(app: AppHandle) -> Result<crate::storage::StorageInfo> {
+    // Walking the model cache can take a moment; keep it off the async workers.
+    tauri::async_runtime::spawn_blocking(move || crate::storage::info(&app.state::<AppState>()))
+        .await
+        .map_err(|e| AppError::Invalid(e.to_string()))?
+}
+
+/// Saves the limits and applies them now. Returns how many rounds were deleted.
+#[tauri::command]
+pub fn set_storage_limits(state: State<AppState>, limits: crate::storage::Limits) -> Result<usize> {
+    crate::storage::set_limits(&state, limits)
+}
+
+#[tauri::command]
+pub fn clear_log() -> Result<()> {
+    crate::storage::clear_log()
+}
+
+/// Returns bytes freed.
+#[tauri::command]
+pub fn clear_temp() -> Result<u64> {
+    crate::storage::clear_temp()
+}
+
+#[tauri::command]
+pub fn vacuum_db(state: State<AppState>) -> Result<()> {
+    state.store.lock().unwrap().vacuum()
+}
+
+/// Opens one of Onsite's folders in Explorer: "data", "log" or "voicestudio".
+#[tauri::command]
+pub fn open_folder(state: State<AppState>, which: String) -> Result<()> {
+    let path = match which.as_str() {
+        "data" => state.data_dir.clone(),
+        "log" => crate::storage::log_path().parent().map(std::path::Path::to_path_buf).unwrap_or_default(),
+        "voicestudio" => std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("OmniVoice").join("hf_cache"),
+        _ => return Err(AppError::Invalid("Unknown folder.".into())),
+    };
+    crate::storage::open_folder(&path)
+}
+
+#[tauri::command]
+pub fn get_backdrop(state: State<AppState>) -> Result<Option<String>> {
+    crate::storage::backdrop(&state)
+}
+
+/// `data`: the image as base64 or a data URL.
+#[tauri::command]
+pub fn set_backdrop(state: State<AppState>, data: String) -> Result<()> {
+    crate::storage::set_backdrop(&state, &data)
+}
+
+#[tauri::command]
+pub fn clear_backdrop(state: State<AppState>) -> Result<()> {
+    crate::storage::clear_backdrop(&state)
+}
+
+/// Says a short line in a panel interviewer's own voice. Builds their VoiceStudio profile
+/// first if it doesn't exist yet (5-15 s, once). Returns ms to first audio.
+#[tauri::command]
+pub async fn voice_persona_preview(state: State<'_, AppState>, id: String) -> Result<u64> {
+    let p = state.panels.persona_by_id(&id).ok_or_else(|| AppError::NotFound("No interviewer with that id.".into()))?;
+    let mut settings = state.settings().voice;
+    settings.speed *= p.speed_factor;
+    let vs = VoiceStudio::new(&settings.base_url);
+    vs.health().await.map_err(|_| AppError::Voice("VoiceStudio isn't running. Start it to hear the interviewers.".into()))?;
+    let pv = crate::voice::vs::PersonaVoice { name: p.name.clone(), instruct: p.voice_instruct, states: p.voice_states };
+    let profile = vs.persona_voice(&pv).await?;
+    let line = format!("Hi, I'm {}, {}. I'll be one of the people interviewing you today.", p.first_name, p.role.split(" / ").next().unwrap_or(&p.role));
+    crate::voice::audio::set_devices(&settings.input_device, &settings.output_device);
+    state.voice.speak_as(&settings, &profile, &line).await
 }

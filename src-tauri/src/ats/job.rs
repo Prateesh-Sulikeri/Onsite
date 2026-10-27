@@ -132,10 +132,10 @@ pub async fn keywords(state: &AppState, jd: &str) -> Result<JobKeywords> {
     // Long postings carry boilerplate (benefits, EEO); the first 12k chars hold the requirements.
     let jd_clip: String = jd.chars().take(12_000).collect();
     let prompt = prompts::render(&template, &[("jd", jd_clip)].into());
-    let loc = state.claude_location().await?;
+    let backend = state.backend().await?;
     let model = state.settings().interviewer_model;
-    let out = run_once(&loc, &prompt, Tools::None, &model, |_| {}).await?;
-    let json = out.json.ok_or_else(|| AppError::Claude("couldn't read the job keywords. Try again.".into()))?;
+    let out = run_once(&backend, &prompt, Tools::None, &model, |_| {}).await?;
+    let json = out.json.ok_or_else(|| AppError::Ai("Couldn't read the job keywords. Try again.".into()))?;
     let job: JobKeywords = serde_json::from_value::<JobKeywords>(json)?.sanitize();
     if job.is_empty() {
         return Err(AppError::Invalid("No skills or keywords found in that job description.".into()));

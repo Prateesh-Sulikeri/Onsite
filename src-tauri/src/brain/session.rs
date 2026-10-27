@@ -1,4 +1,5 @@
 //! One long-lived `claude -p` process per interview round, spoken to over stream-json.
+//! (Rounds on a provider API use `chat::ApiSession`, which shares the turn logic here.)
 
 use super::locate::{isolation_args, ClaudeLocation, Tools};
 use super::splitter::{Piece, SentenceSplitter, END_MARKER};
@@ -15,7 +16,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::task::JoinHandle;
 
 pub struct SessionConfig {
-    pub location: ClaudeLocation,
+    pub backend: super::chat::Backend,
     pub model: String,
     pub system_prompt: String,
     pub resume: Option<String>,
@@ -53,13 +54,13 @@ pub struct ClaudeSession {
 }
 
 impl ClaudeSession {
-    pub async fn start(round_id: i64, cfg: SessionConfig, events: UnboundedSender<SessionEvent>) -> Result<Self> {
+    pub async fn start(round_id: i64, location: ClaudeLocation, cfg: SessionConfig, events: UnboundedSender<SessionEvent>) -> Result<Self> {
         // Empty dir: no CLAUDE.md, repo files or project settings can leak in.
         let workdir = tempfile::Builder::new().prefix("onsite-round-").tempdir()?;
         let prompt_path = workdir.path().join(".system-prompt.md");
         std::fs::write(&prompt_path, &cfg.system_prompt)?;
 
-        let mut args = isolation_args(Tools::None, &cfg.model, Some(&cfg.location.path_arg(&prompt_path)));
+        let mut args = isolation_args(Tools::None, &cfg.model, Some(&location.path_arg(&prompt_path)));
         args.extend(
             ["--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
                 .map(String::from),
@@ -68,12 +69,12 @@ impl ClaudeSession {
             args.extend(["--resume".to_string(), id.clone()]);
         }
 
-        let mut cmd = cfg.location.command(&args, workdir.path());
+        let mut cmd = location.command(&args, workdir.path());
         cmd.stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
         let mut child = cmd.spawn().map_err(|e| AppError::Claude(format!("could not start: {e}")))?;
-        tracing::info!(round_id, location = %cfg.location.describe(), model = %cfg.model, resume = ?cfg.resume, "claude session started");
+        tracing::info!(round_id, location = %location.describe(), model = %cfg.model, resume = ?cfg.resume, "claude session started");
 
         let shared = Arc::new(Shared { session_id: Mutex::new(cfg.resume.clone()), ..Default::default() });
         shared.alive.store(true, Ordering::SeqCst);
@@ -220,14 +221,14 @@ async fn read_loop(
 
 /// Pure per-turn state machine, so it can be tested on recorded streams.
 #[derive(Default)]
-struct TurnState {
+pub(crate) struct TurnState {
     splitter: SentenceSplitter,
     ttft_ms: Option<u64>,
     got_delta: bool,
 }
 
 impl TurnState {
-    fn apply(&mut self, round_id: i64, ev: StreamEvent, started: Option<Instant>) -> Vec<SessionEvent> {
+    pub(crate) fn apply(&mut self, round_id: i64, ev: StreamEvent, started: Option<Instant>) -> Vec<SessionEvent> {
         let since = |s: Option<Instant>| s.map(|t| t.elapsed().as_millis() as u64).unwrap_or(0);
         let mut out = Vec::new();
         match ev {

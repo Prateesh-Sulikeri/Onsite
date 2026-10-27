@@ -3,14 +3,18 @@ pub mod bank;
 pub mod brain;
 pub mod catalog;
 mod commands;
+pub mod dossier;
 pub mod error;
 pub mod interview;
 pub mod panels;
+pub mod research;
 pub mod runner;
+pub mod storage;
 pub mod store;
+pub mod updates;
 pub mod voice;
 
-use brain::ClaudeLocation;
+use brain::{ApiClient, Backend, ClaudeLocation, Provider};
 use catalog::Catalog;
 use error::{AppError, Result};
 use serde::{Deserialize, Serialize};
@@ -21,10 +25,14 @@ use store::Store;
 use tauri::Manager;
 
 const SETTINGS_KEY: &str = "app";
+/// Provider id → API key. Kept apart from `Settings`, which the UI reads in full.
+const KEYS_KEY: &str = "api_keys";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    /// Where model calls go. Older installs have no value and keep Claude Code.
+    pub provider: Provider,
     pub claude: Option<ClaudeLocation>,
     pub interviewer_model: String,
     pub report_model: String,
@@ -34,6 +42,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            provider: Provider::ClaudeCode,
             claude: None,
             interviewer_model: "sonnet".into(),
             report_model: "opus".into(),
@@ -47,6 +56,10 @@ pub struct AppState {
     pub catalog: Catalog,
     pub panels: panels::Panels,
     pub prompts_dir: PathBuf,
+    /// The app's data folder; dossier files are written under it.
+    pub data_dir: PathBuf,
+    /// Research jobs running now, by job id.
+    pub research: Mutex<HashMap<i64, research::Running>>,
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
     pub bank: bank::Bank,
     pub voice: voice::Voice,
@@ -62,6 +75,32 @@ impl AppState {
     pub fn save_settings(&self, s: &Settings) -> Result<()> {
         voice::audio::set_devices(&s.voice.input_device, &s.voice.output_device);
         self.store.lock().unwrap().set_setting(SETTINGS_KEY, s)
+    }
+
+    pub fn api_keys(&self) -> HashMap<String, String> {
+        self.store.lock().unwrap().get_setting(KEYS_KEY).ok().flatten().unwrap_or_default()
+    }
+
+    /// An empty key removes it.
+    pub fn set_api_key(&self, p: Provider, key: &str) -> Result<()> {
+        let mut keys = self.api_keys();
+        match key.trim() {
+            "" => keys.remove(p.id()),
+            k => keys.insert(p.id().to_string(), k.to_string()),
+        };
+        self.store.lock().unwrap().set_setting(KEYS_KEY, &keys)
+    }
+
+    /// Where this call should go: Claude Code, or the chosen API with its key.
+    pub async fn backend(&self) -> Result<Backend> {
+        let p = self.settings().provider;
+        if p == Provider::ClaudeCode {
+            return Ok(Backend::Cli(self.claude_location().await?));
+        }
+        match self.api_keys().get(p.id()) {
+            Some(k) if !k.trim().is_empty() => Ok(Backend::Api(ApiClient::new(p, k))),
+            _ => Err(AppError::Ai(format!("Add your {} key in Settings first.", p.label()))),
+        }
     }
 
     /// The saved location, or auto-detect once and remember it.
@@ -83,22 +122,20 @@ impl AppState {
     }
 }
 
-/// Dev builds read `prompts/` from the repo; installed builds from bundled resources.
-fn prompts_dir(app: &tauri::App) -> PathBuf {
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../prompts");
+/// Dev builds read `prompts/` (and `dossiers/`) from the repo; installed builds from bundled resources.
+fn resource(app: &tauri::App, name: &str) -> PathBuf {
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join(name);
     if cfg!(debug_assertions) && dev.is_dir() {
         return dev;
     }
-    app.path().resource_dir().map(|d| d.join("prompts")).unwrap_or(dev)
+    app.path().resource_dir().map(|d| d.join(name)).unwrap_or(dev)
 }
 
 /// Logs go to %LOCALAPPDATA%\Onsite\onsite.log (the app has no console window).
 fn init_logging() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "onsite=info,onsite_lib=info".into());
-    let dir = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("Onsite");
-    let file = std::fs::create_dir_all(&dir).and_then(|_| {
-        std::fs::OpenOptions::new().create(true).append(true).open(dir.join("onsite.log"))
-    });
+    let path = storage::log_path();
+    let file = std::fs::create_dir_all(path.parent().unwrap_or(&path)).and_then(|_| std::fs::OpenOptions::new().create(true).append(true).open(&path));
     match file {
         Ok(f) => tracing_subscriber::fmt().with_env_filter(filter).with_ansi(false).with_writer(Mutex::new(f)).init(),
         Err(_) => tracing_subscriber::fmt().with_env_filter(filter).init(),
@@ -114,7 +151,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             let db = data_dir.join("onsite.db");
             tracing::info!(db = %db.display(), "opening store");
-            let prompts_dir = prompts_dir(app);
+            let prompts_dir = resource(app, "prompts");
             voice::whisper::set_script_dir(voice::whisper::script_dir_for(app.path().resource_dir().ok().as_deref()));
             let catalog = Catalog::load(&prompts_dir)?;
             let store = Store::open(&db)?;
@@ -123,16 +160,25 @@ pub fn run() {
                 Ok(n) => tracing::info!(n, "deleted rounds with no answers"),
                 Err(e) => tracing::warn!("sweeping empty rounds: {e}"),
             }
+            if let Err(e) = store.fail_running_jobs() {
+                tracing::warn!("marking interrupted research jobs: {e}");
+            }
             app.manage(AppState {
                 store: Arc::new(Mutex::new(store)),
                 catalog,
                 panels: panels::Panels::load(&prompts_dir),
                 bank: bank::Bank::load(&prompts_dir),
                 prompts_dir,
+                data_dir: data_dir.clone(),
+                research: Default::default(),
                 rounds: Default::default(),
                 voice: Default::default(),
                 prep_gen: Default::default(),
             });
+            research::seed(&app.state::<AppState>(), &resource(app, "dossiers"));
+            if let Err(e) = storage::enforce(&app.state::<AppState>()) {
+                tracing::warn!("storage limits: {e}");
+            }
             // Warm VoiceStudio up so the first spoken reply is not a 60 s cold start.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -163,6 +209,33 @@ pub fn run() {
             commands::save_settings,
             commands::detect_claude,
             commands::health_check,
+            commands::ai_keys,
+            commands::set_api_key,
+            commands::set_provider,
+            commands::list_models,
+            commands::list_dossiers,
+            commands::delete_dossier,
+            commands::import_dossier,
+            commands::export_dossier,
+            commands::research_start,
+            commands::research_cancel,
+            commands::research_retry,
+            commands::research_dismiss,
+            commands::research_jobs,
+            commands::app_version,
+            commands::check_updates,
+            commands::install_update,
+            commands::voicestudio_version,
+            commands::storage_info,
+            commands::set_storage_limits,
+            commands::clear_log,
+            commands::clear_temp,
+            commands::vacuum_db,
+            commands::open_folder,
+            commands::get_backdrop,
+            commands::set_backdrop,
+            commands::clear_backdrop,
+            commands::voice_persona_preview,
             commands::create_loop,
             commands::start_round,
             commands::cancel_start,

@@ -522,6 +522,40 @@ impl Bank {
     }
 }
 
+impl Bank {
+    /// A bank problem that one of `reported` (free-text questions from a dossier) names, e.g.
+    /// "Implement an LRU cache" → LRU Cache. Most of the title's words must appear in the
+    /// question. `seed` picks among equally good matches, so loops vary.
+    pub fn match_reported(&self, reported: &[String], seed: u64) -> Option<&Question> {
+        let asked: Vec<HashSet<String>> = reported.iter().map(|q| title_words(q)).collect();
+        self.questions
+            .iter()
+            .filter_map(|q| {
+                let title = title_words(&q.title);
+                if title.is_empty() {
+                    return None;
+                }
+                let best = asked.iter().map(|a| title.iter().filter(|w| a.contains(*w)).count()).max()?;
+                let cover = (best * 100 / title.len()) as u64;
+                (cover >= 60).then_some(((best, cover), q))
+            })
+            // More matched words first, then the tighter title.
+            .max_by_key(|(score, q)| (*score, mix(seed, &q.id)))
+            .map(|(_, q)| q)
+    }
+}
+
+const STOP: [&str; 14] = ["a", "an", "the", "of", "in", "and", "to", "for", "with", "on", "then", "it", "find", "given"];
+
+fn title_words(s: &str) -> HashSet<String> {
+    s.to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty() && !STOP.contains(w))
+        // "lists" and "list" are the same word for matching.
+        .map(|w| w.strip_suffix('s').filter(|r| r.len() > 2).unwrap_or(w).to_string())
+        .collect()
+}
+
 fn mix(seed: u64, id: &str) -> u64 {
     id.bytes().fold(seed ^ 0x9E37_79B9_7F4A_7C15, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01B3))
 }
@@ -533,6 +567,17 @@ mod tests {
 
     fn repo() -> Bank {
         Bank::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts"))
+    }
+
+    #[test]
+    fn reported_questions_find_bank_problems() {
+        let b = repo();
+        let pick = |q: &str| b.match_reported(&[q.to_string()], 7).map(|q| q.id.as_str());
+        assert_eq!(pick("Detect a cycle in a linked list, then find where it starts"), Some("linked-list-cycle"));
+        assert_eq!(pick("Maximum sum subarray, then return the subarray itself"), Some("maximum-subarray"));
+        assert_eq!(pick("Number of islands in a grid"), Some("number-of-islands"));
+        assert_eq!(pick("Design a URL shortener"), None);
+        assert!(b.match_reported(&[], 1).is_none());
     }
 
     #[test]

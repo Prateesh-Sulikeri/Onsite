@@ -41,6 +41,10 @@ impl Catalog {
     }
 
     /// Same rotation as the artifact, so personas stay stable per round index.
+    pub fn round_keys(&self) -> Vec<String> {
+        self.rounds.keys().cloned().collect()
+    }
+
     pub fn persona(&self, round_index: usize) -> &str {
         &self.names[(round_index * 5 + 3) % self.names.len()]
     }

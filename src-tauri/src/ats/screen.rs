@@ -113,11 +113,11 @@ pub async fn screen(state: &AppState, resume: &str, jd: &str) -> Result<AiScreen
     }
     let template = prompts::load(&state.prompts_dir, "ats_screen.md")?;
     let prompt = render_prompt(&template, resume, jd);
-    let loc = state.claude_location().await?;
+    let backend = state.backend().await?;
     // Judging fit is the report model's kind of job.
     let model = state.settings().report_model;
-    let out = run_once(&loc, &prompt, Tools::None, &model, |_| {}).await?;
-    let json = out.json.ok_or_else(|| AppError::Claude("the AI screen came back unreadable. Try again.".into()))?;
+    let out = run_once(&backend, &prompt, Tools::None, &model, |_| {}).await?;
+    let json = out.json.ok_or_else(|| AppError::Ai("The AI screen came back unreadable. Try again.".into()))?;
     let mut s = serde_json::from_value::<AiScreen>(json)?.sanitize();
     s.model = out.model;
     s.duration_ms = out.duration_ms;

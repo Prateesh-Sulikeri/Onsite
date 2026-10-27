@@ -1,0 +1,120 @@
+/* Themes. `data-theme` on <html> is "<family>-<light|dark>" (set by theme-boot.js before paint).
+   Onsite dark is app.css's :root as is. Every other theme sets the base palette below; the
+   shared block derives the rest (lines, washes, glows) from it with color-mix, so app.css
+   needs no per-theme rules. Palettes: catppuccin.com, rosepinetheme.com, gruvbox (morhetz). */
+
+:root[data-theme]:not([data-theme="onsite-dark"]){
+  --backdrop: none;
+  --backdrop-pos: center;
+  --panel: color-mix(in srgb, var(--surface) 90%, transparent);
+  --field: color-mix(in srgb, var(--bg) 60%, var(--surface));
+  --line: color-mix(in srgb, var(--ink) 13%, transparent);
+  --line-2: color-mix(in srgb, var(--ink) 24%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+  --grad: linear-gradient(135deg, var(--accent-hi), var(--accent));
+  --grad-hi: linear-gradient(135deg, color-mix(in srgb, var(--accent-hi) 82%, white), color-mix(in srgb, var(--accent) 85%, white));
+  --tint: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
+  --glow: 0 10px 28px -12px color-mix(in srgb, var(--accent) 55%, transparent);
+  --glow-sm: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent), 0 6px 20px -10px color-mix(in srgb, var(--accent) 45%, transparent);
+  --shadow: 0 1px 0 color-mix(in srgb, white 4%, transparent) inset, 0 18px 40px -24px color-mix(in srgb, black 70%, transparent);
+  --ok-soft: color-mix(in srgb, var(--ok) 18%, transparent);
+  --warn-soft: color-mix(in srgb, var(--warn) 18%, transparent);
+  --bad-soft: color-mix(in srgb, var(--bad) 18%, transparent);
+  --sel-text: color-mix(in srgb, var(--accent) 35%, transparent);
+  --side-bg: var(--side);
+  --side-glow: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-shadow: color-mix(in srgb, var(--accent) 45%, transparent);
+  --hover: color-mix(in srgb, var(--ink) 8%, transparent);
+  --btn-bg: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  --glass: color-mix(in srgb, var(--surface) 75%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
+  --accent-line-strong: color-mix(in srgb, var(--accent) 85%, transparent);
+  --accent-wash: color-mix(in srgb, var(--accent) 16%, transparent);
+  --sel-bg: linear-gradient(135deg, color-mix(in srgb, var(--accent) 24%, var(--surface)), color-mix(in srgb, var(--accent) 9%, var(--surface)));
+  --chip-bg: linear-gradient(145deg, color-mix(in srgb, var(--accent) 22%, var(--surface-2)), var(--surface-2));
+  --tip-bg: linear-gradient(135deg, color-mix(in srgb, var(--warm-2) 16%, var(--surface)), var(--panel) 70%);
+  --warm-line: color-mix(in srgb, var(--warm-2) 35%, transparent);
+  --focus: color-mix(in srgb, var(--accent) 28%, transparent);
+  --placeholder: var(--muted);
+  --ok-hi: var(--ok);
+  --bar-bg: var(--surface);
+  --bubble: var(--surface-2);
+  --bubble-me: linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, var(--surface-2)), color-mix(in srgb, var(--accent) 16%, var(--surface-2)));
+  --orb-ring: color-mix(in srgb, var(--ink) 10%, transparent);
+  --pane: color-mix(in srgb, var(--bg) 88%, transparent);
+  --text-shadow: transparent;
+  --deep-shadow: color-mix(in srgb, black 45%, transparent);
+  --scrim: color-mix(in srgb, black 50%, transparent);
+  --syn-line: color-mix(in srgb, var(--ink) 6%, transparent);
+  --syn-select: color-mix(in srgb, var(--accent) 30%, transparent);
+  --syn-match: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+:root[data-mode="light"][data-theme]{
+  color-scheme: light;
+  --shadow: 0 1px 2px color-mix(in srgb, black 6%, transparent), 0 14px 32px -20px color-mix(in srgb, black 28%, transparent);
+  --deep-shadow: color-mix(in srgb, black 22%, transparent);
+  --scrim: color-mix(in srgb, black 30%, transparent);
+  --panel: color-mix(in srgb, var(--surface) 94%, transparent);
+  --hover: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+:root[data-mode="light"] select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23707080' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")}
+
+/* ---- Onsite light: the same violet, on lavender paper ---- */
+:root[data-theme="onsite-light"]{
+  --bg:#f3f1fa; --side:#ebe7f7; --surface:#ffffff; --surface-2:#f2eefb; --surface-3:#e3dcf5;
+  --ink:#1c1633; --ink-2:#3b3359; --muted:#6b6487;
+  --accent:#6a3de8; --accent-hi:#8b63f2; --accent-ink:#ffffff; --accent-text:#5a2fd6;
+  --warm:#c26a2b; --warm-2:#b8327a; --ok:#1f8a5b; --warn:#a86a00; --bad:#c8323f; --code-bg:#faf9fe;
+  --syn-kw:#7a3fd6; --syn-type:#2a62b8; --syn-fn:#b0571d; --syn-str:#2b8a4a; --syn-num:#b8327a; --syn-comment:#8a84a3; --syn-meta:#9a6a00; --syn-gutter:#a49fbd;
+}
+
+/* ---- Catppuccin: Mocha (dark), Latte (light). Accent: mauve, lavender ---- */
+:root[data-theme="catppuccin-dark"]{
+  color-scheme: dark;
+  --bg:#1e1e2e; --side:#181825; --surface:#24243a; --surface-2:#313244; --surface-3:#45475a;
+  --ink:#cdd6f4; --ink-2:#bac2de; --muted:#9399b2;
+  --accent:#cba6f7; --accent-hi:#b4befe; --accent-ink:#11111b; --accent-text:#cba6f7;
+  --warm:#fab387; --warm-2:#f5c2e7; --ok:#a6e3a1; --warn:#f9e2af; --bad:#f38ba8; --code-bg:#181825;
+  --syn-kw:#cba6f7; --syn-type:#f9e2af; --syn-fn:#89b4fa; --syn-str:#a6e3a1; --syn-num:#fab387; --syn-comment:#7f849c; --syn-meta:#f5c2e7; --syn-gutter:#6c7086;
+}
+:root[data-theme="catppuccin-light"]{
+  --bg:#eff1f5; --side:#e6e9ef; --surface:#f9fafb; --surface-2:#e6e9ef; --surface-3:#ccd0da;
+  --ink:#4c4f69; --ink-2:#5c5f77; --muted:#7c7f93;
+  --accent:#8839ef; --accent-hi:#7287fd; --accent-ink:#ffffff; --accent-text:#8839ef;
+  --warm:#fe640b; --warm-2:#ea76cb; --ok:#40a02b; --warn:#df8e1d; --bad:#d20f39; --code-bg:#e6e9ef;
+  --syn-kw:#8839ef; --syn-type:#df8e1d; --syn-fn:#1e66f5; --syn-str:#40a02b; --syn-num:#fe640b; --syn-comment:#8c8fa1; --syn-meta:#ea76cb; --syn-gutter:#9ca0b0;
+}
+
+/* ---- Rosé Pine: main (dark), Dawn (light). Accent: iris, rose ---- */
+:root[data-theme="rosepine-dark"]{
+  color-scheme: dark;
+  --bg:#191724; --side:#1f1d2e; --surface:#1f1d2e; --surface-2:#26233a; --surface-3:#403d52;
+  --ink:#e0def4; --ink-2:#cfcbe6; --muted:#908caa;
+  --accent:#c4a7e7; --accent-hi:#ebbcba; --accent-ink:#191724; --accent-text:#c4a7e7;
+  --warm:#f6c177; --warm-2:#eb6f92; --ok:#9ccfd8; --warn:#f6c177; --bad:#eb6f92; --code-bg:#1f1d2e;
+  --syn-kw:#c4a7e7; --syn-type:#9ccfd8; --syn-fn:#ebbcba; --syn-str:#f6c177; --syn-num:#eb6f92; --syn-comment:#6e6a86; --syn-meta:#9ccfd8; --syn-gutter:#6e6a86;
+}
+:root[data-theme="rosepine-light"]{
+  --bg:#faf4ed; --side:#f2e9e1; --surface:#fffaf3; --surface-2:#f2e9e1; --surface-3:#dfdad9;
+  --ink:#575279; --ink-2:#625d85; --muted:#797593;
+  --accent:#907aa9; --accent-hi:#d7827e; --accent-ink:#ffffff; --accent-text:#7a6299;
+  --warm:#ea9d34; --warm-2:#b4637a; --ok:#286983; --warn:#c47e1e; --bad:#b4637a; --code-bg:#fffaf3;
+  --syn-kw:#907aa9; --syn-type:#56949f; --syn-fn:#d7827e; --syn-str:#c47e1e; --syn-num:#b4637a; --syn-comment:#9893a5; --syn-meta:#286983; --syn-gutter:#9893a5;
+}
+
+/* ---- Gruvbox: dark, light (medium contrast). Accent: orange, yellow ---- */
+:root[data-theme="gruvbox-dark"]{
+  color-scheme: dark;
+  --bg:#282828; --side:#1d2021; --surface:#32302f; --surface-2:#3c3836; --surface-3:#504945;
+  --ink:#ebdbb2; --ink-2:#d5c4a1; --muted:#a89984;
+  --accent:#fe8019; --accent-hi:#fabd2f; --accent-ink:#282828; --accent-text:#fabd2f;
+  --warm:#fabd2f; --warm-2:#d3869b; --ok:#b8bb26; --warn:#fabd2f; --bad:#fb4934; --code-bg:#1d2021;
+  --syn-kw:#fb4934; --syn-type:#fabd2f; --syn-fn:#8ec07c; --syn-str:#b8bb26; --syn-num:#d3869b; --syn-comment:#928374; --syn-meta:#fe8019; --syn-gutter:#7c6f64;
+}
+:root[data-theme="gruvbox-light"]{
+  --bg:#fbf1c7; --side:#f2e5bc; --surface:#f9f5d7; --surface-2:#ebdbb2; --surface-3:#d5c4a1;
+  --ink:#3c3836; --ink-2:#504945; --muted:#7c6f64;
+  --accent:#af3a03; --accent-hi:#d65d0e; --accent-ink:#fbf1c7; --accent-text:#af3a03;
+  --warm:#b57614; --warm-2:#8f3f71; --ok:#79740e; --warn:#b57614; --bad:#9d0006; --code-bg:#f9f5d7;
+  --syn-kw:#9d0006; --syn-type:#b57614; --syn-fn:#427b58; --syn-str:#79740e; --syn-num:#8f3f71; --syn-comment:#928374; --syn-meta:#af3a03; --syn-gutter:#a89984;
+}

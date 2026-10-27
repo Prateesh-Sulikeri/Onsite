@@ -5,6 +5,7 @@ pub mod report;
 
 use crate::brain::prompts::{render, Vars};
 use crate::catalog::Catalog;
+use crate::dossier::Dossier;
 use crate::error::{AppError, Result};
 use crate::panels::{Panels, DEFAULT_FAMILY};
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,16 @@ pub struct LoopSetup {
     /// Interviewer panel id from panels.json; "" = one-off personas from the catalog.
     #[serde(default)]
     pub panel: String,
+    /// Company-specific mode: the dossier to use and which of its rounds, in order.
+    /// `create_loop` resolves these into `dossier`.
+    #[serde(default)]
+    pub dossier_id: String,
+    #[serde(default)]
+    pub dossier_rounds: Vec<usize>,
+    /// A copy of the dossier with only the chosen rounds, saved with the loop so later
+    /// edits or deletes don't change it. `rounds[i]` is `process[i].kind`.
+    #[serde(default)]
+    pub dossier: Option<Dossier>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -61,6 +72,11 @@ impl LoopSetup {
                 return Err(AppError::Invalid(format!("Unknown round: {k}")));
             }
         }
+        if let Some(d) = &self.dossier {
+            if d.process.iter().map(|r| &r.kind).ne(self.rounds.iter()) {
+                return Err(AppError::Invalid("The rounds don't match the dossier.".into()));
+            }
+        }
         let checks = [
             (cat.companies.contains_key(&self.company), "company style"),
             (cat.levels.contains_key(&self.level), "level"),
@@ -74,6 +90,9 @@ impl LoopSetup {
 
     /// What the candidate sees: "General" for a loop with no company style.
     pub fn company_name(&self, cat: &Catalog) -> String {
+        if let Some(d) = &self.dossier {
+            return d.company.clone();
+        }
         match self.company.as_str() {
             "auto" => "General".into(),
             k => cat.companies.get(k).map_or_else(|| k.to_string(), |c| c.name.clone()),
@@ -82,6 +101,9 @@ impl LoopSetup {
 
     /// The company as the report and verdict prompts name it.
     pub fn company_for_prompt(&self, cat: &Catalog) -> String {
+        if self.dossier.is_some() {
+            return self.company_name(cat);
+        }
         match self.company.as_str() {
             "auto" => "the company in the job description (a typical product company if there is none)".into(),
             _ => self.company_name(cat),
@@ -92,13 +114,15 @@ impl LoopSetup {
         let k = &self.rounds[idx];
         let r = &cat.rounds[k];
         let p = panels.persona(&self.panel, k);
+        // A dossier round keeps the company's own name and length.
+        let reported = self.dossier.as_ref().and_then(|d| d.process.get(idx));
         PlannedRound {
             key: k.clone(),
-            name: r.name.clone(),
+            name: reported.map_or_else(|| r.name.clone(), |d| d.name.clone()),
             persona: p.as_ref().map_or_else(|| cat.persona(idx).to_string(), |p| p.first_name.clone()),
             persona_id: p.as_ref().map(|p| p.id.clone()),
             persona_role: p.map(|p| p.role),
-            minutes: self.minutes.unwrap_or(r.min),
+            minutes: self.minutes.or(reported.map(|d| d.minutes)).unwrap_or(r.min),
             tab: r.tab.clone(),
         }
     }
@@ -124,6 +148,7 @@ fn or_default(s: &str, max: usize, fallback: &str) -> String {
 pub struct PromptTemplates {
     pub interviewer: String,
     pub persona_block: String,
+    pub dossier_block: String,
 }
 
 pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, setup: &LoopSetup, idx: usize) -> String {
@@ -139,7 +164,11 @@ pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, s
     };
     let round = &cat.rounds[&plan.key];
     let company = &cat.companies[&setup.company];
-    let company_line = if setup.company == "auto" { String::new() } else { format!(" at {}", company.name) };
+    let (company_line, company_style, dossier_block) = match &setup.dossier {
+        Some(d) => (format!(" at {}", d.company), format!("{}: {}", d.company, d.style), d.prompt_block(&t.dossier_block, idx)),
+        None if setup.company == "auto" => (String::new(), company.style.clone(), String::new()),
+        None => (format!(" at {}", company.name), company.style.clone(), String::new()),
+    };
     let vars: Vars = [
         ("persona", persona),
         ("persona_role", persona_role),
@@ -150,12 +179,12 @@ pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, s
         ("round_index", (idx + 1).to_string()),
         ("round_count", setup.rounds.len().to_string()),
         ("round_guide", round.guide.clone()),
-        ("company_style", company.style.clone()),
+        ("company_style", company_style),
         ("level_name", cat.levels[&setup.level].clone()),
         ("level_bar", cat.level_bar[&setup.level].clone()),
         ("temperament", cat.temper[&setup.temperament].clone()),
         ("lang", setup.lang.clone()),
-        ("dossier_block", String::new()),
+        ("dossier_block", dossier_block),
         ("resume", or_default(&setup.resume, RESUME_MAX, "(not provided — ask them to walk you through their background)")),
         ("jd", or_default(&setup.jd, JD_MAX, "(none — use a typical role at this level)")),
         ("candidate_notes", or_default(&setup.notes, 4_000, "(none)")),
@@ -275,7 +304,7 @@ mod tests {
     fn fixtures() -> (Catalog, PromptTemplates, Panels) {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts");
         let load = |n| crate::brain::prompts::load(&dir, n).unwrap();
-        let t = PromptTemplates { interviewer: load("interviewer.md"), persona_block: load("persona_block.md") };
+        let t = PromptTemplates { interviewer: load("interviewer.md"), persona_block: load("persona_block.md"), dossier_block: load("dossier_block.md") };
         (Catalog::load(&dir).unwrap(), t, Panels::load(&dir))
     }
 
@@ -291,7 +320,32 @@ mod tests {
             notes: String::new(),
             minutes: Some(10),
             panel: String::new(),
+            dossier_id: String::new(),
+            dossier_rounds: Vec::new(),
+            dossier: None,
         }
+    }
+
+    #[test]
+    fn dossier_loop_uses_company_rounds_and_reports() {
+        let (cat, tpl, panels) = fixtures();
+        let raw = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../dossiers/razorpay-sde-2-backend.json")).unwrap();
+        let keys: Vec<String> = cat.rounds.keys().cloned().collect();
+        let d = Dossier::from_value(&serde_json::from_str(&raw).unwrap(), &keys).unwrap().with_rounds(&[1, 3]);
+        let mut s = setup();
+        s.company = "auto".into();
+        s.minutes = None;
+        s.rounds = d.process.iter().map(|r| r.kind.clone()).collect();
+        s.dossier = Some(d);
+        s.validate(&cat, &panels).unwrap();
+        assert_eq!(s.company_name(&cat), "Razorpay");
+        let plan = s.plan(&cat, &panels, 0);
+        assert_eq!((plan.key.as_str(), plan.name.as_str(), plan.minutes), ("lld", "Machine coding (LLD)", 90));
+        let p = interviewer_prompt(&tpl, &cat, &panels, &s, 0);
+        assert!(!p.contains("{{"), "unrendered placeholder in:\n{p}");
+        assert!(p.contains(" at Razorpay, conducting") && p.contains("RESEARCHED DOSSIER") && p.contains("COMPANY STYLE: Razorpay:"));
+        s.rounds.reverse();
+        assert!(s.validate(&cat, &panels).is_err());
     }
 
     #[test]

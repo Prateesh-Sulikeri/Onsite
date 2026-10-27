@@ -70,7 +70,7 @@ fn env_dir(var: &str) -> Option<PathBuf> {
     std::env::var_os(var).map(PathBuf::from)
 }
 
-fn voicestudio_python() -> Option<PathBuf> {
+pub(crate) fn voicestudio_python() -> Option<PathBuf> {
     let p = env_dir("APPDATA")?.join("VoiceStudio/runtime/project/.venv/Scripts/python.exe");
     p.is_file().then_some(p)
 }

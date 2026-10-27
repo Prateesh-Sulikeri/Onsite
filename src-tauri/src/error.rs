@@ -6,6 +6,9 @@ pub enum AppError {
     ClaudeNotFound,
     #[error("Claude Code failed: {0}")]
     Claude(String),
+    /// A provider API call failed; the text is already plain.
+    #[error("{0}")]
+    Ai(String),
     #[error("{0}")]
     Voice(String),
     #[error("{0}")]

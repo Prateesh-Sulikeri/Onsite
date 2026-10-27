@@ -139,7 +139,7 @@ fn clip(s: &str, max: usize) -> String {
 }
 
 /// Hides console windows for child processes on Windows.
-fn command(program: &str) -> Command {
+fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     let mut c = Command::new(program);
     c.kill_on_drop(true).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(windows)]
@@ -215,11 +215,11 @@ pub struct Toolchain {
 pub async fn toolchains() -> Vec<Toolchain> {
     let mut out = Vec::new();
     for lang in Lang::ALL {
-        let (prog, args): (&str, &[&str]) = match lang {
-            Lang::Java => ("javac", &["-version"]),
-            Lang::Python => (PYTHON, &["--version"]),
-            Lang::Cpp => ("g++", &["--version"]),
-            Lang::Js => ("node", &["--version"]),
+        let (prog, args): (&std::ffi::OsStr, &[&str]) = match lang {
+            Lang::Java => ("javac".as_ref(), &["-version"]),
+            Lang::Python => (python().as_os_str(), &["--version"]),
+            Lang::Cpp => ("g++".as_ref(), &["--version"]),
+            Lang::Js => ("node".as_ref(), &["--version"]),
         };
         let mut c = command(prog);
         c.args(args);
@@ -240,6 +240,28 @@ const PYTHON: &str = "python";
 #[cfg(not(windows))]
 const PYTHON: &str = "python3";
 
+/// Python for running code and building Submit tests: one on PATH, else the copy VoiceStudio
+/// ships, so a machine with only VoiceStudio can still Run and Submit. On Windows, PATH's
+/// `WindowsApps\python.exe` is a Store shortcut, not Python, and is skipped.
+fn python() -> &'static std::path::PathBuf {
+    static PY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    PY.get_or_init(|| {
+        if cfg!(windows) {
+            let on_path = std::env::var_os("PATH")
+                .map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|d| !d.to_string_lossy().to_lowercase().contains("windowsapps"))
+                .map(|d| d.join("python.exe"))
+                .find(|p| p.is_file());
+            if let Some(p) = on_path.or_else(crate::voice::whisper::voicestudio_python) {
+                return p;
+            }
+        }
+        PYTHON.into()
+    })
+}
+
 /// Files and commands for one language, built in `dir`.
 struct Plan {
     compile: Option<Command>,
@@ -253,7 +275,7 @@ fn plan(lang: Lang, q: &Question, code: &str, dir: &Path) -> std::io::Result<Pla
             w("Solution.py", code)?;
             w("driver.py", &gen::python_driver())?;
             w("sig.json", &gen::sig_json(q))?;
-            let mut run = command(PYTHON);
+            let mut run = command(python());
             run.args(["-X", "utf8", "driver.py", "Solution.py", "sig.json", "tests.json"]);
             Plan { compile: None, run }
         }
@@ -283,7 +305,7 @@ fn plan(lang: Lang, q: &Question, code: &str, dir: &Path) -> std::io::Result<Pla
             let mut run = command(if cfg!(windows) { "main.exe" } else { "./main.exe" });
             // Windows resolves a bare program name against PATH, not the working directory.
             if cfg!(windows) {
-                run = command(&dir.join("main.exe").to_string_lossy());
+                run = command(dir.join("main.exe"));
             }
             run.arg("tests.json");
             Plan { compile: Some(compile), run }
@@ -452,7 +474,7 @@ pub async fn stress_tests(q: &Question, count: u32) -> Vec<Test> {
     if files.iter().any(|(n, b)| std::fs::write(dir.join(n), b).is_err()) {
         return vec![];
     }
-    let mut c = command(PYTHON);
+    let mut c = command(python());
     c.args(["-X", "utf8", "make.py", &count.to_string()]);
     match exec(c, dir, Duration::from_secs(120)).await {
         Ok(o) if o.code == Some(0) => o

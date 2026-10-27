@@ -436,13 +436,19 @@ impl Voice {
     }
 
     pub async fn test_speak(&self, settings: &VoiceSettings, text: &str) -> Result<u64> {
-        let player = self.player()?;
         let vs = VoiceStudio::new(&settings.base_url);
         let voice = vs.resolve_voice(&settings.voice).await?;
+        self.speak_as(settings, &voice, text).await
+    }
+
+    /// Speaks `text` once in a given voice (a panel interviewer's preview). Returns ms to first audio.
+    pub async fn speak_as(&self, settings: &VoiceSettings, voice: &vs::Profile, text: &str) -> Result<u64> {
+        let player = self.player()?;
+        let vs = VoiceStudio::new(&settings.base_url);
         let started = Instant::now();
         let mut first_ms = None;
         let mut rs = player.resampler_from(TTS_RATE);
-        vs.speak(text, &voice, settings.steps, settings.speed, |pcm| {
+        vs.speak(text, voice, settings.steps, settings.speed, |pcm| {
             first_ms.get_or_insert(started.elapsed().as_millis() as u64);
             player.push(&mut rs, pcm);
         })

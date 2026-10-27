@@ -267,6 +267,43 @@ impl Store {
         Ok(())
     }
 
+    /// Row counts and transcript bytes, for Settings → Storage.
+    pub fn counts(&self) -> Result<StoreCounts> {
+        let n = |sql: &str| self.conn.query_row(sql, [], |r| r.get::<_, i64>(0));
+        Ok(StoreCounts {
+            loops: n("SELECT COUNT(*) FROM loops")?,
+            rounds: n("SELECT COUNT(*) FROM rounds")?,
+            reports: n("SELECT COUNT(*) FROM reports")?,
+            dossiers: n("SELECT COUNT(*) FROM dossiers")?,
+            research_jobs: n("SELECT COUNT(*) FROM research_jobs")?,
+            transcript_bytes: n("SELECT COALESCE(SUM(LENGTH(transcript) + LENGTH(workspace)), 0) FROM rounds")?,
+            oldest_round: self.conn.query_row("SELECT MIN(started_at) FROM rounds", [], |r| r.get(0))?,
+        })
+    }
+
+    /// Finished rounds past the limits: beyond the newest `keep` (0 = no cap), or started
+    /// before `before` (RFC 3339). Rounds still running are never picked.
+    pub fn rounds_over_limit(&self, keep: u32, before: Option<&str>) -> Result<Vec<i64>> {
+        let mut st = self.conn.prepare("SELECT id, started_at FROM rounds WHERE ended_at IS NOT NULL ORDER BY started_at DESC, id DESC")?;
+        let rows: Vec<(i64, String)> = st.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<std::result::Result<_, _>>()?;
+        Ok(rows
+            .into_iter()
+            .enumerate()
+            .filter(|(i, (_, at))| (keep > 0 && *i >= keep as usize) || before.is_some_and(|b| at.as_str() < b))
+            .map(|(_, (id, _))| id)
+            .collect())
+    }
+
+    /// Loops with no rounds left, created before `before`.
+    pub fn delete_empty_loops(&self, before: &str) -> Result<usize> {
+        Ok(self.conn.execute("DELETE FROM loops WHERE created_at < ?1 AND id NOT IN (SELECT loop_id FROM rounds)", [before])?)
+    }
+
+    pub fn vacuum(&self) -> Result<()> {
+        self.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;")?;
+        Ok(())
+    }
+
     pub fn history(&self, limit: i64) -> Result<Vec<HistoryItem>> {
         let mut st = self.conn.prepare(
             "SELECT r.id, r.loop_id, r.name, l.config, r.started_at, r.ended_at, rep.data, r.round_key, r.minutes
@@ -307,6 +344,123 @@ impl Store {
         }
         Ok(out)
     }
+
+    /// Inserts or replaces a dossier (researching the same company and role again refreshes it).
+    pub fn save_dossier(&self, id: &str, company: &str, role: &str, level: &str, data: &Value) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO dossiers (id, company, role, level, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET company = excluded.company, role = excluded.role, level = excluded.level,
+             data = excluded.data, created_at = excluded.created_at",
+            params![id, company, role, level, data.to_string(), now()],
+        )?;
+        Ok(())
+    }
+
+    /// Newest first.
+    pub fn dossiers(&self) -> Result<Vec<Value>> {
+        let mut st = self.conn.prepare("SELECT data FROM dossiers ORDER BY created_at DESC")?;
+        let rows = st.query_map([], |r| r.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for raw in rows {
+            out.push(serde_json::from_str(&raw?)?);
+        }
+        Ok(out)
+    }
+
+    pub fn dossier(&self, id: &str) -> Result<Option<Value>> {
+        let raw: Option<String> = self.conn.query_row("SELECT data FROM dossiers WHERE id = ?1", [id], |r| r.get(0)).optional()?;
+        Ok(raw.map(|s| serde_json::from_str(&s)).transpose()?)
+    }
+
+    pub fn delete_dossier(&self, id: &str) -> Result<()> {
+        self.conn.execute("UPDATE research_jobs SET dossier_id = NULL WHERE dossier_id = ?1", [id])?;
+        self.conn.execute("DELETE FROM dossiers WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    pub fn create_job(&self, request: &Value) -> Result<i64> {
+        let t = now();
+        self.conn.execute(
+            "INSERT INTO research_jobs (request, status, created_at, updated_at) VALUES (?1, 'running', ?2, ?2)",
+            params![request.to_string(), t],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn update_job(&self, job: &JobRow) -> Result<()> {
+        self.conn.execute(
+            "UPDATE research_jobs SET status = ?1, progress = ?2, log = ?3, raw_output = ?4, dossier_id = ?5, updated_at = ?6
+             WHERE id = ?7",
+            params![job.status, job.progress, job.log, job.raw_output, job.dossier_id, now(), job.id],
+        )?;
+        Ok(())
+    }
+
+    pub fn job(&self, id: i64) -> Result<JobRow> {
+        Ok(self.conn.query_row(&format!("{JOB_COLS} WHERE id = ?1"), [id], job_row)?)
+    }
+
+    /// Newest first.
+    pub fn jobs(&self, limit: i64) -> Result<Vec<JobRow>> {
+        let mut st = self.conn.prepare(&format!("{JOB_COLS} ORDER BY id DESC LIMIT ?1"))?;
+        let rows = st.query_map([limit], job_row)?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    pub fn delete_job(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM research_jobs WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Jobs left running when the app closed can't resume; they become failed, with a retry.
+    pub fn fail_running_jobs(&self) -> Result<usize> {
+        Ok(self.conn.execute(
+            "UPDATE research_jobs SET status = 'failed', log = log || 'Onsite closed while this was running.\n', updated_at = ?1
+             WHERE status = 'running'",
+            [now()],
+        )?)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct StoreCounts {
+    pub loops: i64,
+    pub rounds: i64,
+    pub reports: i64,
+    pub dossiers: i64,
+    pub research_jobs: i64,
+    pub transcript_bytes: i64,
+    pub oldest_round: Option<String>,
+}
+
+const JOB_COLS: &str = "SELECT id, request, status, progress, log, raw_output, dossier_id, created_at, updated_at FROM research_jobs";
+
+/// One research job. `status`: running, done, failed or cancelled.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct JobRow {
+    pub id: i64,
+    pub request: Value,
+    pub status: String,
+    pub progress: i64,
+    pub log: String,
+    pub raw_output: Option<String>,
+    pub dossier_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+fn job_row(r: &rusqlite::Row) -> rusqlite::Result<JobRow> {
+    Ok(JobRow {
+        id: r.get(0)?,
+        request: serde_json::from_str(&r.get::<_, String>(1)?).unwrap_or(Value::Null),
+        status: r.get(2)?,
+        progress: r.get(3)?,
+        log: r.get(4)?,
+        raw_output: r.get(5)?,
+        dossier_id: r.get(6)?,
+        created_at: r.get(7)?,
+        updated_at: r.get(8)?,
+    })
 }
 
 #[cfg(test)]
@@ -353,6 +507,55 @@ mod tests {
         assert!(s.create_round(loop_id, 0, "coding", "DSA coding", "Rahul", 45, "sonnet").unwrap() > id);
         assert_eq!(s.loop_verdict(loop_id).unwrap(), None);
         s.delete_round(id).unwrap(); // already gone: no error
+    }
+
+    #[test]
+    fn limits_pick_old_finished_rounds() {
+        let s = Store::open_in_memory().unwrap();
+        let l = s.create_loop(&json!({})).unwrap();
+        let ids: Vec<i64> = (0..4).map(|i| s.create_round(l, i, "coding", "DSA", "R", 45, "m").unwrap()).collect();
+        for (i, id) in ids.iter().enumerate() {
+            s.conn.execute("UPDATE rounds SET started_at = ?1 WHERE id = ?2", params![format!("2026-0{}-01T00:00:00Z", i + 1), id]).unwrap();
+        }
+        for id in &ids[..3] {
+            s.finish_round(*id).unwrap();
+        }
+        // ids[3] is still running: never picked.
+        assert_eq!(s.rounds_over_limit(2, None).unwrap(), vec![ids[0]]);
+        assert_eq!(s.rounds_over_limit(0, Some("2026-02-15T00:00:00Z")).unwrap(), vec![ids[1], ids[0]]);
+        assert!(s.rounds_over_limit(0, None).unwrap().is_empty());
+        let c = s.counts().unwrap();
+        assert_eq!((c.loops, c.rounds), (1, 4));
+        assert_eq!(c.oldest_round.as_deref(), Some("2026-01-01T00:00:00Z"));
+        s.vacuum().unwrap();
+    }
+
+    #[test]
+    fn dossiers_and_jobs() {
+        let s = Store::open_in_memory().unwrap();
+        s.save_dossier("acme-sde", "Acme", "SDE", "sde2", &json!({"id": "acme-sde", "company": "Acme"})).unwrap();
+        s.save_dossier("acme-sde", "Acme", "SDE", "sde2", &json!({"id": "acme-sde", "company": "Acme", "v": 2})).unwrap();
+        assert_eq!(s.dossiers().unwrap().len(), 1);
+        assert_eq!(s.dossier("acme-sde").unwrap().unwrap()["v"], 2);
+
+        let id = s.create_job(&json!({"company": "Acme"})).unwrap();
+        let mut job = s.job(id).unwrap();
+        assert_eq!((job.status.as_str(), job.request["company"].as_str()), ("running", Some("Acme")));
+        job.progress = 40;
+        job.log.push_str("searching\n");
+        s.update_job(&job).unwrap();
+        assert_eq!(s.fail_running_jobs().unwrap(), 1);
+        let job = s.job(id).unwrap();
+        assert_eq!((job.status.as_str(), job.progress), ("failed", 40));
+        assert!(job.log.ends_with("Onsite closed while this was running.\n"));
+        assert_eq!(s.jobs(5).unwrap().len(), 1);
+
+        let mut done = s.job(s.create_job(&json!({})).unwrap()).unwrap();
+        done.dossier_id = Some("acme-sde".into());
+        s.update_job(&done).unwrap();
+        s.delete_dossier("acme-sde").unwrap();
+        assert!(s.dossier("acme-sde").unwrap().is_none());
+        assert_eq!(s.job(done.id).unwrap().dossier_id, None);
     }
 
     #[test]
