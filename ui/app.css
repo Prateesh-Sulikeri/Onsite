@@ -411,6 +411,19 @@ code{font-family:var(--mono); font-variant-ligatures:none; font-size:.9em; backg
 .kw.ok{background:var(--ok-soft); color:var(--ok)} .kw.warn{background:var(--warn-soft); color:var(--warn)} .kw.bad{background:var(--bad-soft); color:var(--bad)}
 .kw-key{display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:12.5px; margin-top:14px}
 .kw-key .kw{font-size:11.5px; padding:2px 8px}
+.ai-card h3{font-size:13.5px; margin:18px 0 10px}
+.ai-top{display:grid; grid-template-columns:auto 1fr; gap:20px; align-items:center}
+.ai-grade{width:76px; height:76px; border-radius:20px; display:grid; place-items:center; font:700 40px/1 var(--font-display)}
+.ai-grade.ok{background:var(--ok-soft); color:var(--ok)} .ai-grade.warn{background:var(--warn-soft); color:var(--warn)} .ai-grade.bad{background:var(--bad-soft); color:var(--bad)}
+.ai-meta{display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:13px}
+.ai-meta b{font-size:15px}
+.ai-sum{font-size:15px; margin:8px 0 4px; line-height:1.45}
+.ai-take{margin-top:16px; padding:12px 14px; border-radius:var(--r); background:var(--surface-2); font-size:13.5px}
+.ai-must{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
+.ai-must li{display:grid; grid-template-columns:118px 1fr; gap:12px; align-items:start; font-size:13.5px}
+.ai-must .kw{justify-content:center; font-size:12px}
+.ai-must small{display:block; color:var(--muted); font-size:12.5px; margin-top:2px}
+.ai-card .small{font-size:12px; margin-top:14px}
 .ats-raw summary{cursor:pointer}
 .ats-raw pre{margin:14px 0 0; padding:14px; background:var(--bg); border-radius:var(--r); font-family:var(--mono); font-size:12.5px; white-space:pre-wrap; word-break:break-word; max-height:420px; overflow:auto}
 #view-resume .drops{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); align-items:stretch; margin-top:0}

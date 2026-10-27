@@ -1296,6 +1296,7 @@ function renderAts(r, saved){
           <p class="muted small">Simulated from each product’s public behaviour. Real ATSs don’t publish their scoring, and many recruiters search rather than auto-reject. Scoring follows the open-source Resume-Matcher and ats-screener projects.</p>
         </div>
       </div>
+      ${job && r.extractability !== "none" ? `<div id="atsAi"></div>` : ""}
       ${first ? `<div class="fix"><span class="fix-ic">${icon("bulb")}</span><div><b>Fix this first</b>${esc(first)}</div></div>` : ""}
       ${rest.length ? `<div class="panel"><h2>Then</h2><ul class="list">${rest.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
       <div class="ats-grid">${ats}</div>
@@ -1305,6 +1306,54 @@ function renderAts(r, saved){
       </div>
       ${kws}
       <details class="panel ats-raw"><summary><b>What the ATS sees</b> <span class="muted">— the text exactly as extracted, in reading order</span></summary><pre>${esc(r.preview)}</pre></details>
+    </div>`;
+  if (!job || r.extractability === "none") return;
+  if (r.screen) renderAiScreen(r.screen);
+  else if (!saved) runAiScreen();
+  else renderAiScreen(null, "No AI screen for this check yet.");
+}
+let aiSeq = 0;
+async function runAiScreen(){
+  const seq = ++aiSeq;
+  renderAiScreen(null);
+  const jd = $("#atsJd").value.trim();
+  const args = RESUME_FILE ? {name: RESUME_FILE.name, data: RESUME_FILE.data, text: null, jd} : {name: null, data: null, text: $("#resume").value, jd};
+  try{
+    const s = await api.invoke("ats_screen", args);
+    if (seq === aiSeq) renderAiScreen(s);
+  }catch(e){ if (seq === aiSeq) renderAiScreen(null, errText(e)); }
+}
+function renderAiScreen(s, err){
+  const el = $("#atsAi"); if (!el) return;
+  if (!s){
+    el.innerHTML = err
+      ? `<div class="panel ai-card"><div class="panel-head"><h2>AI screen</h2></div><p class="form-msg err">${esc(err)}</p><div class="btn-row"><button class="btn" id="aiRetry">${icon("refresh")}Run AI screen</button></div></div>`
+      : `<div class="panel ai-card"><div class="panel-head"><h2>AI screen</h2><span class="pill">Grading…</span></div><p class="muted">Claude is reading the extracted text the way HiredScore or Role Fit would. This takes 15–30 s.</p><div class="skeleton" style="height:64px; margin-top:12px"></div></div>`;
+    const b = $("#aiRetry"); if (b) b.onclick = runAiScreen;
+    return;
+  }
+  const gc = {A: "ok", B: "ok", C: "warn", D: "bad"}[s.grade] || "warn";
+  const lvl = {below: "Below the level", at: "At the level", above: "Above the level"}[s.level] || "";
+  const vc = {proven: "ok", claimed: "warn", missing: "bad"};
+  const vt = {proven: "Shown in work", claimed: "Only listed", missing: "Missing"};
+  const li = a => a.map(x => `<li>${esc(x)}</li>`).join("");
+  el.innerHTML = `
+    <div class="panel ai-card">
+      <div class="ai-top">
+        <div class="ai-grade ${gc}" role="img" aria-label="AI grade ${esc(s.grade)}">${esc(s.grade)}</div>
+        <div>
+          <div class="ai-meta"><b>AI screen</b><span class="pill ${s.advance ? "ok" : "bad"}">${s.advance ? "Advances" : "Screened out"}</span><span class="muted">Fit ${s.fit} of 100${lvl ? ` · ${lvl}` : ""}</span></div>
+          <p class="ai-sum">${esc(s.summary)}</p>
+          ${s.level_note ? `<p class="muted">${esc(s.level_note)}</p>` : ""}
+        </div>
+      </div>
+      ${s.recruiter_take ? `<p class="ai-take"><b>A recruiter’s 7-second read:</b> ${esc(s.recruiter_take)}</p>` : ""}
+      ${s.must_haves.length ? `<h3>Must-haves</h3><ul class="ai-must">${s.must_haves.map(m => `<li><span class="kw ${vc[m.verdict]}">${vt[m.verdict]}</span><div><b>${esc(m.skill)}</b><small>${esc(m.evidence)}</small></div></li>`).join("")}</ul>` : ""}
+      <div class="cols">
+        <div><h3>Strengths</h3><ul class="list">${li(s.strengths) || "<li class='muted'>None noted.</li>"}</ul></div>
+        <div><h3>Red flags</h3><ul class="list">${li(s.red_flags) || "<li class='muted'>None noted.</li>"}</ul></div>
+      </div>
+      <p class="muted small">Graded by Claude${s.model ? ` (${esc(s.model)})` : ""} from the text as extracted. Real AI screeners are trained on hiring data and differ by company.</p>
     </div>`;
 }
 

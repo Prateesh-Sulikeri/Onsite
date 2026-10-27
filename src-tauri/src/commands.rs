@@ -340,6 +340,12 @@ pub async fn ats_check(state: State<'_, AppState>, name: Option<String>, data: O
     crate::ats::run(&state, name, data, text, &jd).await
 }
 
+/// The AI screen for the same resume and posting as `ats_check`. Takes Claude 10-30 s.
+#[tauri::command]
+pub async fn ats_screen(state: State<'_, AppState>, name: Option<String>, data: Option<String>, text: Option<String>, jd: String) -> Result<crate::ats::screen::AiScreen> {
+    crate::ats::run_screen(&state, name, data, text, &jd).await
+}
+
 /// The last resume check, if any.
 #[tauri::command]
 pub fn ats_last(state: State<AppState>) -> Result<Option<Value>> {

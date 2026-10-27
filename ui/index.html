@@ -227,7 +227,7 @@
     <!-- ============ RESUME CHECK ============ -->
     <section class="view" id="view-resume" hidden>
       <header class="page-head"><div><div class="crumb">Resume check</div><h1>How an ATS reads your resume</h1>
-        <p class="lede">Reads your file the way applicant tracking systems do, then scores it against a job posting. Your resume stays on this computer. Only the job description goes to Claude.</p></div></header>
+        <p class="lede">Reads your file the way applicant tracking systems do, scores it against a job posting, then runs an AI screen like the ones Workday and iCIMS now use. With a posting, the extracted resume text and the posting go to Claude through your Claude Code login.</p></div></header>
       <div class="stack">
         <div class="panel">
           <div class="drops">
@@ -236,7 +236,7 @@
               <div class="drop-tx"><b>Resume file</b><span id="atsMsg"></span></div>
               <input type="file" id="atsFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
             </div>
-            <label class="field"><span>Job description <small class="muted">(optional, for the match score)</small></span>
+            <label class="field"><span>Job description <small class="muted">(optional, for the match score and AI screen)</small></span>
               <textarea id="atsJd" rows="4" placeholder="Paste the posting. Without it you get the parsing checks only."></textarea>
             </label>
           </div>

@@ -187,6 +187,7 @@ pub fn run() {
             commands::mic_monitor_stop,
             commands::read_document,
             commands::ats_check,
+            commands::ats_screen,
             commands::ats_last,
         ])
         .run(tauri::generate_context!())

@@ -4,11 +4,13 @@
 //! 2. `checks`: can it be read at all (columns, tables, text boxes, images, contact, headings).
 //! 3. `job`: what the posting asks for (Claude reads the posting only; cached).
 //! 4. `score`: Resume-Matcher's match score plus six simulated ATS products.
+//! 5. `screen`: the AI screen (Claude grades the extracted text against the posting, like HiredScore).
 
 pub mod checks;
 pub mod extract;
 pub mod job;
 pub mod score;
+pub mod screen;
 pub mod text;
 
 use crate::error::{AppError, Result};
@@ -114,19 +116,7 @@ pub fn today() -> (i32, u32) {
 
 /// The full check. A file wins over pasted text, since only a file shows layout problems.
 pub async fn run(state: &AppState, name: Option<String>, data_b64: Option<String>, text: Option<String>, jd: &str) -> Result<Report> {
-    let (name, doc) = match (name, data_b64) {
-        (Some(n), Some(d)) => {
-            let doc = read_file(n.clone(), &d).await?;
-            (n, doc)
-        }
-        _ => {
-            let t = text.unwrap_or_default();
-            if t.trim().is_empty() {
-                return Err(AppError::Invalid("Add your resume first.".into()));
-            }
-            ("Pasted text".to_string(), Document::from_text(&t))
-        }
-    };
+    let (name, doc) = resume_doc(name, data_b64, text).await?;
     let job = if jd.trim().is_empty() { None } else { Some(job::keywords(state, jd).await?) };
     let report = analyze(&name, &doc, job.as_ref(), today());
     if let Err(e) = state.store.lock().unwrap().set_setting(LAST_KEY, &report) {
@@ -134,6 +124,40 @@ pub async fn run(state: &AppState, name: Option<String>, data_b64: Option<String
     }
     tracing::info!(kind = ?doc.kind, parse = report.parse_score, matched = report.matched.overall, "resume checked");
     Ok(report)
+}
+
+/// The resume as the check sees it: the file's extracted text, else the pasted text.
+async fn resume_doc(name: Option<String>, data_b64: Option<String>, text: Option<String>) -> Result<(String, Document)> {
+    match (name, data_b64) {
+        (Some(n), Some(d)) => {
+            let doc = read_file(n.clone(), &d).await?;
+            Ok((n, doc))
+        }
+        _ => {
+            let t = text.unwrap_or_default();
+            if t.trim().is_empty() {
+                return Err(AppError::Invalid("Add your resume first.".into()));
+            }
+            Ok(("Pasted text".to_string(), Document::from_text(&t)))
+        }
+    }
+}
+
+/// The AI screen for the same input as `run`. Attached to the saved report when it matches.
+pub async fn run_screen(state: &AppState, name: Option<String>, data_b64: Option<String>, text: Option<String>, jd: &str) -> Result<screen::AiScreen> {
+    let (_, doc) = resume_doc(name, data_b64, text).await?;
+    let s = screen::screen(state, &doc.text, jd).await?;
+    let store = state.store.lock().unwrap();
+    if let Ok(Some(mut last)) = store.get_setting::<serde_json::Value>(LAST_KEY) {
+        let preview: String = doc.text.chars().take(PREVIEW_CHARS).collect();
+        if last["preview"].as_str() == Some(preview.as_str()) {
+            last["screen"] = serde_json::to_value(&s)?;
+            if let Err(e) = store.set_setting(LAST_KEY, &last) {
+                tracing::warn!("saving AI screen: {e}");
+            }
+        }
+    }
+    Ok(s)
 }
 
 #[cfg(test)]

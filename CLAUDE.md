@@ -173,6 +173,11 @@ Reports and transcripts must survive app restarts. Export/import dossiers as JSO
   profiles (Workday, Taleo, iCIMS, Greenhouse, Lever, SuccessFactors) follow ats-screener (MIT). All deterministic.
 - Claude only reads the job description (`prompts/ats_job.md`, no tools, interviewer model, ~7 s), never the resume.
   Result cached in `settings` under `ats_job:<sha256>`; bump `CACHE_VERSION` in `ats/job.rs` when the prompt changes.
+- AI screen (`ats/screen.rs`, `prompts/ats_screen.md`): with a posting, Claude grades the *extracted* resume text
+  A–D like HiredScore/Role Fit (must-haves proven/claimed/missing, level, red flags). Report model, no tools,
+  ~17–22 s on opus (measured 2026-10-27). Runs automatically after the rule-based check; cached per resume+posting
+  under `ats_screen:<sha256>`. It notices scrambled two-column reading order on its own. Prompt forbids guessing
+  gender or other traits from the name (opus said "she" before that rule).
 - The interview setup's resume/JD drops also take PDF/Word/RTF via `read_document`.
 - Offline CLI: `cargo run --example ats_check -- resume.pdf [job.json] [--json]`. Fixtures + sources: `tests/fixtures/ats/`.
 - If the app is running, `onsite.exe` is locked: test with `--target-dir target/ats-test`.
