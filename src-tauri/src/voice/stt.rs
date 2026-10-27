@@ -12,10 +12,14 @@
 //! So we: pick the best installed model, cut long answers into segments at short pauses
 //! (one WS session each, so the tail left to decode at the end stays short), fix domain words
 //! against a vocabulary, and collapse repetition loops.
+//!
+//! Parakeet still mangles tech terms ("Postgres Creole", "reddish" for Redis), so each finished
+//! segment also goes to Whisper large-v3 on the GPU ([`super::whisper`]), with the vocabulary as
+//! its prompt. Parakeet gives the live caption; Whisper's text is what gets sent, when it works.
 
 use super::audio::{i16_to_f32, rms, Level, Mic, Vad, VadEvent, MIC_RATE};
 use super::vs::VoiceStudio;
-use super::VoiceEvent;
+use super::{whisper, VoiceEvent};
 use crate::error::{AppError, Result};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
@@ -462,6 +466,21 @@ struct Seg {
     st: SttState,
     sink: Option<SplitSink<Ws, Message>>,
     done: bool,
+    /// This segment's audio, handed to Whisper when the segment ends.
+    pcm: Vec<i16>,
+    whisper: Option<JoinHandle<Result<String>>>,
+    /// Whisper's text; preferred over Parakeet's when present.
+    fixed: Option<String>,
+}
+
+impl Seg {
+    fn new(sink: Option<SplitSink<Ws, Message>>, pcm: Vec<i16>) -> Self {
+        Self { st: SttState::default(), sink, done: false, pcm, whisper: None, fixed: None }
+    }
+
+    fn text(&self) -> String {
+        self.fixed.clone().unwrap_or_else(|| self.st.result())
+    }
 }
 
 /// Every segment of one answer, in order.
@@ -473,7 +492,7 @@ struct Answer {
 impl Answer {
     /// Best text so far: each segment's summary when it has one, else its finals and partial.
     fn text(&self) -> String {
-        self.segs.iter().map(|s| s.st.result()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" ")
+        self.segs.iter().map(Seg::text).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" ")
     }
 
     fn all_done(&self) -> bool {
@@ -501,7 +520,12 @@ impl Answer {
         }
     }
 
-    async fn end(&mut self, i: usize) -> Result<()> {
+    /// Ends segment `i`: Parakeet gets end-of-audio, Whisper gets the segment's audio.
+    async fn end(&mut self, i: usize, prompt: &str) -> Result<()> {
+        let seg = &mut self.segs[i];
+        if seg.whisper.is_none() && matches!(whisper::status(), whisper::WhisperStatus::Ready { .. }) {
+            seg.whisper = Some(tokio::spawn(whisper::transcribe(std::mem::take(&mut seg.pcm), prompt.to_string())));
+        }
         if let Some(sink) = self.segs[i].sink.as_mut() {
             sink.send(Message::Text(r#"{"type":"input_audio.end"}"#.into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
         }
@@ -564,6 +588,7 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
     let mut last_level = Instant::now();
     let mut shown = String::new();
     let heard = |ans: &Answer| clean_transcript(&ans.text(), &opts.vocab);
+    let prompt = whisper::prompt_for(&opts.vocab);
     let mut health = tokio::time::interval(Duration::from_millis(500));
     let mut mic_lost = false;
     emit(VoiceEvent::Listening { active: true });
@@ -625,7 +650,7 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
                     sink.send(Message::Binary(pcm_bytes(&head).into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
                     let idx = ans.segs.len();
                     readers.0.push(spawn_reader(idx, stream, seg_tx.clone()));
-                    ans.segs.push(Seg { st: SttState::default(), sink: Some(sink), done: false });
+                    ans.segs.push(Seg::new(Some(sink), head.clone()));
                     active = Some(idx);
                     seg_samples = head.len();
                 }
@@ -634,12 +659,13 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
                         if let Some(sink) = ans.segs[i].sink.as_mut() {
                             sink.send(Message::Binary(pcm_bytes(&chunk).into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
                         }
+                        ans.segs[i].pcm.extend_from_slice(&chunk);
                         seg_samples += chunk.len();
                         // Short pause inside a long answer: finish this segment now, so its
                         // decode runs while the candidate keeps talking.
                         let cut = seg_pause_ms(seg_samples).is_some_and(|p| vad.quiet_ms() >= p);
                         if !ended && vad.is_speaking() && cut {
-                            ans.end(i).await?;
+                            ans.end(i, &prompt).await?;
                             active = None;
                             preroll.clear();
                         }
@@ -668,11 +694,25 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
     }
     let ended_at = Instant::now();
     if let Some(i) = active {
-        ans.end(i).await?;
+        ans.end(i, &prompt).await?;
     }
+    // Whisper first. When every segment has Whisper's text, Parakeet's summaries aren't needed.
+    for seg in ans.segs.iter_mut() {
+        let Some(job) = seg.whisper.take() else { continue };
+        tokio::select! {
+            r = job => match r {
+                Ok(Ok(t)) if !t.trim().is_empty() => seg.fixed = Some(t),
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => tracing::warn!("Whisper segment failed, using Parakeet: {e}"),
+                Err(e) => tracing::warn!("Whisper segment task: {e}"),
+            },
+            _ = ctl.cancel.notified() => return Ok(ListenEnd::Cancelled { heard: heard(&ans) }),
+        }
+    }
+    let by_whisper = ans.segs.iter().filter(|s| s.fixed.is_some()).count();
     let deadline = tokio::time::sleep(FINAL_WAIT);
     tokio::pin!(deadline);
-    while !ans.all_done() {
+    while by_whisper < ans.segs.len() && !ans.all_done() {
         tokio::select! {
             _ = &mut deadline => { tracing::warn!("STT summary timed out; using what we have"); break; }
             _ = ctl.cancel.notified() => return Ok(ListenEnd::Cancelled { heard: heard(&ans) }),
@@ -692,7 +732,7 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
     let raw = ans.text();
     let text = clean_transcript(&raw, &opts.vocab);
     let stt_ms = ended_at.elapsed().as_millis() as u64;
-    tracing::info!(stt_ms, segments = ans.segs.len(), words = text.split_whitespace().count(), "utterance transcribed");
+    tracing::info!(stt_ms, segments = ans.segs.len(), by_whisper, words = text.split_whitespace().count(), "utterance transcribed");
     if raw != text {
         tracing::debug!(%raw, "transcript cleaned");
     }
@@ -809,7 +849,7 @@ mod tests {
     fn answer_joins_segments_in_order() {
         let mut a = Answer::default();
         for _ in 0..2 {
-            a.segs.push(Seg { st: SttState::default(), sink: None, done: false });
+            a.segs.push(Seg::new(None, Vec::new()));
         }
         a.on_msg(SegMsg::Msg(1, json!({"type":"partial","text":"second"}))).unwrap();
         a.on_msg(SegMsg::Msg(0, json!({"type":"final","final_kind":"summary","text":"First."}))).unwrap();
@@ -818,5 +858,7 @@ mod tests {
         a.on_msg(SegMsg::Closed(1)).unwrap();
         assert!(a.all_done());
         assert!(a.on_msg(SegMsg::Failed("x".into())).is_err());
+        a.segs[1].fixed = Some("Second, from Whisper.".into());
+        assert_eq!(a.text(), "First. Second, from Whisper.", "Whisper's text wins over Parakeet's");
     }
 }

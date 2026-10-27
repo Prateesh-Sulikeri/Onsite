@@ -112,6 +112,7 @@ pub fn run() {
             let db = data_dir.join("onsite.db");
             tracing::info!(db = %db.display(), "opening store");
             let prompts_dir = prompts_dir(app);
+            voice::whisper::set_script_dir(voice::whisper::script_dir_for(app.path().resource_dir().ok().as_deref()));
             let catalog = Catalog::load(&prompts_dir)?;
             app.manage(AppState {
                 store: Arc::new(Mutex::new(Store::open(&db)?)),
@@ -128,6 +129,8 @@ pub fn run() {
                 let settings = handle.state::<AppState>().settings().voice;
                 voice::audio::set_devices(&settings.input_device, &settings.output_device);
                 if settings.enabled {
+                    // Loads Whisper onto the GPU (~10 s) while VoiceStudio warms up.
+                    voice::whisper::start();
                     commands::warm_voice(&settings).await;
                     // Build panel voices now, so a round never waits on one (~5-15 s each, once).
                     let personas = handle.state::<AppState>().panels.all_personas();

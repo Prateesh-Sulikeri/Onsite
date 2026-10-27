@@ -155,6 +155,8 @@ pub struct VoiceStatus {
     pub installed: bool,
     /// The English-only speech-to-text model (installed on demand).
     pub english: Option<crate::voice::stt::EnglishModel>,
+    /// Whisper on the GPU, which writes the text sent to the interviewer.
+    pub whisper: crate::voice::whisper::WhisperStatus,
 }
 
 fn voicestudio_exe() -> Option<std::path::PathBuf> {
@@ -167,7 +169,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
     let vs = VoiceStudio::new(&state.settings().voice.base_url);
     let installed = voicestudio_exe().is_some();
     let Ok(health) = vs.health().await else {
-        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None });
+        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None, whisper: crate::voice::whisper::status() });
     };
     Ok(VoiceStatus {
         up: true,
@@ -176,6 +178,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
         profiles: vs.profiles().await.unwrap_or_default(),
         installed,
         english: Some(crate::voice::stt::english_model(&vs).await),
+        whisper: crate::voice::whisper::status(),
     })
 }
 

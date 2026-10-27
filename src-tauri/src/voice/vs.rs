@@ -169,8 +169,8 @@ pub fn sample_penalty(s: &SampleScore, instruct: &str) -> f32 {
     voiced + over(s.zcr.min(1e6), 1250.0) + over(s.floor, 0.004) + pitch
 }
 
-/// 16-bit mono WAV at the TTS rate.
-fn wav_bytes(pcm: &[i16]) -> Vec<u8> {
+/// 16-bit mono WAV.
+pub(crate) fn wav_bytes(pcm: &[i16], rate: u32) -> Vec<u8> {
     let data = (pcm.len() * 2) as u32;
     let mut b = Vec::with_capacity(44 + data as usize);
     b.extend_from_slice(b"RIFF");
@@ -179,8 +179,8 @@ fn wav_bytes(pcm: &[i16]) -> Vec<u8> {
     b.extend_from_slice(&16u32.to_le_bytes());
     b.extend_from_slice(&1u16.to_le_bytes());
     b.extend_from_slice(&1u16.to_le_bytes());
-    b.extend_from_slice(&TTS_RATE.to_le_bytes());
-    b.extend_from_slice(&(TTS_RATE * 2).to_le_bytes());
+    b.extend_from_slice(&rate.to_le_bytes());
+    b.extend_from_slice(&(rate * 2).to_le_bytes());
     b.extend_from_slice(&2u16.to_le_bytes());
     b.extend_from_slice(&16u16.to_le_bytes());
     b.extend_from_slice(b"data");
@@ -343,7 +343,7 @@ impl VoiceStudio {
     }
 
     async fn create_clone(&self, name: &str, seed: i64, pcm: &[i16], tag: &str) -> Result<Profile> {
-        let audio = reqwest::multipart::Part::bytes(wav_bytes(pcm)).file_name("sample.wav").mime_str("audio/wav").map_err(|e| err("create voice", e))?;
+        let audio = reqwest::multipart::Part::bytes(wav_bytes(pcm, TTS_RATE)).file_name("sample.wav").mime_str("audio/wav").map_err(|e| err("create voice", e))?;
         let form = reqwest::multipart::Form::new()
             .text("name", name.to_string())
             .text("kind", "clone")
@@ -579,7 +579,7 @@ mod tests {
 
     #[test]
     fn wav_header_is_valid() {
-        let w = wav_bytes(&[1, -1, 2]);
+        let w = wav_bytes(&[1, -1, 2], TTS_RATE);
         assert_eq!(&w[..4], b"RIFF");
         assert_eq!(w.len(), 44 + 6);
         assert_eq!(u32::from_le_bytes(w[24..28].try_into().unwrap()), TTS_RATE);

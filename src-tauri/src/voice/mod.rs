@@ -5,6 +5,7 @@
 pub mod audio;
 pub mod stt;
 pub mod vs;
+pub mod whisper;
 
 use crate::error::{AppError, Result};
 use audio::Player;
@@ -178,6 +179,8 @@ impl Voice {
     pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings) -> Result<()> {
         self.end();
         stt::reset_model_choice();
+        // Normally already loaded at app start; restarts it if it died.
+        whisper::start();
         let player = self.player()?;
         let vs = VoiceStudio::new(&settings.base_url);
         let (tx, mut rx) = unbounded_channel::<Cmd>();

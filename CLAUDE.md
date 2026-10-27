@@ -92,7 +92,9 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   Send raw signed 16-bit mono PCM frames; finish with `{"type":"input_audio.end"}`; read
   `partial` and `final` JSON frames (`final_kind: "summary"` is authoritative).
 - Fallback: `POST :3900/v1/audio/transcriptions` (OpenAI-compatible) with a WAV of the utterance.
-- Optional later fallback: whisper-rs, behind a cargo feature.
+- Accuracy pass: Whisper large-v3 kept loaded on the GPU in a Python sidecar (`sidecar/whisper_server.py`,
+  driven by `voice/whisper.rs`). Parakeet gives the live caption; Whisper's text is what gets sent.
+  If Whisper is missing or fails, Parakeet's text is used.
 
 ### tts/ — text to speech
 - Trait `Speaker { speak(text), stop(), is_busy() }` with a queue and barge-in support.
@@ -126,7 +128,14 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
     audio after ~30 s and loops ("for the MQ for the MQ"). Onsite passes `&model=` (parakeet-tdt v2, else
     v3), cuts long answers into segments at short pauses, collapses repeats and fixes tech terms.
     The stream takes no language or prompt. Batch `/v1/audio/transcriptions` honours both but reloads
-    large-v3 on every call (~8 s), so it is not used. Last-segment latency ~3.4 s on CPU Parakeet.
+    large-v3 on every call (~8 s idle, ~38 s once the voice model fills the GPU), so it is not used.
+    Last-segment latency ~3.4 s on CPU Parakeet.
+  - Parakeet v2 still mangles tech terms ("Postgres Creole", "reddish" for Redis, "identity case" for
+    idempotency key). Measured 2026-10-26 on 8 accented tech answers: Whisper large-v3 int8 kept loaded
+    on the GPU is word-perfect at 1.1–1.5 s per answer (CPU int8: ~12 s). Onsite runs it as a sidecar
+    with VoiceStudio's bundled Python (`%APPDATA%/VoiceStudio/runtime/project/.venv`, has faster-whisper
+    + CUDA) and the weights VoiceStudio downloaded (`%LOCALAPPDATA%/OmniVoice/hf_cache`). It loads at
+    app start (~10 s); each finished segment goes to it with the tech vocabulary as the prompt.
   - Mic audio goes through a windowed-sinc low-pass before 48→16 kHz downsampling (aliasing hurt ASR).
   - `/ws/tts` is not used; the HTTP stream is simpler and documented in `/openapi.json`.
   - `voice` must be a profile id. `"default"` gives a different random speaker on every call (this
