@@ -198,6 +198,21 @@ Reports and transcripts must survive app restarts. Export/import dossiers as JSO
 - Offline CLI: `cargo run --example ats_check -- resume.pdf [job.json] [--json]`. Fixtures + sources: `tests/fixtures/ats/`.
 - If the app is running, `onsite.exe` is locked: test with `--target-dir target/ats-test`.
 
+### Question bank (prompts/questions.csv, bank.rs, runner/)
+- One LeetCode problem per row: 20 originals + the rest of Blind 75 (81 total). Expected values are data;
+  the model only picks a question id. Edit in a text editor: Excel re-quotes the header and scrambles the id column.
+- Types: int, long, double, bool, string, char, `T[]`, `list<T>`, plus `ListNode` (`[1,2,3]`, or `[[vals],pos]`
+  for a cycle), `TreeNode` (level order with nulls), `Node` (Clone Graph adjacency list, node i+1 at index i),
+  and `void` (in-place: the result is the first argument after the call).
+- `kind` column: empty = `Solution.function`; `design` = a class run through LeetCode's operations list
+  (`methods` lines like `insert(word: string) -> void`); `roundtrip` = Codec, `decode(encode(x)) == x` on two
+  instances (JS uses two top-level functions, as on LeetCode).
+- Python and JS drivers read `sig.json`; Java and C++ drivers are generated per question, with only the node
+  classes it uses. Java drops `public` from class declarations (LeetCode's `public class Codec`).
+  JS runs in a worker with a 256 MB stack for deep recursion. Returning input graph nodes is an error.
+- New rows were built by a script that checked every reference against LeetCode's example answers and brute
+  force. `cargo test -- --ignored` runs every reference and every starter in every language.
+
 ### mcp/ (phase 3)
 Expose a small MCP server (rmcp crate, stdio) so Claude Code in a terminal can:
 `list_dossiers`, `get_dossier`, `request_research(company, role, jd)`, `list_reports`, `get_report`.

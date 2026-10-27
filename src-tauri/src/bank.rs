@@ -21,6 +21,17 @@ pub enum Ty {
     Arr(Box<Ty>),
     /// `list<int>`, `list<list<string>>`: `List<Integer>` in Java, vectors in C++.
     List(Box<Ty>),
+    /// LeetCode's singly linked list. JSON: `[1,2,3]`, or `[[3,2,0,-4],1]` for a list whose tail
+    /// links back to index 1 (Linked List Cycle).
+    ListNode,
+    /// LeetCode's binary tree. JSON: level order with nulls, `[1,null,2,3]`.
+    TreeNode,
+    /// LeetCode's graph node (Clone Graph). JSON: adjacency list, node `i+1` at index `i`.
+    Node,
+    /// Return type of an in-place method; the result is the first argument after the call.
+    Void,
+    /// Any JSON. Only for the arguments column of a design question.
+    Any,
 }
 
 impl Ty {
@@ -38,6 +49,11 @@ impl Ty {
                 "bool" | "boolean" => Ty::Bool,
                 "string" => Ty::Str,
                 "char" => Ty::Char,
+                "ListNode" => Ty::ListNode,
+                "TreeNode" => Ty::TreeNode,
+                "Node" => Ty::Node,
+                "void" => Ty::Void,
+                "any" => Ty::Any,
                 _ => return Err(format!("unknown type '{s}'")),
             }
         };
@@ -72,6 +88,31 @@ impl Ty {
             Ty::Str => v.is_string(),
             Ty::Char => v.as_str().is_some_and(|s| s.chars().count() == 1),
             Ty::Arr(t) | Ty::List(t) => v.as_array().is_some_and(|a| a.iter().all(|x| t.accepts(x))),
+            Ty::ListNode => match v.as_array().map(Vec::as_slice) {
+                Some([vals, pos]) if vals.is_array() => {
+                    let n = vals.as_array().map_or(0, Vec::len) as i64;
+                    Ty::Arr(Box::new(Ty::Int)).accepts(vals) && pos.as_i64().is_some_and(|p| p >= -1 && p < n)
+                }
+                _ => Ty::Arr(Box::new(Ty::Int)).accepts(v),
+            },
+            Ty::TreeNode => v.as_array().is_some_and(|a| {
+                a.first().is_none_or(|r| !r.is_null()) && a.iter().all(|x| x.is_null() || Ty::Int.accepts(x))
+            }),
+            Ty::Node => v.as_array().is_some_and(|a| {
+                let n = a.len() as i64;
+                a.iter().all(|ns| ns.as_array().is_some_and(|ns| ns.iter().all(|j| j.as_i64().is_some_and(|j| j >= 1 && j <= n))))
+            }),
+            Ty::Void => v.is_null(),
+            Ty::Any => true,
+        }
+    }
+
+    /// Types the runner builds from JSON into objects (and back), rather than passing through.
+    pub fn has_nodes(&self) -> bool {
+        match self {
+            Ty::ListNode | Ty::TreeNode | Ty::Node => true,
+            Ty::Arr(t) | Ty::List(t) => t.has_nodes(),
+            _ => false,
         }
     }
 }
@@ -160,7 +201,47 @@ pub fn ty_name(t: &Ty) -> String {
         Ty::Char => "char".into(),
         Ty::Arr(t) => format!("{}[]", ty_name(t)),
         Ty::List(t) => format!("list<{}>", ty_name(t)),
+        Ty::ListNode => "ListNode".into(),
+        Ty::TreeNode => "TreeNode".into(),
+        Ty::Node => "Node".into(),
+        Ty::Void => "void".into(),
+        Ty::Any => "any".into(),
     }
+}
+
+/// How a question is called.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    /// `Solution.function(params)`.
+    Function,
+    /// A class driven by LeetCode's operation list: args are `[["Trie","insert",...], [[],["apple"],...]]`
+    /// and the result is one value per operation (null for the constructor and void methods).
+    Design,
+    /// Serialize then deserialize with two fresh instances (Codec): the result must equal the input.
+    Roundtrip,
+}
+
+/// One method of a design or roundtrip class: `insert(word: string) -> void`.
+#[derive(Debug, Clone, Serialize)]
+pub struct Method {
+    pub name: String,
+    pub params: Vec<Param>,
+    #[serde(serialize_with = "ser_ty")]
+    pub returns: Ty,
+}
+
+fn parse_method(line: &str) -> Result<Method, String> {
+    let bad = || format!("method '{line}' must look like 'name(a: int, b: string) -> bool'");
+    let (head, ret) = line.split_once("->").ok_or_else(bad)?;
+    let (name, rest) = head.split_once('(').ok_or_else(bad)?;
+    let inner = rest.trim().strip_suffix(')').ok_or_else(bad)?;
+    let name = name.trim();
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(format!("bad method name '{name}'"));
+    }
+    let params = parse_params(&inner.replace(',', ";"))?;
+    Ok(Method { name: name.to_string(), params, returns: Ty::parse(ret)? })
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -180,7 +261,12 @@ pub struct Question {
     pub levels: Vec<String>,
     pub topics: Vec<String>,
     pub companies: Vec<String>,
+    /// The method name, or the class name for design and roundtrip questions.
     pub function: String,
+    pub mode: Mode,
+    /// Design and roundtrip only. Roundtrip has exactly two: encode, then decode.
+    pub methods: Vec<Method>,
+    /// Design questions get `operations: list<string>; arguments: any`; roundtrip the encoder's parameter.
     pub params: Vec<Param>,
     #[serde(serialize_with = "ser_ty")]
     pub returns: Ty,
@@ -199,9 +285,69 @@ pub struct Question {
 }
 
 impl Question {
-    /// `nums = [2,7,11,15], target = 9`
+    /// `nums = [2,7,11,15], target = 9`. A cyclic list shows as `head = [3,2,0,-4], pos = 1`.
     pub fn input_text(&self, args: &[Value]) -> String {
-        self.params.iter().zip(args).map(|(p, a)| format!("{} = {}", p.name, a)).collect::<Vec<_>>().join(", ")
+        self.params
+            .iter()
+            .zip(args)
+            .map(|(p, a)| match (&p.ty, a.as_array().map(Vec::as_slice)) {
+                (Ty::ListNode, Some([vals, pos])) if vals.is_array() => format!("{} = {vals}, pos = {pos}", p.name),
+                _ => format!("{} = {}", p.name, a),
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    /// The type of the value a test expects: an in-place method's first argument.
+    pub fn output_ty(&self) -> &Ty {
+        match (&self.returns, self.params.first()) {
+            (Ty::Void, Some(p)) => &p.ty,
+            (t, _) => t,
+        }
+    }
+
+    /// Checks one test's arguments and expected value against the signature.
+    pub fn check(&self, args: &[Value], expected: &Value) -> Result<(), String> {
+        if self.mode == Mode::Design {
+            return self.check_design(args, expected);
+        }
+        if args.len() != self.params.len() {
+            return Err(format!("has {} args, the function takes {}", args.len(), self.params.len()));
+        }
+        if let Some((p, _)) = self.params.iter().zip(args).find(|(p, a)| !p.ty.accepts(a)) {
+            return Err(format!("'{}' is not a valid {}", p.name, ty_name(&p.ty)));
+        }
+        if !self.output_ty().accepts(expected) {
+            return Err(format!("expected is not a valid {}", ty_name(self.output_ty())));
+        }
+        Ok(())
+    }
+
+    fn check_design(&self, args: &[Value], expected: &Value) -> Result<(), String> {
+        let (Some(ops), Some(argl), Some(exp)) = (args.first().and_then(Value::as_array), args.get(1).and_then(Value::as_array), expected.as_array()) else {
+            return Err("needs args [[operations], [arguments]] and an expected list".into());
+        };
+        if ops.len() != argl.len() || ops.len() != exp.len() {
+            return Err("operations, arguments and expected differ in length".into());
+        }
+        if ops.first().and_then(Value::as_str) != Some(self.function.as_str()) || argl[0].as_array().is_none_or(|a| !a.is_empty()) {
+            return Err(format!("the first operation must be {}, with no arguments", self.function));
+        }
+        for (k, ((op, a), e)) in ops.iter().zip(argl).zip(exp).enumerate().skip(1) {
+            let op = op.as_str().unwrap_or_default();
+            let m = self.methods.iter().find(|m| m.name == op).ok_or_else(|| format!("operation {k}: no method '{op}'"))?;
+            let a = a.as_array().filter(|a| a.len() == m.params.len()).ok_or_else(|| format!("operation {k} ({op}): wrong number of arguments"))?;
+            if let Some((p, _)) = m.params.iter().zip(a).find(|(p, x)| !p.ty.accepts(x)) {
+                return Err(format!("operation {k} ({op}): '{}' is not a valid {}", p.name, ty_name(&p.ty)));
+            }
+            if !(m.returns == Ty::Void && e.is_null() || m.returns != Ty::Void && m.returns.accepts(e)) {
+                return Err(format!("operation {k} ({op}): expected is not a valid {}", ty_name(&m.returns)));
+            }
+        }
+        if !exp[0].is_null() {
+            return Err("the constructor's expected value must be null".into());
+        }
+        Ok(())
     }
 
     pub fn examples(&self) -> impl Iterator<Item = &Test> {
@@ -227,20 +373,12 @@ fn parse_params(s: &str) -> Result<Vec<Param>, String> {
         .collect()
 }
 
-fn parse_tests(s: &str, params: &[Param], returns: &Ty) -> Result<Vec<Test>, String> {
+fn parse_tests(s: &str, q: &Question) -> Result<Vec<Test>, String> {
     let raw: Vec<Value> = serde_json::from_str(s).map_err(|e| format!("tests are not valid JSON: {e}"))?;
     let mut out = Vec::new();
     for (i, t) in raw.iter().enumerate() {
         let args = t["args"].as_array().ok_or_else(|| format!("test {} has no args array", i + 1))?;
-        if args.len() != params.len() {
-            return Err(format!("test {} has {} args, the function takes {}", i + 1, args.len(), params.len()));
-        }
-        if let Some((p, _)) = params.iter().zip(args).find(|(p, a)| !p.ty.accepts(a)) {
-            return Err(format!("test {}: '{}' is not a valid {}", i + 1, p.name, ty_name(&p.ty)));
-        }
-        if !returns.accepts(&t["expected"]) {
-            return Err(format!("test {}: expected is not a valid {}", i + 1, ty_name(returns)));
-        }
+        q.check(args, &t["expected"]).map_err(|e| format!("test {}: {e}", i + 1))?;
         out.push(Test {
             args: args.clone(),
             expected: t["expected"].clone(),
@@ -274,23 +412,49 @@ fn parse_row(r: &csv::StringRecord, h: &csv::StringRecord) -> Result<Question, S
     if function.is_empty() || !function.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return Err(format!("bad function name '{function}'"));
     }
-    let params = parse_params(&col("params"))?;
-    let returns = Ty::parse(&col("returns"))?;
-    let compare = Compare::parse(&col("compare"))?;
-    let tests = parse_tests(&col("tests"), &params, &returns)?;
-    Ok(Question {
+    let mode = match col("kind").as_str() {
+        "" | "function" => Mode::Function,
+        "design" => Mode::Design,
+        "roundtrip" => Mode::Roundtrip,
+        k => return Err(format!("kind '{k}' must be function, design or roundtrip")),
+    };
+    let methods = split(&col("methods"), '\n').iter().map(|m| parse_method(m)).collect::<Result<Vec<_>, _>>()?;
+    let (params, returns) = match mode {
+        Mode::Function => {
+            let params = parse_params(&col("params"))?;
+            let returns = Ty::parse(&col("returns"))?;
+            if returns == Ty::Void && params.is_empty() {
+                return Err("an in-place (void) function needs a parameter to check".into());
+            }
+            (params, returns)
+        }
+        Mode::Design => {
+            if methods.is_empty() {
+                return Err("a design question needs methods".into());
+            }
+            let any = |n: &str, t: Ty| Param { name: n.into(), ty: t };
+            (vec![any("operations", Ty::List(Box::new(Ty::Str))), any("arguments", Ty::Any)], Ty::Any)
+        }
+        Mode::Roundtrip => match methods.as_slice() {
+            [enc, dec] if enc.params.len() == 1 && dec.params.len() == 1 => (enc.params.clone(), dec.returns.clone()),
+            _ => return Err("a roundtrip question needs two one-argument methods: encode, then decode".into()),
+        },
+    };
+    let mut q = Question {
         title: col("title"),
         difficulty,
         levels: split(&col("levels"), ';'),
         topics: split(&col("topics"), ';'),
         companies: split(&col("companies"), ';'),
         function,
+        mode,
+        methods,
         params,
         returns,
-        compare,
+        compare: Compare::parse(&col("compare"))?,
         statement: col("statement"),
         constraints: split(&col("constraints"), '\n'),
-        tests,
+        tests: vec![],
         hints: split(&col("hints"), '\n'),
         time: col("time"),
         space: col("space"),
@@ -298,7 +462,9 @@ fn parse_row(r: &csv::StringRecord, h: &csv::StringRecord) -> Result<Question, S
         reference: col("reference"),
         stress: col("stress"),
         id,
-    })
+    };
+    q.tests = parse_tests(&col("tests"), &q)?;
+    Ok(q)
 }
 
 #[derive(Debug, Default)]
@@ -373,7 +539,7 @@ mod tests {
     fn seed_bank_loads_clean() {
         let b = repo();
         assert!(b.errors.is_empty(), "{:#?}", b.errors);
-        assert!(b.questions.len() >= 20);
+        assert_eq!(b.questions.len(), 81);
         for d in ["Easy", "Medium", "Hard"] {
             assert!(b.questions.iter().filter(|q| q.difficulty == d).count() >= 5, "{d}");
         }
@@ -388,12 +554,50 @@ mod tests {
         assert_eq!(Ty::parse("int[][]").unwrap(), Ty::Arr(Box::new(Ty::Arr(Box::new(Ty::Int)))));
         assert_eq!(Ty::parse("list<list<string>>").unwrap().depth(), 2);
         assert!(Ty::parse("int[][][]").is_err());
-        assert!(Ty::parse("ListNode").is_err());
+        assert!(Ty::parse("LinkedList").is_err());
         assert!(Ty::Int.accepts(&json!(5)) && !Ty::Int.accepts(&json!(3_000_000_000i64)));
         assert!(Ty::Long.accepts(&json!(3_000_000_000i64)));
         assert!(Ty::Char.accepts(&json!("1")) && !Ty::Char.accepts(&json!("10")));
         assert!(Ty::parse("char[][]").unwrap().accepts(&json!([["1", "0"]])));
         assert!(!Ty::parse("int[]").unwrap().accepts(&json!([1, "2"])));
+    }
+
+    #[test]
+    fn node_types_accept_leetcode_json() {
+        assert!(Ty::ListNode.accepts(&json!([1, 2, 3])) && Ty::ListNode.accepts(&json!([])));
+        assert!(Ty::ListNode.accepts(&json!([[3, 2, 0, -4], 1])) && Ty::ListNode.accepts(&json!([[], -1])));
+        assert!(!Ty::ListNode.accepts(&json!([[3, 2], 2])), "pos past the end");
+        assert!(Ty::TreeNode.accepts(&json!([1, null, 2, 3])) && Ty::TreeNode.accepts(&json!([])));
+        assert!(!Ty::TreeNode.accepts(&json!([null, 1])), "a tree can't start with a gap");
+        assert!(Ty::Node.accepts(&json!([[2, 4], [1, 3], [2, 4], [1, 3]])) && Ty::Node.accepts(&json!([[]])));
+        assert!(!Ty::Node.accepts(&json!([[2]])), "neighbor 2 doesn't exist");
+        assert!(Ty::parse("ListNode[]").unwrap().has_nodes() && !Ty::parse("int[][]").unwrap().has_nodes());
+    }
+
+    #[test]
+    fn every_mode_loads_from_the_bank() {
+        let b = repo();
+        let trie = b.get("implement-trie-prefix-tree").unwrap();
+        assert_eq!((trie.mode, trie.methods.len()), (Mode::Design, 3));
+        assert_eq!(trie.input_text(&trie.tests[0].args).split(", arguments").next().unwrap(), r#"operations = ["Trie","insert","search","search","startsWith","insert","search"]"#);
+        let codec = b.get("serialize-and-deserialize-binary-tree").unwrap();
+        assert_eq!((codec.mode, codec.params[0].ty.clone(), codec.returns.clone()), (Mode::Roundtrip, Ty::TreeNode, Ty::TreeNode));
+        let reorder = b.get("reorder-list").unwrap();
+        assert_eq!((reorder.returns.clone(), reorder.output_ty()), (Ty::Void, &Ty::ListNode));
+        let cycle = b.get("linked-list-cycle").unwrap();
+        assert_eq!(cycle.input_text(&cycle.tests[0].args), "head = [3,2,0,-4], pos = 1");
+    }
+
+    #[test]
+    fn design_tests_are_checked_against_the_methods() {
+        let b = repo();
+        let trie = b.get("implement-trie-prefix-tree").unwrap();
+        let ok = |ops: Value, args: Value, exp: Value| trie.check(&[ops, args], &exp);
+        assert!(ok(json!(["Trie", "insert", "search"]), json!([[], ["a"], ["a"]]), json!([null, null, true])).is_ok());
+        assert!(ok(json!(["Trie", "remove"]), json!([[], ["a"]]), json!([null, null])).is_err(), "no such method");
+        assert!(ok(json!(["Trie", "search"]), json!([[], [1]]), json!([null, true])).is_err(), "wrong argument type");
+        assert!(ok(json!(["Trie", "insert"]), json!([[], ["a"]]), json!([null, true])).is_err(), "void returns null");
+        assert!(ok(json!(["Nope", "search"]), json!([[], ["a"]]), json!([null, true])).is_err(), "starts with the constructor");
     }
 
     #[test]
@@ -425,10 +629,10 @@ mod tests {
         let b = repo();
         let mut used = HashSet::new();
         let q = b.pick("Medium", &["graph".into()], "", &used, 1).unwrap();
-        assert_eq!(q.id, "number-of-islands");
+        assert!(q.topics.iter().any(|t| t == "graph"), "{}", q.id);
         used.insert(q.id.clone());
         let q2 = b.pick("Medium", &["graph".into()], "", &used, 1).unwrap();
-        assert_ne!(q2.id, "number-of-islands");
+        assert_ne!(q2.id, q.id);
         assert_eq!(q2.difficulty, "Medium");
         assert!(b.pick("Impossible", &[], "", &used, 1).is_none());
     }

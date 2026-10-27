@@ -251,21 +251,23 @@ fn plan(lang: Lang, q: &Question, code: &str, dir: &Path) -> std::io::Result<Pla
     Ok(match lang {
         Lang::Python => {
             w("Solution.py", code)?;
-            w("driver.py", gen::PYTHON_DRIVER)?;
+            w("driver.py", &gen::python_driver())?;
+            w("sig.json", &gen::sig_json(q))?;
             let mut run = command(PYTHON);
-            run.args(["-X", "utf8", "driver.py", "Solution.py", &q.function, "tests.json"]);
+            run.args(["-X", "utf8", "driver.py", "Solution.py", "sig.json", "tests.json"]);
             Plan { compile: None, run }
         }
         Lang::Js => {
             w("solution.js", code)?;
             w("driver.js", gen::JS_DRIVER)?;
+            w("sig.json", &gen::sig_json(q))?;
             let mut run = command("node");
-            run.args(["driver.js", "solution.js", &q.function, "tests.json"]);
+            run.args(["driver.js", "solution.js", "sig.json", "tests.json"]);
             Plan { compile: None, run }
         }
         Lang::Java => {
             // Imports go on line 1 so compiler line numbers match the editor.
-            w("Solution.java", &format!("{}{code}", gen::JAVA_IMPORTS))?;
+            w("Solution.java", &format!("{}{}", gen::JAVA_IMPORTS, java_unpublic(code)))?;
             w("Main.java", &gen::java_main(q))?;
             let mut compile = command("javac");
             compile.args(["-encoding", "UTF-8", "-nowarn", "-d", "out", "Solution.java", "Main.java"]);
@@ -287,6 +289,17 @@ fn plan(lang: Lang, q: &Question, code: &str, dir: &Path) -> std::io::Result<Pla
             Plan { compile: Some(compile), run }
         }
     })
+}
+
+/// LeetCode's own starters say `public class Codec`, which javac only accepts in Codec.java.
+/// Everything lives in Solution.java, so `public` is dropped from type declarations.
+/// Line numbers don't change.
+fn java_unpublic(code: &str) -> String {
+    let mut out = code.to_string();
+    for kw in ["class ", "final class ", "abstract class ", "interface ", "enum ", "record "] {
+        out = out.replace(&format!("public {kw}"), kw);
+    }
+    out
 }
 
 /// Compiler output without our temp paths and the JVM's banner.
@@ -434,18 +447,19 @@ pub async fn stress_tests(q: &Question, count: u32) -> Vec<Test> {
     }
     let Ok(tmp) = tempfile::tempdir() else { return vec![] };
     let dir = tmp.path();
-    let files = [("reference.py", q.reference.as_str()), ("stress.py", q.stress.as_str()), ("make.py", gen::STRESS_MAKER)];
+    let (maker, sig) = (gen::stress_maker(), gen::sig_json(q));
+    let files = [("reference.py", q.reference.as_str()), ("stress.py", q.stress.as_str()), ("make.py", maker.as_str()), ("sig.json", sig.as_str())];
     if files.iter().any(|(n, b)| std::fs::write(dir.join(n), b).is_err()) {
         return vec![];
     }
     let mut c = command(PYTHON);
-    c.args(["-X", "utf8", "make.py", &q.function, &count.to_string()]);
+    c.args(["-X", "utf8", "make.py", &count.to_string()]);
     match exec(c, dir, Duration::from_secs(120)).await {
         Ok(o) if o.code == Some(0) => o
             .stdout
             .lines()
             .filter_map(|l| serde_json::from_str::<Value>(l).ok())
-            .filter(|v| v["args"].as_array().is_some_and(|a| a.len() == q.params.len()) && q.returns.accepts(&v["expected"]))
+            .filter(|v| v["args"].as_array().is_some_and(|a| q.check(a, &v["expected"]).is_ok()))
             .map(|v| Test { args: v["args"].as_array().unwrap().clone(), expected: v["expected"].clone(), example: false, explanation: None })
             .collect(),
         Ok(o) => {
@@ -457,6 +471,14 @@ pub async fn stress_tests(q: &Question, count: u32) -> Vec<Test> {
             vec![]
         }
     }
+}
+
+#[test]
+fn java_unpublic_keeps_lines() {
+    let src = "public class Codec {\n    public String f() { return \"public class \"; }\n    public static final class X {}\n}\n";
+    let out = java_unpublic(src);
+    assert!(out.starts_with("class Codec {") && out.contains("public String f()") && out.contains("public static final class X"));
+    assert_eq!(out.lines().count(), src.lines().count());
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-id,title,difficulty,levels,topics,companies,function,params,returns,compare,statement,constraints,tests,hints,time,space,follow_ups,reference,stress
+id,title,difficulty,levels,topics,companies,function,params,returns,compare,statement,constraints,tests,hints,time,space,follow_ups,reference,stress,kind,methods
 two-sum,Two Sum,Easy,ng;sde1,array;hash-map,amazon;google;meta,twoSum,nums: int[]; target: int,int[],any_order,"Given an integer array `nums` and an integer `target`, return the **indices** of the two numbers that add up to `target`.
 
 Each input has exactly one solution, and you may not use the same element twice. Return the answer in any order.","2 <= nums.length <= 10^4
@@ -16,7 +16,7 @@ What if there can be many valid pairs and you must return all of them?","class S
     n = 10000
     nums = rng.sample(range(-10**9, 10**9), n)
     i, j = rng.sample(range(n), 2)
-    return [nums, nums[i] + nums[j]]"
+    return [nums, nums[i] + nums[j]]",,
 valid-parentheses,Valid Parentheses,Easy,ng;sde1,stack;string,amazon;microsoft,isValid,s: string,bool,exact,"Given a string `s` made only of the characters `'('`, `')'`, `'{'`, `'}'`, `'['` and `']'`, decide whether it is valid.
 
 A string is valid when every opening bracket is closed by the same type of bracket, brackets close in the correct order, and every closing bracket has a matching opening bracket.","1 <= s.length <= 10^4
@@ -35,7 +35,7 @@ The most recent open bracket must be closed first.",O(n),O(n),How would you repo
     n = 10000
     s = ''.join(rng.choice('([{') for _ in range(n // 2))
     close = {'(': ')', '[': ']', '{': '}'}
-    return [s + ''.join(close[c] for c in reversed(s))]"
+    return [s + ''.join(close[c] for c in reversed(s))]",,
 best-time-to-buy-and-sell-stock,Best Time to Buy and Sell Stock,Easy,ng;sde1,array;greedy,amazon;meta;bank,maxProfit,prices: int[],int,exact,"You are given an array `prices` where `prices[i]` is the price of a stock on day `i`.
 
 Choose one day to buy and a later day to sell to maximise your profit. Return the maximum profit you can make. If no profit is possible, return `0`.","1 <= prices.length <= 10^5
@@ -47,7 +47,7 @@ What if each trade has a fee?","class Solution:
             lo = min(lo, p)
             best = max(best, p - lo)
         return best","def gen(rng):
-    return [[rng.randint(0, 10**4) for _ in range(10**5)]]"
+    return [[rng.randint(0, 10**4) for _ in range(10**5)]]",,
 binary-search,Binary Search,Easy,ng;sde1,binary-search;array,,search,nums: int[]; target: int,int,exact,"Given an array of distinct integers `nums` sorted in ascending order and an integer `target`, return the index of `target` in `nums`, or `-1` if it is not there.
 
 Your solution must run in O(log n) time.","1 <= nums.length <= 10^4
@@ -62,7 +62,7 @@ All values in nums are distinct and sorted ascending.","[{""args"":[[-1,0,3,5,9,
             else: hi = m - 1
         return -1","def gen(rng):
     nums = sorted(rng.sample(range(-9999, 10000), 10000))
-    return [nums, rng.choice([nums[rng.randrange(10000)], 10**4 - 1 if nums[-1] != 9999 else -9999])]"
+    return [nums, rng.choice([nums[rng.randrange(10000)], 10**4 - 1 if nums[-1] != 9999 else -9999])]",,
 valid-anagram,Valid Anagram,Easy,ng;sde1,hash-map;string;sorting,,isAnagram,s: string; t: string,bool,exact,"Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.
 
 An anagram uses exactly the same letters, the same number of times, in any order.","1 <= s.length, t.length <= 5 * 10^4
@@ -73,7 +73,7 @@ s and t contain lowercase English letters only.","[{""args"":[""anagram"",""naga
     s = ''.join(rng.choice('abcdefghijklmnopqrstuvwxyz') for _ in range(50000))
     t = list(s); rng.shuffle(t)
     if rng.random() < 0.5: t[0] = 'a' if t[0] != 'a' else 'b'
-    return [s, ''.join(t)]"
+    return [s, ''.join(t)]",,
 longest-substring-without-repeating-characters,Longest Substring Without Repeating Characters,Medium,sde1;sde2,sliding-window;hash-map;string,amazon;google;microsoft,lengthOfLongestSubstring,s: string,int,exact,"Given a string `s`, return the length of the longest **substring** that contains no repeated characters.
 
 A substring is a contiguous run of characters within the string.","0 <= s.length <= 5 * 10^4
@@ -89,7 +89,7 @@ When a repeat enters, where must the left edge jump to?",O(n),"O(min(n, alphabet
         return best","def gen(rng):
     import string
     alpha = string.ascii_letters + string.digits + ' !?'
-    return [''.join(rng.choice(alpha) for _ in range(50000))]"
+    return [''.join(rng.choice(alpha) for _ in range(50000))]",,
 group-anagrams,Group Anagrams,Medium,sde1;sde2,hash-map;string;sorting,amazon;meta,groupAnagrams,strs: string[],list<list<string>>,nested_any_order,"Given an array of strings `strs`, group the anagrams together. You can return the groups in any order, and the words inside a group in any order.
 
 Two words are anagrams when they use exactly the same letters the same number of times.","1 <= strs.length <= 10^4
@@ -104,7 +104,7 @@ strs[i] contains lowercase English letters only.","[{""args"":[[""eat"",""tea"",
     out = []
     for _ in range(10000):
         w = list(rng.choice(base)); rng.shuffle(w); out.append(''.join(w))
-    return [out]"
+    return [out]",,
 3sum,3Sum,Medium,sde1;sde2,array;two-pointers;sorting,meta;amazon;google,threeSum,nums: int[],list<list<int>>,nested_any_order,"Given an integer array `nums`, return all the triplets `[nums[i], nums[j], nums[k]]` where `i`, `j` and `k` are different indices and `nums[i] + nums[j] + nums[k] == 0`.
 
 The answer must not contain duplicate triplets. The triplets and the numbers inside them can be in any order.","3 <= nums.length <= 3000
@@ -125,7 +125,7 @@ Skip equal neighbours to avoid duplicates.",O(n^2),O(1) besides the output,Retur
                     while lo < hi and nums[lo] == nums[lo + 1]: lo += 1
                     lo += 1; hi -= 1
         return out","def gen(rng):
-    return [[rng.randint(-1000, 1000) for _ in range(3000)]]"
+    return [[rng.randint(-1000, 1000) for _ in range(3000)]]",,
 merge-intervals,Merge Intervals,Medium,sde1;sde2;senior,array;sorting;intervals,google;meta;stripe,merge,intervals: int[][],int[][],any_order,"Given an array of `intervals` where `intervals[i] = [start_i, end_i]`, merge every overlapping interval and return the intervals that cover all the input, with no overlaps.
 
 Intervals that touch, like `[1,4]` and `[4,5]`, count as overlapping.","1 <= intervals.length <= 10^4
@@ -140,7 +140,7 @@ intervals[i].length == 2
     iv = []
     for _ in range(10000):
         s = rng.randint(0, 10000); iv.append([s, min(10000, s + rng.randint(0, 3))])
-    return [iv]"
+    return [iv]",,
 number-of-islands,Number of Islands,Medium,sde1;sde2,graph;bfs;dfs;matrix,amazon;google;microsoft,numIslands,grid: char[][],int,exact,"Given an `m x n` grid of characters where `'1'` is land and `'0'` is water, return the number of islands.
 
 An island is land connected horizontally or vertically, surrounded by water. Assume the edges of the grid are all water.","m == grid.length
@@ -164,7 +164,7 @@ grid[i][j] is '0' or '1'.","[{""args"":[[[""1"",""1"",""1"",""1"",""0""],[""1"",
     for i in range(0, 300, 2):
         for j in range(300): g[i][j] = '1'
         if i + 1 < 300: g[i + 1][299 if (i // 2) % 2 == 0 else 0] = '1'
-    return [g]"
+    return [g]",,
 top-k-frequent-elements,Top K Frequent Elements,Medium,sde1;sde2,hash-map;heap;bucket-sort,amazon;meta,topKFrequent,nums: int[]; k: int,int[],any_order,"Given an integer array `nums` and an integer `k`, return the `k` most frequent elements. You may return them in any order.","1 <= nums.length <= 10^5
 -10^4 <= nums[i] <= 10^4
 k is between 1 and the number of distinct elements.
@@ -179,7 +179,7 @@ The answer is unique.","[{""args"":[[1,1,1,2,2,3],2],""expected"":[1,2],""exampl
     from collections import Counter
     c = sorted(Counter(nums).values(), reverse=True)
     k = next((i for i in range(10, 1, -1) if c[i - 1] != c[i]), 1)
-    return [nums, k]"
+    return [nums, k]",,
 product-of-array-except-self,Product of Array Except Self,Medium,sde1;sde2,array;prefix-sum,amazon;meta;microsoft,productExceptSelf,nums: int[],int[],exact,"Given an integer array `nums`, return an array `answer` where `answer[i]` is the product of every element of `nums` except `nums[i]`.
 
 Every such product fits in a 32-bit integer. Do it in O(n) time **without using division**.","2 <= nums.length <= 10^5
@@ -193,7 +193,7 @@ Every prefix and suffix product fits in a 32-bit integer.","[{""args"":[[1,2,3,4
         return out","def gen(rng):
     nums = [rng.choice([1, -1]) for _ in range(10**5)]
     for i in rng.sample(range(10**5), 20): nums[i] = rng.choice([2, -2, 3])
-    return [nums]"
+    return [nums]",,
 coin-change,Coin Change,Medium,sde1;sde2;senior,dynamic-programming;bfs,amazon;google;bank,coinChange,coins: int[]; amount: int,int,exact,"You are given coins of different denominations in `coins` and a total `amount` of money.
 
 Return the fewest coins needed to make up exactly `amount`. If no combination of coins can make it, return `-1`. You have an unlimited number of each coin.","1 <= coins.length <= 12
@@ -205,7 +205,7 @@ Return the fewest coins needed to make up exactly `amount`. If no combination of
             for c in coins:
                 if c <= a and dp[a - c] + 1 < dp[a]: dp[a] = dp[a - c] + 1
         return -1 if dp[amount] == INF else dp[amount]","def gen(rng):
-    return [rng.sample(range(1, 500), 12), 10**4]"
+    return [rng.sample(range(1, 500), 12), 10**4]",,
 search-in-rotated-sorted-array,Search in Rotated Sorted Array,Medium,sde1;sde2,binary-search;array,meta;microsoft;amazon,search,nums: int[]; target: int,int,exact,"An array of distinct integers sorted ascending was rotated at an unknown pivot, so `[0,1,2,4,5,6,7]` might now be `[4,5,6,7,0,1,2]`.
 
 Given the rotated array `nums` and an integer `target`, return the index of `target`, or `-1` if it is not in `nums`. Your solution must run in O(log n) time.","1 <= nums.length <= 5000
@@ -217,7 +217,7 @@ nums is an ascending array, possibly rotated.","[{""args"":[[4,5,6,7,0,1,2],0],"
         except ValueError: return -1","def gen(rng):
     a = sorted(rng.sample(range(-10**4, 10**4), 5000)); r = rng.randrange(5000)
     a = a[r:] + a[:r]
-    return [a, rng.choice(a)]"
+    return [a, rng.choice(a)]",,
 daily-temperatures,Daily Temperatures,Medium,sde1;sde2,stack;monotonic-stack;array,meta;amazon,dailyTemperatures,temperatures: int[],int[],exact,"Given an array `temperatures` of daily temperatures, return an array `answer` where `answer[i]` is the number of days you have to wait after day `i` for a warmer temperature.
 
 If no warmer day comes later, `answer[i]` is `0`.","1 <= temperatures.length <= 10^5
@@ -231,7 +231,7 @@ If no warmer day comes later, `answer[i]` is `0`.","1 <= temperatures.length <= 
         return out","def gen(rng):
     # Falling then one hot day: O(n^2) scans time out here.
     n = 10**5
-    return [[100 - (i * 70 // n) for i in range(n - 1)] + [100]]"
+    return [[100 - (i * 70 // n) for i in range(n - 1)] + [100]]",,
 trapping-rain-water,Trapping Rain Water,Hard,sde2;senior;staff,two-pointers;stack;array,google;amazon;meta,trap,height: int[],int,exact,"Given `n` non-negative integers that describe an elevation map where every bar has width 1, compute how much water the map traps after it rains.","n == height.length
 1 <= n <= 2 * 10^4
 0 <= height[i] <= 10^5","[{""args"":[[0,1,0,2,1,0,1,3,2,1,2,1]],""expected"":6,""example"":true,""explanation"":""6 units of water are trapped between the bars.""},{""args"":[[4,2,0,3,2,5]],""expected"":9,""example"":true},{""args"":[[0]],""expected"":0},{""args"":[[5,4,3,2,1]],""expected"":0},{""args"":[[2,0,2]],""expected"":2},{""args"":[[3,0,0,2,0,4]],""expected"":10}]","Water above bar i = min(tallest bar to its left, tallest to its right) - height[i].
@@ -244,7 +244,7 @@ Can two pointers find those maxima without extra arrays?",O(n),O(1),The 2D versi
             else:
                 rm = max(rm, h[r]); w += rm - h[r]; r -= 1
         return w","def gen(rng):
-    return [[rng.randint(0, 10**5) for _ in range(2 * 10**4)]]"
+    return [[rng.randint(0, 10**5) for _ in range(2 * 10**4)]]",,
 median-of-two-sorted-arrays,Median of Two Sorted Arrays,Hard,senior;staff,binary-search;divide-and-conquer,google;amazon,findMedianSortedArrays,nums1: int[]; nums2: int[],double,float,"Given two sorted arrays `nums1` and `nums2` of sizes `m` and `n`, return the median of the two arrays combined.
 
 The overall run time should be O(log (m + n)).","0 <= m, n <= 1000
@@ -254,7 +254,7 @@ Binary search the partition point in the shorter array.","O(log min(m, n))",O(1)
     def findMedianSortedArrays(self, a, b):
         c = sorted(a + b); n = len(c)
         return float(c[n // 2]) if n % 2 else (c[n // 2 - 1] + c[n // 2]) / 2","def gen(rng):
-    return [sorted(rng.randint(-10**6, 10**6) for _ in range(1000)), sorted(rng.randint(-10**6, 10**6) for _ in range(999))]"
+    return [sorted(rng.randint(-10**6, 10**6) for _ in range(1000)), sorted(rng.randint(-10**6, 10**6) for _ in range(999))]",,
 sliding-window-maximum,Sliding Window Maximum,Hard,sde2;senior;staff,sliding-window;monotonic-queue;heap,amazon;google,maxSlidingWindow,nums: int[]; k: int,int[],exact,"You are given an integer array `nums` and a window of size `k` that moves from the far left of the array to the far right, one position at a time. You can only see the `k` numbers inside the window.
 
 Return the maximum of each window position.","1 <= nums.length <= 10^5
@@ -270,7 +270,7 @@ Return the maximum of each window position.","1 <= nums.length <= 10^5
             if i >= k - 1: out.append(nums[d[0]])
         return out","def gen(rng):
     n = 10**5
-    return [[n - i for i in range(n)], 5 * 10**4]"
+    return [[n - i for i in range(n)], 5 * 10**4]",,
 minimum-window-substring,Minimum Window Substring,Hard,sde2;senior;staff,sliding-window;hash-map;string,meta;google;uber,minWindow,s: string; t: string,string,exact,"Given strings `s` and `t`, return the shortest substring of `s` that contains every character of `t`, duplicates included. If there is no such substring, return the empty string `""""`.
 
 The test cases are built so that the answer is unique.","1 <= s.length, t.length <= 10^5
@@ -288,7 +288,7 @@ s and t contain upper and lower case English letters.","[{""args"":[""ADOBECODEB
         return '' if best[1] == 10**9 else s[best[0]:best[1]]","def gen(rng):
     n = 10**5
     s = ['a'] * n; s[n // 3] = 'B'; s[2 * n // 3] = 'C'
-    return [''.join(s), 'BC']"
+    return [''.join(s), 'BC']",,
 largest-rectangle-in-histogram,Largest Rectangle in Histogram,Hard,senior;staff,stack;monotonic-stack;array,google;amazon,largestRectangleArea,heights: int[],int,exact,"Given an array `heights` where each value is the height of a bar of width 1 in a histogram, return the area of the largest rectangle that fits inside the histogram.","1 <= heights.length <= 10^5
 0 <= heights[i] <= 10^4","[{""args"":[[2,1,5,6,2,3]],""expected"":10,""example"":true,""explanation"":""The largest rectangle covers the bars of height 5 and 6: area 5 * 2 = 10.""},{""args"":[[2,4]],""expected"":4,""example"":true},{""args"":[[0]],""expected"":0},{""args"":[[1,1,1,1]],""expected"":4},{""args"":[[6,2,5,4,5,1,6]],""expected"":12},{""args"":[[2,1,2]],""expected"":3}]","For each bar, how far can a rectangle of its height stretch left and right?
 A stack of increasing heights tells you when a bar's rectangle ends.",O(n),O(n),Largest rectangle of 1s in a binary matrix.,"class Solution:
@@ -300,4 +300,1057 @@ A stack of increasing heights tells you when a bar's rectangle ends.",O(n),O(n),
                 j, y = st.pop(); best = max(best, y * (i - j)); start = j
             st.append((start, x))
         return best","def gen(rng):
-    return [list(range(1, 10**5 + 1))]"
+    return [list(range(1, 10**5 + 1))]",,
+contains-duplicate,Contains Duplicate,Easy,ng;sde1,array;hash-set,amazon;apple;google,containsDuplicate,nums: int[],bool,exact,Return true if any integer occurs more than once in nums; otherwise return false.,"1 <= nums.length <= 10^5
+-10^9 <= nums[i] <= 10^9","[{""args"":[[1,2,3,1]],""expected"":true,""example"":true,""explanation"":""The value 1 appears at index 0 and index 3.""},{""args"":[[1,2,3,4]],""expected"":false,""example"":true,""explanation"":""All values are distinct.""},{""args"":[[1,1,1,3,3,4,3,2,4,2]],""expected"":true,""example"":true},{""args"":[[1]],""expected"":false},{""args"":[[-1000000000,1000000000]],""expected"":false},{""args"":[[5,4,3,2,1,5]],""expected"":true},{""args"":[[0,0]],""expected"":true},{""args"":[[7,3,9,-2,11]],""expected"":false}]",Compare the array length with the size of a set.,O(n),O(n),"Solve it in O(1) extra space. What do you give up?
+What if the array is too big for memory?","class Solution:
+    def containsDuplicate(self, nums):
+        return len(set(nums)) != len(nums)","def gen(rng):
+    return [rng.sample(range(-10**9, 10**9), 10**5)]",,
+maximum-subarray,Maximum Subarray,Medium,ng;sde1,array;dynamic-programming;kadane,amazon;microsoft;apple;bank,maxSubArray,nums: int[],int,exact,Return the largest possible sum of a non-empty contiguous subarray.,"1 <= nums.length <= 10^5
+-10^4 <= nums[i] <= 10^4","[{""args"":[[-2,1,-3,4,-1,2,1,-5,4]],""expected"":6,""example"":true,""explanation"":""The subarray [4,-1,2,1] has the largest sum, 6.""},{""args"":[[1]],""expected"":1,""example"":true},{""args"":[[5,4,-1,7,8]],""expected"":23,""example"":true,""explanation"":""The whole array.""},{""args"":[[-3,-2,-5]],""expected"":-2},{""args"":[[-1]],""expected"":-1},{""args"":[[0,0,0]],""expected"":0},{""args"":[[2,-1,2]],""expected"":3},{""args"":[[-2,-1]],""expected"":-1},{""args"":[[8,-19,5,-4,20]],""expected"":21}]","At each value, decide whether to extend the previous subarray or start fresh.",O(n),O(1),"Return the subarray itself, not just its sum.
+Solve it with divide and conquer. What is the complexity?","class Solution:
+    def maxSubArray(self, nums):
+        best = cur = nums[0]
+        for x in nums[1:]:
+            cur = max(x, cur + x)
+            best = max(best, cur)
+        return best","def gen(rng):
+    return [[rng.randint(-10**4, 10**4) for _ in range(10**5)]]",,
+maximum-product-subarray,Maximum Product Subarray,Medium,ng;sde1,array;dynamic-programming,amazon;linkedin;google,maxProduct,nums: int[],int,exact,Return the maximum product of any non-empty contiguous subarray.,"1 <= nums.length <= 2 * 10^4
+-10 <= nums[i] <= 10
+The product of any subarray fits in a 32-bit integer.","[{""args"":[[2,3,-2,4]],""expected"":6,""example"":true,""explanation"":""[2,3] has the largest product, 6.""},{""args"":[[-2,0,-1]],""expected"":0,""example"":true,""explanation"":""The result cannot be 2, because [-2,-1] is not a subarray.""},{""args"":[[-2]],""expected"":-2},{""args"":[[-2,3,-4]],""expected"":24},{""args"":[[0,2]],""expected"":2},{""args"":[[-1,-2,-3,0]],""expected"":6},{""args"":[[2,-5,-2,-4,3]],""expected"":24},{""args"":[[-2,0]],""expected"":0},{""args"":[[3,-1,4]],""expected"":4}]",Track both maximum and minimum products because a negative value can swap their roles.,O(n),O(1),Why is tracking only the maximum product not enough?,"class Solution:
+    def maxProduct(self, nums):
+        best = hi = lo = nums[0]
+        for x in nums[1:]:
+            if x < 0:
+                hi, lo = lo, hi
+            hi = max(x, hi * x)
+            lo = min(x, lo * x)
+            best = max(best, hi)
+        return best","def gen(rng):
+    nums = []
+    while len(nums) < 2 * 10**4:
+        block = [rng.choice([-1, 1]) for _ in range(rng.randint(50, 300))]
+        for i in rng.sample(range(len(block)), min(len(block), rng.randint(0, 25))):
+            block[i] = rng.choice([-2, 2])
+        nums += block + [0]
+    return [nums[:2 * 10**4]]",,
+find-minimum-in-rotated-sorted-array,Find Minimum in Rotated Sorted Array,Medium,ng;sde1,array;binary-search,microsoft;amazon;meta,findMin,nums: int[],int,exact,Find the minimum element in a strictly increasing array rotated an unknown number of times; all values are unique.,"n == nums.length
+1 <= n <= 5000
+-5000 <= nums[i] <= 5000
+All values are unique.
+nums is sorted ascending and rotated between 1 and n times.","[{""args"":[[3,4,5,1,2]],""expected"":1,""example"":true,""explanation"":""The original array was [1,2,3,4,5], rotated 3 times.""},{""args"":[[4,5,6,7,0,1,2]],""expected"":0,""example"":true},{""args"":[[11,13,15,17]],""expected"":11,""example"":true,""explanation"":""Rotated 4 times, back to sorted.""},{""args"":[[1]],""expected"":1},{""args"":[[2,1]],""expected"":1},{""args"":[[1,2]],""expected"":1},{""args"":[[5,1,2,3,4]],""expected"":1},{""args"":[[2,3,4,5,1]],""expected"":1},{""args"":[[-3,-1,4,-5,-4]],""expected"":-5}]",Compare the midpoint with the right boundary to choose the half containing the minimum.,O(log n),O(1),What changes if the array can contain duplicates?,"class Solution:
+    def findMin(self, nums):
+        lo, hi = 0, len(nums) - 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if nums[mid] > nums[hi]:
+                lo = mid + 1
+            else:
+                hi = mid
+        return nums[lo]","def gen(rng):
+    a = sorted(rng.sample(range(-5000, 5001), 5000))
+    k = rng.randrange(5000)
+    return [a[k:] + a[:k]]",,
+container-with-most-water,Container With Most Water,Medium,ng;sde1,array;two-pointers;greedy,amazon;google;meta,maxArea,height: int[],int,exact,"Given vertical line heights, return the maximum water container area formed by two lines and the x-axis.","n == height.length
+2 <= n <= 10^5
+0 <= height[i] <= 10^4","[{""args"":[[1,8,6,2,5,4,8,3,7]],""expected"":49,""example"":true,""explanation"":""Lines at index 1 and 8: min(8, 7) * 7 = 49.""},{""args"":[[1,1]],""expected"":1,""example"":true},{""args"":[[4,3,2,1,4]],""expected"":16},{""args"":[[1,2,1]],""expected"":2},{""args"":[[0,0]],""expected"":0},{""args"":[[2,3,4,5,18,17,6]],""expected"":17},{""args"":[[1,2,4,3]],""expected"":4},{""args"":[[10000,1,10000]],""expected"":20000}]","Move the pointer at the shorter line inward, since moving the taller one cannot improve the limiting height.",O(n),O(1),Prove that moving the shorter line never skips the best answer.,"class Solution:
+    def maxArea(self, height):
+        i, j, best = 0, len(height) - 1, 0
+        while i < j:
+            best = max(best, min(height[i], height[j]) * (j - i))
+            if height[i] < height[j]:
+                i += 1
+            else:
+                j -= 1
+        return best","def gen(rng):
+    return [[rng.randint(0, 10**4) for _ in range(10**5)]]",,
+sum-of-two-integers,Sum of Two Integers,Medium,ng;sde1,bit-manipulation,meta;amazon,getSum,a: int; b: int,int,exact,Compute a + b without using the plus or minus arithmetic operators.,"-1000 <= a, b <= 1000","[{""args"":[1,2],""expected"":3,""example"":true},{""args"":[2,3],""expected"":5,""example"":true},{""args"":[-1,1],""expected"":0},{""args"":[-12,-8],""expected"":-20},{""args"":[1000,-1000],""expected"":0},{""args"":[0,0],""expected"":0},{""args"":[-1000,-1000],""expected"":-2000},{""args"":[7,-3],""expected"":4},{""args"":[-3,7],""expected"":4}]",Use XOR for sum bits and AND shifted left for carries; account for fixed-width integer behavior.,O(1),O(1),How do negative numbers work here? Walk through -1 + 1 in two's complement.,"class Solution:
+    def getSum(self, a, b):
+        mask = 0xFFFFFFFF
+        while b & mask:
+            a, b = a ^ b, (a & b) << 1
+        a &= mask
+        return a if a <= 0x7FFFFFFF else ~(a ^ mask)",,,
+number-of-1-bits,Number of 1 Bits,Easy,ng;sde1,bit-manipulation,apple;microsoft,hammingWeight,n: int,int,exact,Return the number of set bits in the unsigned integer n.,1 <= n <= 2^31 - 1,"[{""args"":[11],""expected"":3,""example"":true,""explanation"":""11 is 1011 in binary: three set bits.""},{""args"":[128],""expected"":1,""example"":true,""explanation"":""128 is 10000000 in binary.""},{""args"":[2147483645],""expected"":30,""example"":true},{""args"":[1],""expected"":1},{""args"":[2147483647],""expected"":31},{""args"":[1024],""expected"":1},{""args"":[255],""expected"":8},{""args"":[6],""expected"":2}]",Repeatedly clear the lowest set bit with n &= n - 1.,O(number of bits),O(1),"If this is called many times, how would you make it faster?","class Solution:
+    def hammingWeight(self, n):
+        count = 0
+        while n:
+            n &= n - 1
+            count += 1
+        return count",,,
+counting-bits,Counting Bits,Easy,ng;sde1,bit-manipulation;dynamic-programming,amazon;apple,countBits,n: int,int[],exact,"For every integer i from 0 through n, return the number of set bits in i.",0 <= n <= 10^5,"[{""args"":[2],""expected"":[0,1,1],""example"":true,""explanation"":""0 is 0, 1 is 1, 2 is 10.""},{""args"":[5],""expected"":[0,1,1,2,1,2],""example"":true},{""args"":[0],""expected"":[0]},{""args"":[1],""expected"":[0,1]},{""args"":[16],""expected"":[0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,1]},{""args"":[31],""expected"":[0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5]}]",bits[i] = bits[i >> 1] + (i & 1).,O(n),O(n),Can you do it in one pass without any built-in popcount?,"class Solution:
+    def countBits(self, n):
+        bits = [0] * (n + 1)
+        for i in range(1, n + 1):
+            bits[i] = bits[i >> 1] + (i & 1)
+        return bits","def gen(rng):
+    return [10**5]",,
+missing-number,Missing Number,Easy,ng;sde1,array;bit-manipulation;math,amazon;microsoft;meta,missingNumber,nums: int[],int,exact,An array contains n distinct values from 0 through n; return the one missing value.,"n == nums.length
+1 <= n <= 10^4
+0 <= nums[i] <= n
+All values are unique.","[{""args"":[[3,0,1]],""expected"":2,""example"":true,""explanation"":""n = 3, so the range is [0,3]. 2 is missing.""},{""args"":[[0,1]],""expected"":2,""example"":true},{""args"":[[9,6,4,2,3,5,7,0,1]],""expected"":8,""example"":true},{""args"":[[0]],""expected"":1},{""args"":[[1]],""expected"":0},{""args"":[[1,2]],""expected"":0},{""args"":[[2,0]],""expected"":1},{""args"":[[0,1,2,3,4,5,6,7,8,9]],""expected"":10}]",Use the expected sum or XOR all indices and values.,O(n),O(1) extra,Solve it with O(1) extra space and without risking overflow.,"class Solution:
+    def missingNumber(self, nums):
+        x = len(nums)
+        for i, v in enumerate(nums):
+            x ^= i ^ v
+        return x","def gen(rng):
+    a = list(range(10**4 + 1))
+    a.remove(rng.randint(0, 10**4))
+    rng.shuffle(a)
+    return [a]",,
+reverse-bits,Reverse Bits,Easy,ng;sde1,bit-manipulation,apple;airbnb,reverseBits,n: int,int,exact,"Reverse the bits of a 32-bit unsigned integer and return the resulting unsigned integer.
+
+Treat n as 32 bits. Because n is even and below 2^31, the reversed value also fits in a signed 32-bit integer.","0 <= n <= 2^31 - 2
+n is even","[{""args"":[43261596],""expected"":964176192,""example"":true,""explanation"":""00000010100101000001111010011100 reversed is 00111001011110000010100101000000.""},{""args"":[2147483644],""expected"":1073741822,""example"":true},{""args"":[0],""expected"":0},{""args"":[2],""expected"":1073741824},{""args"":[6],""expected"":1610612736},{""args"":[1073741824],""expected"":2},{""args"":[123456788],""expected"":682875616}]","Repeat 32 times: shift the result left, append the lowest input bit, then shift input right.",O(1),O(1),"If this function is called many times, how would you optimise it?","class Solution:
+    def reverseBits(self, n):
+        out = 0
+        for _ in range(32):
+            out = (out << 1) | (n & 1)
+            n >>= 1
+        return out",,,
+climbing-stairs,Climbing Stairs,Easy,ng;sde1,dynamic-programming,amazon;adobe;google,climbStairs,n: int,int,exact,How many distinct ways can you climb n steps if each move is 1 or 2 steps?,1 <= n <= 45,"[{""args"":[2],""expected"":2,""example"":true,""explanation"":""1 + 1, or 2.""},{""args"":[3],""expected"":3,""example"":true,""explanation"":""1 + 1 + 1, 1 + 2, or 2 + 1.""},{""args"":[1],""expected"":1},{""args"":[5],""expected"":8},{""args"":[10],""expected"":89},{""args"":[45],""expected"":1836311903},{""args"":[44],""expected"":1134903170}]",The number of ways follows the Fibonacci recurrence.,O(n),O(1),"What if you can take 1, 2 or 3 steps?
+What if some steps are broken?","class Solution:
+    def climbStairs(self, n):
+        a, b = 1, 1
+        for _ in range(n):
+            a, b = b, a + b
+        return a",,,
+longest-increasing-subsequence,Longest Increasing Subsequence,Medium,ng;sde1,dynamic-programming;binary-search,amazon;google;microsoft,lengthOfLIS,nums: int[],int,exact,Return the length of the longest strictly increasing subsequence of nums.,"1 <= nums.length <= 2500
+-10^4 <= nums[i] <= 10^4","[{""args"":[[10,9,2,5,3,7,101,18]],""expected"":4,""example"":true,""explanation"":""[2,3,7,101] has length 4.""},{""args"":[[0,1,0,3,2,3]],""expected"":4,""example"":true},{""args"":[[7,7,7,7,7,7,7]],""expected"":1,""example"":true},{""args"":[[1]],""expected"":1},{""args"":[[5,4,3,2,1]],""expected"":1},{""args"":[[1,3,6,7,9,4,10,5,6]],""expected"":6},{""args"":[[4,10,4,3,8,9]],""expected"":3},{""args"":[[-2,-1]],""expected"":2}]",Maintain the smallest possible tail for each subsequence length using binary search.,O(n log n),O(n),"Bring it to O(n log n).
+Return one longest subsequence, not just its length.","class Solution:
+    def lengthOfLIS(self, nums):
+        tails = []
+        for x in nums:
+            i = bisect_left(tails, x)
+            if i == len(tails):
+                tails.append(x)
+            else:
+                tails[i] = x
+        return len(tails)","def gen(rng):
+    return [[rng.randint(-10**4, 10**4) for _ in range(2500)]]",,
+longest-common-subsequence,Longest Common Subsequence,Medium,ng;sde1,dynamic-programming;string,amazon;google;microsoft,longestCommonSubsequence,text1: string; text2: string,int,exact,Return the length of the longest subsequence common to text1 and text2.,"1 <= text1.length, text2.length <= 1000
+text1 and text2 contain lowercase English letters only.","[{""args"":[""abcde"",""ace""],""expected"":3,""example"":true,""explanation"":""\""ace\"" is the longest common subsequence.""},{""args"":[""abc"",""abc""],""expected"":3,""example"":true},{""args"":[""abc"",""def""],""expected"":0,""example"":true},{""args"":[""a"",""a""],""expected"":1},{""args"":[""bl"",""yby""],""expected"":1},{""args"":[""ezupkr"",""ubmrapg""],""expected"":2},{""args"":[""oxcpqrsvwf"",""shmtulqrypy""],""expected"":2},{""args"":[""abcba"",""abcbcba""],""expected"":5}]",Use a DP table over prefixes of both strings.,O(mn),"O(mn), reducible to O(min(m,n))","Reduce the space to O(min(m, n)).
+Print the subsequence itself.","class Solution:
+    def longestCommonSubsequence(self, a, b):
+        prev = [0] * (len(b) + 1)
+        for ca in a:
+            cur = [0]
+            for j, cb in enumerate(b):
+                cur.append(prev[j] + 1 if ca == cb else max(prev[j + 1], cur[j]))
+            prev = cur
+        return prev[-1]","def gen(rng):
+    s = lambda: """".join(rng.choice(""abcd"") for _ in range(1000))
+    return [s(), s()]",,
+word-break,Word Break,Medium,ng;sde1,dynamic-programming;string;hash-set,amazon;google;meta,wordBreak,s: string; wordDict: list<string>,bool,exact,Return whether s can be segmented into one or more dictionary words; words may be reused.,"1 <= s.length <= 300
+1 <= wordDict.length <= 1000
+1 <= wordDict[i].length <= 20
+s and wordDict[i] contain lowercase English letters only.
+All words in wordDict are unique.","[{""args"":[""leetcode"",[""leet"",""code""]],""expected"":true,""example"":true,""explanation"":""\""leetcode\"" is \""leet code\"".""},{""args"":[""applepenapple"",[""apple"",""pen""]],""expected"":true,""example"":true,""explanation"":""Words can be reused.""},{""args"":[""catsandog"",[""cats"",""dog"",""sand"",""and"",""cat""]],""expected"":false,""example"":true},{""args"":[""a"",[""b""]],""expected"":false},{""args"":[""aaaaaaa"",[""aaaa"",""aaa""]],""expected"":true},{""args"":[""aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"",[""a"",""aa"",""aaa"",""aaaa"",""aaaaa""]],""expected"":false},{""args"":[""cars"",[""car"",""ca"",""rs""]],""expected"":true},{""args"":[""bb"",[""a"",""b"",""bbb"",""bbbb""]],""expected"":true}]",dp[i] is true when some reachable prefix ends with a dictionary word.,O(n²) plus dictionary lookups,O(n),"Return every possible sentence (Word Break II).
+What if the dictionary is huge and s is short?","class Solution:
+    def wordBreak(self, s, wordDict):
+        words = set(wordDict)
+        lens = sorted({len(w) for w in words})
+        ok = [True] + [False] * len(s)
+        for i in range(1, len(s) + 1):
+            ok[i] = any(L <= i and ok[i - L] and s[i - L:i] in words for L in lens)
+        return ok[-1]","def gen(rng):
+    return [""a"" * 299 + ""b"", [""a"" * k for k in range(1, 11)]]",,
+combination-sum,Combination Sum,Medium,ng;sde1,backtracking;array,amazon;meta;airbnb,combinationSum,candidates: int[]; target: int,list<list<int>>,nested_any_order,"Return all unique combinations of candidates that sum to target; each candidate may be reused unlimited times.
+
+Return the combinations in any order.","1 <= candidates.length <= 30
+2 <= candidates[i] <= 40
+All values in candidates are distinct.
+1 <= target <= 40","[{""args"":[[2,3,6,7],7],""expected"":[[2,2,3],[7]],""example"":true,""explanation"":""2 + 2 + 3 = 7 and 7 = 7.""},{""args"":[[2,3,5],8],""expected"":[[2,2,2,2],[2,3,3],[3,5]],""example"":true},{""args"":[[2],1],""expected"":[],""example"":true},{""args"":[[8,7,4,3],11],""expected"":[[3,4,4],[3,8],[4,7]]},{""args"":[[2,3],6],""expected"":[[2,2,2],[3,3]]},{""args"":[[7,3,2],18],""expected"":[[2,2,2,2,2,2,2,2,2],[2,2,2,2,2,2,3,3],[2,2,2,2,3,7],[2,2,2,3,3,3,3],[2,2,7,7],[2,3,3,3,7],[3,3,3,3,3,3]]},{""args"":[[5],5],""expected"":[[5]]},{""args"":[[2,4],7],""expected"":[]}]",Backtrack with a start index so combinations are generated without permutation duplicates.,Output-sensitive; exponential worst case,"O(target/minCandidate) recursion, excluding output",Each candidate can be used once and the input has duplicates (Combination Sum II).,"class Solution:
+    def combinationSum(self, candidates, target):
+        candidates = sorted(candidates)
+        out, path = [], []
+        def go(start, left):
+            if left == 0:
+                out.append(path[:])
+                return
+            for i in range(start, len(candidates)):
+                if candidates[i] > left:
+                    break
+                path.append(candidates[i])
+                go(i, left - candidates[i])
+                path.pop()
+        go(0, target)
+        return out",,,
+house-robber,House Robber,Medium,ng;sde1,dynamic-programming;array,amazon;google;cisco,rob,nums: int[],int,exact,Maximize the sum of non-adjacent house values.,"1 <= nums.length <= 100
+0 <= nums[i] <= 400","[{""args"":[[1,2,3,1]],""expected"":4,""example"":true,""explanation"":""Rob house 1 and house 3: 1 + 3 = 4.""},{""args"":[[2,7,9,3,1]],""expected"":12,""example"":true,""explanation"":""Rob houses 1, 3 and 5: 2 + 9 + 1 = 12.""},{""args"":[[5]],""expected"":5},{""args"":[[2,1]],""expected"":2},{""args"":[[2,1,1,2]],""expected"":4},{""args"":[[0,0,0]],""expected"":0},{""args"":[[400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400,400]],""expected"":20000}]","For each house, choose between skipping it and taking it plus the best result two houses back.",O(n),O(1),"The houses form a circle (House Robber II).
+The houses form a binary tree (House Robber III).","class Solution:
+    def rob(self, nums):
+        take, skip = 0, 0
+        for x in nums:
+            take, skip = skip + x, max(take, skip)
+        return max(take, skip)","def gen(rng):
+    return [[rng.randint(0, 400) for _ in range(100)]]",,
+house-robber-ii,House Robber II,Medium,ng;sde1,dynamic-programming;array,amazon;microsoft,rob,nums: int[],int,exact,"Houses form a circle, so the first and last cannot both be robbed; return the maximum amount.","1 <= nums.length <= 100
+0 <= nums[i] <= 1000","[{""args"":[[2,3,2]],""expected"":3,""example"":true,""explanation"":""Houses 1 and 3 are adjacent in the circle.""},{""args"":[[1,2,3,1]],""expected"":4,""example"":true},{""args"":[[1,2,3]],""expected"":3,""example"":true},{""args"":[[5]],""expected"":5},{""args"":[[1,2]],""expected"":2},{""args"":[[200,3,140,20,10]],""expected"":340},{""args"":[[0,0]],""expected"":0},{""args"":[[1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000,1000]],""expected"":50000}]",Take the maximum of linear robber solutions excluding the first or excluding the last house.,O(n),O(1),Why does splitting into two straight lines cover every case?,"class Solution:
+    def rob(self, nums):
+        def line(a):
+            take = skip = 0
+            for x in a:
+                take, skip = skip + x, max(take, skip)
+            return max(take, skip)
+        if len(nums) == 1:
+            return nums[0]
+        return max(line(nums[1:]), line(nums[:-1]))","def gen(rng):
+    return [[rng.randint(0, 1000) for _ in range(100)]]",,
+decode-ways,Decode Ways,Medium,ng;sde1,dynamic-programming;string,meta;google;amazon,numDecodings,s: string,int,exact,Count ways to decode a digit string where 1–26 map to A–Z; strings with invalid leading zeros have no decoding.,"1 <= s.length <= 100
+s contains only digits and may contain leading zeros.
+The answer fits in a 32-bit integer.","[{""args"":[""12""],""expected"":2,""example"":true,""explanation"":""\""AB\"" (1 2) or \""L\"" (12).""},{""args"":[""226""],""expected"":3,""example"":true,""explanation"":""\""BZ\"" (2 26), \""VF\"" (22 6) or \""BBF\"" (2 2 6).""},{""args"":[""06""],""expected"":0,""example"":true,""explanation"":""\""06\"" is not a valid code for F.""},{""args"":[""0""],""expected"":0},{""args"":[""10""],""expected"":1},{""args"":[""27""],""expected"":1},{""args"":[""2101""],""expected"":1},{""args"":[""11106""],""expected"":2},{""args"":[""1111111111""],""expected"":89},{""args"":[""100""],""expected"":0},{""args"":[""230""],""expected"":0}]","At each position, add valid one-digit and two-digit decoding counts.",O(n),O(1),"The string may also contain '*', meaning any digit 1 to 9 (Decode Ways II).","class Solution:
+    def numDecodings(self, s):
+        prev, cur = 1, 1 if s[0] != ""0"" else 0
+        for i in range(1, len(s)):
+            nxt = cur if s[i] != ""0"" else 0
+            if 10 <= int(s[i - 1:i + 1]) <= 26:
+                nxt += prev
+            prev, cur = cur, nxt
+        return cur","def gen(rng):
+    def count(s):
+        prev, cur = 1, 1 if s[0] != ""0"" else 0
+        for i in range(1, len(s)):
+            nxt = (cur if s[i] != ""0"" else 0) + (prev if 10 <= int(s[i - 1:i + 1]) <= 26 else 0)
+            prev, cur = cur, nxt
+        return cur
+    p = 0.5
+    while True:
+        s = """".join(rng.choice(""12"") if rng.random() < p else rng.choice(""3456789"") for _ in range(100))
+        if 0 < count(s) < 2**31:
+            return [s]
+        p *= 0.9",,
+unique-paths,Unique Paths,Medium,ng;sde1,dynamic-programming;math,google;amazon;bloomberg,uniquePaths,m: int; n: int,int,exact,Count paths from the top-left to bottom-right of an m × n grid when moves are only right or down.,"1 <= m, n <= 100
+The answer is at most 2 * 10^9.","[{""args"":[3,7],""expected"":28,""example"":true},{""args"":[3,2],""expected"":3,""example"":true,""explanation"":""Right then down twice, down then right then down, or down twice then right.""},{""args"":[1,1],""expected"":1},{""args"":[10,10],""expected"":48620},{""args"":[23,12],""expected"":193536720},{""args"":[1,100],""expected"":1},{""args"":[100,1],""expected"":1},{""args"":[16,16],""expected"":155117520}]",Use a row of DP values; each cell is the sum of the cell above and the cell to the left.,O(mn),O(n),"Some cells are blocked (Unique Paths II).
+Can you solve it with combinatorics?","class Solution:
+    def uniquePaths(self, m, n):
+        row = [1] * n
+        for _ in range(1, m):
+            for j in range(1, n):
+                row[j] += row[j - 1]
+        return row[-1]",,,
+jump-game,Jump Game,Medium,ng;sde1,array;greedy,amazon;microsoft;meta,canJump,nums: int[],bool,exact,Return whether the last index is reachable when nums[i] is the maximum forward jump length from i.,"1 <= nums.length <= 10^4
+0 <= nums[i] <= 10^5","[{""args"":[[2,3,1,1,4]],""expected"":true,""example"":true,""explanation"":""Jump 1 step to index 1, then 3 steps to the last index.""},{""args"":[[3,2,1,0,4]],""expected"":false,""example"":true,""explanation"":""Every path reaches index 3, whose jump length is 0.""},{""args"":[[0]],""expected"":true},{""args"":[[0,1]],""expected"":false},{""args"":[[1,0,1]],""expected"":false},{""args"":[[2,0,0]],""expected"":true},{""args"":[[1,1,1,0]],""expected"":true},{""args"":[[5,0,0,0,0,0]],""expected"":true}]",Track the farthest reachable index while scanning left to right.,O(n),O(1),Return the minimum number of jumps (Jump Game II).,"class Solution:
+    def canJump(self, nums):
+        reach = 0
+        for i, x in enumerate(nums):
+            if i > reach:
+                return False
+            reach = max(reach, i + x)
+        return True","def gen(rng):
+    return [[1] * (10**4 - 1) + [0]]",,
+clone-graph,Clone Graph,Medium,ng;sde1,graph;dfs;bfs;hash-map,meta;amazon;google,cloneGraph,node: Node,Node,exact,"Return a deep copy of a connected undirected graph given a reference to one node.
+
+The test input is an adjacency list: list i holds the neighbors of the node with value i + 1. You get the node with value 1, and must return the copy of that node.","The number of nodes is in the range [0, 100].
+1 <= Node.val <= 100
+Node.val is unique for each node.
+There are no repeated edges and no self-loops.
+The graph is connected.","[{""args"":[[[2,4],[1,3],[2,4],[1,3]]],""expected"":[[2,4],[1,3],[2,4],[1,3]],""example"":true,""explanation"":""Four nodes in a square.""},{""args"":[[[]]],""expected"":[[]],""example"":true,""explanation"":""One node with no neighbors.""},{""args"":[[]],""expected"":[],""example"":true,""explanation"":""An empty graph.""},{""args"":[[[2],[1]]],""expected"":[[2],[1]]},{""args"":[[[2,3,4,5],[1],[1],[1],[1]]],""expected"":[[2,3,4,5],[1],[1],[1],[1]]},{""args"":[[[2,3],[1,3],[1,2]]],""expected"":[[2,3],[1,3],[1,2]]},{""args"":[[[5,2],[1,3],[2,4],[3,5],[4,1]]],""expected"":[[5,2],[1,3],[2,4],[3,5],[4,1]]}]",Map each original node to its clone and traverse with DFS or BFS.,O(V + E),O(V),What if the graph can be disconnected and you get a list of nodes?,"class Solution:
+    def cloneGraph(self, node):
+        if node is None:
+            return None
+        copies = {node: Node(node.val)}
+        stack = [node]
+        while stack:
+            n = stack.pop()
+            for m in n.neighbors:
+                if m not in copies:
+                    copies[m] = Node(m.val)
+                    stack.append(m)
+                copies[n].neighbors.append(copies[m])
+        return copies[node]",,,
+course-schedule,Course Schedule,Medium,ng;sde1,graph;topological-sort;dfs,amazon;meta;google,canFinish,numCourses: int; prerequisites: int[][],bool,exact,"Given prerequisites, determine whether all courses can be completed.","1 <= numCourses <= 2000
+0 <= prerequisites.length <= 5000
+prerequisites[i] = [a, b] means you must take b before a.
+All pairs are unique.","[{""args"":[2,[[1,0]]],""expected"":true,""example"":true,""explanation"":""Take course 0, then course 1.""},{""args"":[2,[[1,0],[0,1]]],""expected"":false,""example"":true,""explanation"":""Each course needs the other first.""},{""args"":[1,[]],""expected"":true},{""args"":[3,[[1,0],[2,1],[0,2]]],""expected"":false},{""args"":[5,[[1,4],[2,4],[3,1],[3,2]]],""expected"":true},{""args"":[4,[[1,0],[2,1],[3,2]]],""expected"":true},{""args"":[3,[[0,1],[0,2],[1,2]]],""expected"":true}]",Detect a directed cycle with DFS states or use Kahn's topological sort.,O(V + E),O(V + E),Return an order in which to take the courses (Course Schedule II).,"class Solution:
+    def canFinish(self, numCourses, prerequisites):
+        graph = [[] for _ in range(numCourses)]
+        indeg = [0] * numCourses
+        for a, b in prerequisites:
+            graph[b].append(a)
+            indeg[a] += 1
+        queue = [i for i in range(numCourses) if indeg[i] == 0]
+        for c in queue:
+            for d in graph[c]:
+                indeg[d] -= 1
+                if indeg[d] == 0:
+                    queue.append(d)
+        return len(queue) == numCourses","def gen(rng):
+    n = 2000
+    order = list(range(n))
+    rng.shuffle(order)
+    edges = set()
+    while len(edges) < 5000:
+        i, j = sorted(rng.sample(range(n), 2))
+        edges.add((order[j], order[i]))
+    return [n, [list(e) for e in edges]]",,
+pacific-atlantic-water-flow,Pacific Atlantic Water Flow,Medium,ng;sde1,graph;dfs;bfs;matrix,google;amazon,pacificAtlantic,heights: int[][],list<list<int>>,any_order,"Return grid cells from which water can flow to both the Pacific and Atlantic, flowing to equal-or-lower neighboring heights.
+
+The Pacific touches the top and left edges, the Atlantic the bottom and right edges. Return [row, col] pairs in any order.","m == heights.length
+n == heights[i].length
+1 <= m, n <= 200
+0 <= heights[i][j] <= 10^5","[{""args"":[[[1,2,2,3,5],[3,2,3,4,4],[2,4,5,3,1],[6,7,1,4,5],[5,1,1,2,4]]],""expected"":[[0,4],[1,3],[1,4],[2,2],[3,0],[3,1],[4,0]],""example"":true},{""args"":[[[1]]],""expected"":[[0,0]],""example"":true},{""args"":[[[1,2],[4,3]]],""expected"":[[0,1],[1,0],[1,1]]},{""args"":[[[3,3,3],[3,1,3],[0,2,4]]],""expected"":[[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]},{""args"":[[[10,10,10],[10,1,10],[10,10,10]]],""expected"":[[0,0],[0,1],[0,2],[1,0],[1,2],[2,0],[2,1],[2,2]]},{""args"":[[[1,2,3]]],""expected"":[[0,0],[0,1],[0,2]]}]","Search backward from each ocean's borders, moving to neighbors of equal or greater height.",O(mn),O(mn),Why is searching uphill from the oceans faster than searching downhill from every cell?,"class Solution:
+    def pacificAtlantic(self, heights):
+        m, n = len(heights), len(heights[0])
+        def flood(starts):
+            seen = set(starts)
+            stack = list(starts)
+            while stack:
+                r, c = stack.pop()
+                for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < m and 0 <= nc < n and (nr, nc) not in seen and heights[nr][nc] >= heights[r][c]:
+                        seen.add((nr, nc))
+                        stack.append((nr, nc))
+            return seen
+        pac = flood([(0, c) for c in range(n)] + [(r, 0) for r in range(m)])
+        atl = flood([(m - 1, c) for c in range(n)] + [(r, n - 1) for r in range(m)])
+        return [[r, c] for r, c in sorted(pac & atl)]","def gen(rng):
+    return [[[rng.randint(0, 10**5) for _ in range(200)] for _ in range(200)]]",,
+longest-consecutive-sequence,Longest Consecutive Sequence,Medium,ng;sde1,array;hash-set,google;amazon;meta,longestConsecutive,nums: int[],int,exact,"Return the length of the longest run of consecutive integer values, in expected O(n) time.","0 <= nums.length <= 10^5
+-10^9 <= nums[i] <= 10^9","[{""args"":[[100,4,200,1,3,2]],""expected"":4,""example"":true,""explanation"":""The run is [1,2,3,4].""},{""args"":[[0,3,7,2,5,8,4,6,0,1]],""expected"":9,""example"":true},{""args"":[[1,0,1,2]],""expected"":3,""example"":true},{""args"":[[]],""expected"":0},{""args"":[[5]],""expected"":1},{""args"":[[9,1,-3,2,4,8,3,-1,6,-2,-4,7]],""expected"":4},{""args"":[[1,1,1]],""expected"":1},{""args"":[[-1000000000,1000000000]],""expected"":1}]",Only start counting from values whose predecessor is absent from the set.,O(n) expected,O(n),Why is the total work O(n) even though there is a nested loop?,"class Solution:
+    def longestConsecutive(self, nums):
+        s = set(nums)
+        best = 0
+        for x in s:
+            if x - 1 not in s:
+                y = x
+                while y + 1 in s:
+                    y += 1
+                best = max(best, y - x + 1)
+        return best","def gen(rng):
+    a = list(range(-50000, 50000))
+    rng.shuffle(a)
+    return [a]",,
+alien-dictionary,Alien Dictionary,Hard,ng;sde1,graph;topological-sort;string,meta;google;airbnb;uber,alienOrder,words: string[],string,exact,"Given sorted words in an unknown alphabet, return a valid character ordering or an empty string if constraints are inconsistent.
+
+Every letter that appears must be in the answer. Each test has exactly one valid order, or none (return """").","1 <= words.length <= 100
+1 <= words[i].length <= 100
+words[i] contains lowercase English letters only.","[{""args"":[[""wrt"",""wrf"",""er"",""ett"",""rftt""]],""expected"":""wertf"",""example"":true},{""args"":[[""z"",""x""]],""expected"":""zx"",""example"":true},{""args"":[[""z"",""x"",""z""]],""expected"":"""",""example"":true,""explanation"":""z comes before x and after it, so no order works.""},{""args"":[[""abc"",""ab""]],""expected"":""""},{""args"":[[""z"",""z""]],""expected"":""z""},{""args"":[[""ba"",""bc"",""ac"",""cab""]],""expected"":""bac""},{""args"":[[""z""]],""expected"":""z""},{""args"":[[""ca"",""cb"",""ba"",""bc""]],""expected"":""acb""},{""args"":[[""x"",""y"",""yz"",""zy"",""zx""]],""expected"":""""}]","Derive precedence edges from the first differing character of adjacent words, then topologically sort.",O(total characters + alphabet edges),O(alphabet + edges),What if the input may admit several valid orders? How would you test an answer?,"class Solution:
+    def alienOrder(self, words):
+        graph = {c: set() for w in words for c in w}
+        indeg = {c: 0 for c in graph}
+        for a, b in zip(words, words[1:]):
+            for x, y in zip(a, b):
+                if x != y:
+                    if y not in graph[x]:
+                        graph[x].add(y)
+                        indeg[y] += 1
+                    break
+            else:
+                if len(a) > len(b):
+                    return """"
+        queue = sorted(c for c in indeg if indeg[c] == 0)
+        out = []
+        while queue:
+            c = queue.pop(0)
+            out.append(c)
+            for d in sorted(graph[c]):
+                indeg[d] -= 1
+                if indeg[d] == 0:
+                    queue.append(d)
+        return """".join(out) if len(out) == len(graph) else """"","def gen(rng):
+    alpha = list(""abcdefghijklmnopqrstuvwxyz"")
+    rng.shuffle(alpha)
+    rank = {c: i for i, c in enumerate(alpha)}
+    words = set()
+    for c in alpha:
+        for _ in range(3):
+            words.add(c + """".join(rng.choice(alpha) for _ in range(rng.randint(0, 99))))
+    while len(words) < 100:
+        words.add("""".join(rng.choice(alpha) for _ in range(rng.randint(1, 100))))
+    return [sorted(words, key=lambda w: [rank[c] for c in w])]",,
+graph-valid-tree,Graph Valid Tree,Medium,ng;sde1,graph;dfs;union-find,google;meta;linkedin,validTree,n: int; edges: int[][],bool,exact,Determine whether an undirected graph with n nodes and edges forms a valid tree.,"1 <= n <= 2000
+0 <= edges.length <= 5000
+edges[i] = [a, b], 0 <= a, b < n, a != b
+There are no repeated edges.","[{""args"":[5,[[0,1],[0,2],[0,3],[1,4]]],""expected"":true,""example"":true},{""args"":[5,[[0,1],[1,2],[2,3],[1,3],[1,4]]],""expected"":false,""example"":true,""explanation"":""1, 2 and 3 form a cycle.""},{""args"":[1,[]],""expected"":true},{""args"":[2,[]],""expected"":false},{""args"":[4,[[0,1],[2,3]]],""expected"":false},{""args"":[3,[[0,1],[1,2]]],""expected"":true},{""args"":[4,[[0,1],[0,2],[0,3],[1,2]]],""expected"":false}]",A tree must be connected and have exactly n - 1 edges.,O(V + E),O(V),Solve it with union-find and with DFS. Which would you pick for a graph that keeps growing?,"class Solution:
+    def validTree(self, n, edges):
+        if len(edges) != n - 1:
+            return False
+        parent = list(range(n))
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        for a, b in edges:
+            ra, rb = find(a), find(b)
+            if ra == rb:
+                return False
+            parent[ra] = rb
+        return True","def gen(rng):
+    n = 2000
+    return [n, [[i, rng.randrange(i)] for i in range(1, n)]]",,
+number-of-connected-components-in-an-undirected-graph,Number of Connected Components in an Undirected Graph,Medium,ng;sde1,graph;dfs;union-find,linkedin;amazon;google,countComponents,n: int; edges: int[][],int,exact,Count connected components in an undirected graph with n vertices.,"1 <= n <= 2000
+0 <= edges.length <= 5000
+edges[i] = [a, b], 0 <= a, b < n, a != b
+There are no repeated edges.","[{""args"":[5,[[0,1],[1,2],[3,4]]],""expected"":2,""example"":true},{""args"":[5,[[0,1],[1,2],[2,3],[3,4]]],""expected"":1,""example"":true},{""args"":[1,[]],""expected"":1},{""args"":[4,[[2,3]]],""expected"":3},{""args"":[6,[[0,1],[2,3],[4,5]]],""expected"":3},{""args"":[3,[[0,1],[1,2],[0,2]]],""expected"":1}]","Run DFS/BFS from each unvisited vertex, or use disjoint-set union.",O(V + E),O(V),Edges arrive one at a time and you must report the count after each one.,"class Solution:
+    def countComponents(self, n, edges):
+        parent = list(range(n))
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        count = n
+        for a, b in edges:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+                count -= 1
+        return count","def gen(rng):
+    n = 2000
+    edges = set()
+    while len(edges) < 1900:
+        a, b = sorted(rng.sample(range(n), 2))
+        edges.add((a, b))
+    return [n, [list(e) for e in edges]]",,
+insert-interval,Insert Interval,Medium,ng;sde1,intervals;array,google;linkedin;meta,insert,intervals: int[][]; newInterval: int[],int[][],exact,Insert a new interval into a sorted list of non-overlapping intervals and merge any overlaps.,"0 <= intervals.length <= 10^4
+intervals[i].length == 2
+0 <= start <= end <= 10^5
+intervals is sorted by start and has no overlaps.
+newInterval.length == 2","[{""args"":[[[1,3],[6,9]],[2,5]],""expected"":[[1,5],[6,9]],""example"":true},{""args"":[[[1,2],[3,5],[6,7],[8,10],[12,16]],[4,8]],""expected"":[[1,2],[3,10],[12,16]],""example"":true,""explanation"":""[4,8] overlaps [3,5], [6,7] and [8,10].""},{""args"":[[],[5,7]],""expected"":[[5,7]]},{""args"":[[[1,5]],[2,3]],""expected"":[[1,5]]},{""args"":[[[1,5]],[6,8]],""expected"":[[1,5],[6,8]]},{""args"":[[[3,5]],[0,1]],""expected"":[[0,1],[3,5]]},{""args"":[[[1,5]],[0,6]],""expected"":[[0,6]]},{""args"":[[[1,5]],[5,7]],""expected"":[[1,7]]}]","Append intervals strictly before the new interval, merge overlaps, then append the rest.",O(n),O(n) output,What if you insert many intervals one after another?,"class Solution:
+    def insert(self, intervals, newInterval):
+        s, e = newInterval
+        out, i = [], 0
+        while i < len(intervals) and intervals[i][1] < s:
+            out.append(intervals[i]); i += 1
+        while i < len(intervals) and intervals[i][0] <= e:
+            s, e = min(s, intervals[i][0]), max(e, intervals[i][1]); i += 1
+        out.append([s, e])
+        return out + intervals[i:]","def gen(rng):
+    pts = sorted(rng.sample(range(10**5 + 1), 2 * 10**4))
+    a, b = sorted(rng.sample(range(10**5 + 1), 2))
+    return [[[pts[i], pts[i + 1]] for i in range(0, len(pts), 2)], [a, b]]",,
+non-overlapping-intervals,Non-overlapping Intervals,Medium,ng;sde1,intervals;greedy,google;meta;amazon,eraseOverlapIntervals,intervals: int[][],int,exact,"Return the minimum number of intervals that must be removed so the remaining intervals do not overlap.
+
+Intervals that only touch, like [1,2] and [2,3], do not overlap.","1 <= intervals.length <= 10^5
+intervals[i].length == 2
+-5 * 10^4 <= start < end <= 5 * 10^4","[{""args"":[[[1,2],[2,3],[3,4],[1,3]]],""expected"":1,""example"":true,""explanation"":""Remove [1,3].""},{""args"":[[[1,2],[1,2],[1,2]]],""expected"":2,""example"":true},{""args"":[[[1,2],[2,3]]],""expected"":0,""example"":true},{""args"":[[[0,2],[1,3],[2,4],[3,5],[4,6]]],""expected"":2},{""args"":[[[-5,5]]],""expected"":0},{""args"":[[[1,100],[11,22],[1,11],[2,12]]],""expected"":2},{""args"":[[[-3,-1],[-2,0],[0,1]]],""expected"":1}]",Sort by end time and greedily keep intervals that start after the last kept end.,O(n log n),O(1) extra beyond sorting,"Why does sorting by end time work, and sorting by start time not?","class Solution:
+    def eraseOverlapIntervals(self, intervals):
+        end, kept = float(""-inf""), 0
+        for s, e in sorted(intervals, key=lambda x: x[1]):
+            if s >= end:
+                kept += 1
+                end = e
+        return len(intervals) - kept","def gen(rng):
+    out = []
+    for _ in range(10**5):
+        s = rng.randint(-5 * 10**4, 5 * 10**4 - 1)
+        out.append([s, rng.randint(s + 1, min(5 * 10**4, s + 100))])
+    return [out]",,
+meeting-rooms,Meeting Rooms,Easy,ng;sde1,intervals;sorting,meta;amazon;bloomberg,canAttendMeetings,intervals: int[][],bool,exact,"Determine whether a person can attend all meetings given their start and end times.
+
+A meeting that ends at 5 and one that starts at 5 do not clash.","0 <= intervals.length <= 10^4
+intervals[i].length == 2
+0 <= start < end <= 10^6","[{""args"":[[[0,30],[5,10],[15,20]]],""expected"":false,""example"":true},{""args"":[[[7,10],[2,4]]],""expected"":true,""example"":true},{""args"":[[]],""expected"":true},{""args"":[[[1,5],[5,10]]],""expected"":true},{""args"":[[[5,8],[6,8]]],""expected"":false},{""args"":[[[1,2]]],""expected"":true},{""args"":[[[9,10],[4,9],[4,17]]],""expected"":false}]",Sort by start time and check adjacent intervals for overlap.,O(n log n),O(n) or O(1) extra after sorting,Return the minimum number of rooms (Meeting Rooms II).,"class Solution:
+    def canAttendMeetings(self, intervals):
+        intervals = sorted(intervals)
+        return all(intervals[i][1] <= intervals[i + 1][0] for i in range(len(intervals) - 1))","def gen(rng):
+    pts = sorted(rng.sample(range(10**6 + 1), 2 * 10**4))
+    out = [[pts[i], pts[i + 1]] for i in range(0, len(pts), 2)]
+    rng.shuffle(out)
+    return [out]",,
+meeting-rooms-ii,Meeting Rooms II,Medium,ng;sde1,intervals;heap;sorting,meta;amazon;google;uber,minMeetingRooms,intervals: int[][],int,exact,"Return the minimum number of meeting rooms required for all intervals.
+
+A room freed at time 5 can host a meeting that starts at 5.","1 <= intervals.length <= 10^4
+0 <= start < end <= 10^6","[{""args"":[[[0,30],[5,10],[15,20]]],""expected"":2,""example"":true},{""args"":[[[7,10],[2,4]]],""expected"":1,""example"":true},{""args"":[[[1,5],[5,10]]],""expected"":1},{""args"":[[[1,10],[2,9],[3,8]]],""expected"":3},{""args"":[[[13,15],[1,13]]],""expected"":1},{""args"":[[[1,2]]],""expected"":1},{""args"":[[[9,10],[4,9],[4,17]]],""expected"":2}]",Sort start times and track active meeting end times in a min-heap.,O(n log n),O(n),Return which room each meeting goes to.,"class Solution:
+    def minMeetingRooms(self, intervals):
+        ends, best = [], 0
+        for s, e in sorted(intervals):
+            while ends and ends[0] <= s:
+                heappop(ends)
+            heappush(ends, e)
+            best = max(best, len(ends))
+        return best","def gen(rng):
+    out = []
+    for _ in range(10**4):
+        s = rng.randint(0, 10**6 - 1)
+        out.append([s, rng.randint(s + 1, min(10**6, s + 5000))])
+    return [out]",,
+reverse-linked-list,Reverse Linked List,Easy,ng;sde1,linked-list;recursion,amazon;microsoft;apple,reverseList,head: ListNode,ListNode,exact,Reverse a singly linked list and return the new head.,"The number of nodes is in the range [0, 5000].
+-5000 <= Node.val <= 5000","[{""args"":[[1,2,3,4,5]],""expected"":[5,4,3,2,1],""example"":true},{""args"":[[1,2]],""expected"":[2,1],""example"":true},{""args"":[[]],""expected"":[],""example"":true},{""args"":[[7]],""expected"":[7]},{""args"":[[1,1,2]],""expected"":[2,1,1]},{""args"":[[-5000,0,5000]],""expected"":[5000,0,-5000]}]","Maintain previous, current, and next pointers while reversing each link.",O(n),O(1) iterative,Do it recursively. What does that cost in stack space?,"class Solution:
+    def reverseList(self, head):
+        prev = None
+        while head:
+            head.next, prev, head = prev, head, head.next
+        return prev","def gen(rng):
+    return [[rng.randint(-5000, 5000) for _ in range(5000)]]",,
+linked-list-cycle,Linked List Cycle,Easy,ng;sde1,linked-list;two-pointers,amazon;microsoft;bloomberg,hasCycle,head: ListNode,bool,exact,"Return true if a linked list contains a cycle.
+
+pos is the index the tail links back to (-1 means no cycle). It is only used to build the test list; your function just gets head.","The number of nodes is in the range [0, 10^4].
+-10^5 <= Node.val <= 10^5
+pos is -1 or a valid index in the list.","[{""args"":[[[3,2,0,-4],1]],""expected"":true,""example"":true,""explanation"":""The tail links back to the node at index 1.""},{""args"":[[[1,2],0]],""expected"":true,""example"":true},{""args"":[[[1],-1]],""expected"":false,""example"":true},{""args"":[[[],-1]],""expected"":false},{""args"":[[[1,2,3,4,5],-1]],""expected"":false},{""args"":[[[1,2,3,4,5],4]],""expected"":true},{""args"":[[[1],0]],""expected"":true},{""args"":[[[1,2],-1]],""expected"":false}]",Use slow and fast pointers; they meet if a cycle exists.,O(n),O(1),Return the node where the cycle begins (Linked List Cycle II).,"class Solution:
+    def hasCycle(self, head):
+        slow = fast = head
+        while fast and fast.next:
+            slow, fast = slow.next, fast.next.next
+            if slow is fast:
+                return True
+        return False","def gen(rng):
+    n = 10**4
+    return [[[rng.randint(-10**5, 10**5) for _ in range(n)], rng.randrange(n)]]",,
+merge-two-sorted-lists,Merge Two Sorted Lists,Easy,ng;sde1,linked-list;recursion,amazon;microsoft;apple,mergeTwoLists,list1: ListNode; list2: ListNode,ListNode,exact,Merge two sorted linked lists into one sorted list and return its head.,"The number of nodes in each list is in the range [0, 50].
+-100 <= Node.val <= 100
+Both lists are sorted in non-decreasing order.","[{""args"":[[1,2,4],[1,3,4]],""expected"":[1,1,2,3,4,4],""example"":true},{""args"":[[],[]],""expected"":[],""example"":true},{""args"":[[],[0]],""expected"":[0],""example"":true},{""args"":[[5],[1,2,3]],""expected"":[1,2,3,5]},{""args"":[[1,1],[1]],""expected"":[1,1,1]},{""args"":[[-3,0,7],[-5,-2,8,9]],""expected"":[-5,-3,-2,0,7,8,9]},{""args"":[[2],[]],""expected"":[2]}]",Use a dummy head and repeatedly link the smaller current node.,O(m+n),O(1) iterative,Merge k sorted lists.,"class Solution:
+    def mergeTwoLists(self, a, b):
+        dummy = tail = ListNode()
+        while a and b:
+            if a.val <= b.val:
+                tail.next, a = a, a.next
+            else:
+                tail.next, b = b, b.next
+            tail = tail.next
+        tail.next = a or b
+        return dummy.next",,,
+merge-k-sorted-lists,Merge K Sorted Lists,Hard,ng;sde1,linked-list;heap;divide-and-conquer,amazon;google;meta;microsoft,mergeKLists,lists: ListNode[],ListNode,exact,Merge k sorted linked lists into one sorted linked list.,"k == lists.length
+0 <= k <= 10^4
+0 <= lists[i].length <= 500
+-10^4 <= lists[i][j] <= 10^4
+Each list is sorted ascending.
+The total number of nodes is at most 10^4.","[{""args"":[[[1,4,5],[1,3,4],[2,6]]],""expected"":[1,1,2,3,4,4,5,6],""example"":true},{""args"":[[]],""expected"":[],""example"":true},{""args"":[[[]]],""expected"":[],""example"":true},{""args"":[[[],[1]]],""expected"":[1]},{""args"":[[[2],[1],[0]]],""expected"":[0,1,2]},{""args"":[[[-1,5,11],[],[6,10]]],""expected"":[-1,5,6,10,11]},{""args"":[[[1,2,3]]],""expected"":[1,2,3]}]",Put each list head in a min-heap and repeatedly extract the smallest node.,O(N log k),O(k) heap,Compare the heap with merging pairs of lists. Which uses less memory?,"class Solution:
+    def mergeKLists(self, lists):
+        heap = [(h.val, i, h) for i, h in enumerate(lists) if h]
+        heapify(heap)
+        dummy = tail = ListNode()
+        while heap:
+            _, i, node = heappop(heap)
+            tail.next = tail = node
+            if node.next:
+                heappush(heap, (node.next.val, i, node.next))
+        return dummy.next","def gen(rng):
+    return [[[rng.randint(-10**4, 10**4)] for _ in range(10**4)]]",,
+remove-nth-node-from-end-of-list,Remove Nth Node From End of List,Medium,ng;sde1,linked-list;two-pointers,meta;amazon;microsoft,removeNthFromEnd,head: ListNode; n: int,ListNode,exact,Remove the nth node from the end of a linked list and return the head.,"The number of nodes is sz.
+1 <= sz <= 30
+0 <= Node.val <= 100
+1 <= n <= sz","[{""args"":[[1,2,3,4,5],2],""expected"":[1,2,3,5],""example"":true},{""args"":[[1],1],""expected"":[],""example"":true},{""args"":[[1,2],1],""expected"":[1],""example"":true},{""args"":[[1,2],2],""expected"":[2]},{""args"":[[1,2,3],3],""expected"":[2,3]},{""args"":[[1,2,3],2],""expected"":[1,3]},{""args"":[[5,6,7,8],4],""expected"":[6,7,8]}]","Advance a fast pointer n steps, then move fast and slow together using a dummy head.",O(n),O(1),Do it in one pass.,"class Solution:
+    def removeNthFromEnd(self, head, n):
+        dummy = ListNode(0, head)
+        fast = slow = dummy
+        for _ in range(n):
+            fast = fast.next
+        while fast.next:
+            fast, slow = fast.next, slow.next
+        slow.next = slow.next.next
+        return dummy.next",,,
+reorder-list,Reorder List,Medium,ng;sde1,linked-list;two-pointers;stack,meta;amazon;microsoft,reorderList,head: ListNode,void,exact,"Reorder L0 → L1 → … → Ln as L0 → Ln → L1 → Ln-1 → … in place.
+
+Change the list in place and return nothing. The tests check the list after your call.","The number of nodes is in the range [1, 5 * 10^4].
+1 <= Node.val <= 1000","[{""args"":[[1,2,3,4]],""expected"":[1,4,2,3],""example"":true},{""args"":[[1,2,3,4,5]],""expected"":[1,5,2,4,3],""example"":true},{""args"":[[1]],""expected"":[1]},{""args"":[[1,2]],""expected"":[1,2]},{""args"":[[1,2,3]],""expected"":[1,3,2]},{""args"":[[7,7,8,9,10,11]],""expected"":[7,11,7,10,8,9]}]","Find the middle, reverse the second half, then interleave the two halves.",O(n),O(1),Do it with O(1) extra space.,"class Solution:
+    def reorderList(self, head):
+        slow = fast = head
+        while fast.next and fast.next.next:
+            slow, fast = slow.next, fast.next.next
+        prev, cur = None, slow.next
+        slow.next = None
+        while cur:
+            cur.next, prev, cur = prev, cur, cur.next
+        a, b = head, prev
+        while b:
+            a.next, b.next, a, b = b, a.next, a.next, b.next","def gen(rng):
+    return [[rng.randint(1, 1000) for _ in range(5 * 10**4)]]",,
+set-matrix-zeroes,Set Matrix Zeroes,Medium,ng;sde1,matrix;array,amazon;microsoft;meta,setZeroes,matrix: int[][],void,exact,"If a matrix cell is zero, set its entire row and column to zero in place.
+
+Change the matrix in place and return nothing. The tests check the matrix after your call.","m == matrix.length
+n == matrix[0].length
+1 <= m, n <= 200
+-2^31 <= matrix[i][j] <= 2^31 - 1","[{""args"":[[[1,1,1],[1,0,1],[1,1,1]]],""expected"":[[1,0,1],[0,0,0],[1,0,1]],""example"":true},{""args"":[[[0,1,2,0],[3,4,5,2],[1,3,1,5]]],""expected"":[[0,0,0,0],[0,4,5,0],[0,3,1,0]],""example"":true},{""args"":[[[1]]],""expected"":[[1]]},{""args"":[[[0]]],""expected"":[[0]]},{""args"":[[[1,0]]],""expected"":[[0,0]]},{""args"":[[[-2147483648,2],[3,0]]],""expected"":[[-2147483648,0],[0,0]]},{""args"":[[[1,2,3],[4,5,6]]],""expected"":[[1,2,3],[4,5,6]]},{""args"":[[[1],[0],[3]]],""expected"":[[0],[0],[0]]}]","Use the first row and first column as markers, tracking their original zero status separately.",O(mn),O(1) extra,Use O(1) extra space.,"class Solution:
+    def setZeroes(self, matrix):
+        rows = {i for i, r in enumerate(matrix) if 0 in r}
+        cols = {j for r in matrix for j, x in enumerate(r) if x == 0}
+        for i, r in enumerate(matrix):
+            for j in range(len(r)):
+                if i in rows or j in cols:
+                    r[j] = 0","def gen(rng):
+    m = [[rng.randint(-2**31, 2**31 - 1) for _ in range(200)] for _ in range(200)]
+    for _ in range(30):
+        m[rng.randrange(200)][rng.randrange(200)] = 0
+    return [m]",,
+spiral-matrix,Spiral Matrix,Medium,ng;sde1,matrix;simulation,microsoft;amazon;google,spiralOrder,matrix: int[][],list<int>,exact,Return all matrix elements in clockwise spiral order.,"m == matrix.length
+n == matrix[i].length
+1 <= m, n <= 10
+-100 <= matrix[i][j] <= 100","[{""args"":[[[1,2,3],[4,5,6],[7,8,9]]],""expected"":[1,2,3,6,9,8,7,4,5],""example"":true},{""args"":[[[1,2,3,4],[5,6,7,8],[9,10,11,12]]],""expected"":[1,2,3,4,8,12,11,10,9,5,6,7],""example"":true},{""args"":[[[1]]],""expected"":[1]},{""args"":[[[1,2,3]]],""expected"":[1,2,3]},{""args"":[[[1],[2],[3]]],""expected"":[1,2,3]},{""args"":[[[1,2],[3,4],[5,6]]],""expected"":[1,2,4,6,5,3]},{""args"":[[[1,2,3],[4,5,6]]],""expected"":[1,2,3,6,5,4]}]","Maintain top, bottom, left, and right boundaries and shrink them after each traversal.",O(mn),O(1) extra excluding output,Fill an n x n matrix in spiral order (Spiral Matrix II).,"class Solution:
+    def spiralOrder(self, matrix):
+        out = []
+        while matrix:
+            out += matrix.pop(0)
+            matrix = [list(r) for r in zip(*matrix)][::-1]
+        return out",,,
+rotate-image,Rotate Image,Medium,ng;sde1,matrix;array,amazon;microsoft;apple,rotate,matrix: int[][],void,exact,"Rotate an n × n matrix 90 degrees clockwise in place.
+
+Rotate in place and return nothing. The tests check the matrix after your call.","n == matrix.length == matrix[i].length
+1 <= n <= 20
+-1000 <= matrix[i][j] <= 1000","[{""args"":[[[1,2,3],[4,5,6],[7,8,9]]],""expected"":[[7,4,1],[8,5,2],[9,6,3]],""example"":true},{""args"":[[[5,1,9,11],[2,4,8,10],[13,3,6,7],[15,14,12,16]]],""expected"":[[15,13,2,5],[14,3,4,1],[12,6,8,9],[16,7,10,11]],""example"":true},{""args"":[[[1]]],""expected"":[[1]]},{""args"":[[[1,2],[3,4]]],""expected"":[[3,1],[4,2]]},{""args"":[[[-1,0,1],[2,3,4],[5,6,7]]],""expected"":[[5,2,-1],[6,3,0],[7,4,1]]}]","Transpose the matrix, then reverse each row.",O(n²),O(1),Rotate counter-clockwise. What changes?,"class Solution:
+    def rotate(self, matrix):
+        n = len(matrix)
+        for i in range(n):
+            for j in range(i + 1, n):
+                matrix[i][j], matrix[j][i] = matrix[j][i], matrix[i][j]
+        for row in matrix:
+            row.reverse()",,,
+word-search,Word Search,Medium,ng;sde1,matrix;backtracking,amazon;microsoft;meta,exist,board: char[][]; word: string,bool,exact,Return whether a word can be formed from sequentially adjacent cells without reusing a cell.,"m == board.length
+n == board[i].length
+1 <= m, n <= 6
+1 <= word.length <= 15
+board and word contain English letters only.","[{""args"":[[[""A"",""B"",""C"",""E""],[""S"",""F"",""C"",""S""],[""A"",""D"",""E"",""E""]],""ABCCED""],""expected"":true,""example"":true},{""args"":[[[""A"",""B"",""C"",""E""],[""S"",""F"",""C"",""S""],[""A"",""D"",""E"",""E""]],""SEE""],""expected"":true,""example"":true},{""args"":[[[""A"",""B"",""C"",""E""],[""S"",""F"",""C"",""S""],[""A"",""D"",""E"",""E""]],""ABCB""],""expected"":false,""example"":true,""explanation"":""A cell cannot be used twice.""},{""args"":[[[""a""]],""a""],""expected"":true},{""args"":[[[""a"",""b""],[""c"",""d""]],""abdc""],""expected"":true},{""args"":[[[""a"",""b""],[""c"",""d""]],""abcd""],""expected"":false},{""args"":[[[""A"",""A"",""A"",""A""],[""A"",""A"",""A"",""A""],[""A"",""A"",""A"",""A""]],""AAAAAAAAAAAAB""],""expected"":false},{""args"":[[[""C"",""A"",""A""],[""A"",""A"",""A""],[""B"",""C"",""D""]],""AAB""],""expected"":true}]",Backtrack from matching starting cells and mark the current path as visited.,O(mn × 4^L) upper bound,O(L) recursion,"Search for many words at once (Word Search II).
+How would you prune when the board is large?","class Solution:
+    def exist(self, board, word):
+        m, n = len(board), len(board[0])
+        if Counter(word) - Counter(c for r in board for c in r):
+            return False
+        def go(r, c, i):
+            if i == len(word):
+                return True
+            if not (0 <= r < m and 0 <= c < n) or board[r][c] != word[i]:
+                return False
+            board[r][c] = ""#""
+            found = go(r + 1, c, i + 1) or go(r - 1, c, i + 1) or go(r, c + 1, i + 1) or go(r, c - 1, i + 1)
+            board[r][c] = word[i]
+            return found
+        return any(go(r, c, 0) for r in range(m) for c in range(n))",,,
+longest-repeating-character-replacement,Longest Repeating Character Replacement,Medium,ng;sde1,string;sliding-window,google;amazon;uber,characterReplacement,s: string; k: int,int,exact,Return the longest substring that can be made of one repeated character after at most k replacements.,"1 <= s.length <= 10^5
+s contains uppercase English letters only.
+0 <= k <= s.length","[{""args"":[""ABAB"",2],""expected"":4,""example"":true,""explanation"":""Replace both A with B, or both B with A.""},{""args"":[""AABABBA"",1],""expected"":4,""example"":true,""explanation"":""Replace the middle A to get BBBB.""},{""args"":[""A"",0],""expected"":1},{""args"":[""ABCDE"",1],""expected"":2},{""args"":[""AAAA"",0],""expected"":4},{""args"":[""ABBB"",2],""expected"":4},{""args"":[""ABAA"",0],""expected"":2},{""args"":[""BAAAB"",2],""expected"":5}]",Maintain a window where window length minus the highest character frequency is at most k.,O(n),O(1) for fixed alphabet,Why does the window never need to shrink by more than one?,"class Solution:
+    def characterReplacement(self, s, k):
+        count = Counter()
+        best = top = left = 0
+        for right, c in enumerate(s):
+            count[c] += 1
+            top = max(top, count[c])
+            while right - left + 1 - top > k:
+                count[s[left]] -= 1
+                left += 1
+            best = max(best, right - left + 1)
+        return best","def gen(rng):
+    return ["""".join(rng.choice(""ABC"") for _ in range(10**5)), rng.randint(0, 1000)]",,
+valid-palindrome,Valid Palindrome,Easy,ng;sde1,string;two-pointers,meta;microsoft;amazon,isPalindrome,s: string,bool,exact,Determine whether a string is a palindrome after ignoring non-alphanumeric characters and case.,"1 <= s.length <= 2 * 10^5
+s contains printable ASCII characters only.","[{""args"":[""A man, a plan, a canal: Panama""],""expected"":true,""example"":true,""explanation"":""\""amanaplanacanalpanama\"" reads the same both ways.""},{""args"":[""race a car""],""expected"":false,""example"":true},{""args"":["" ""],""expected"":true,""example"":true,""explanation"":""After cleaning, the string is empty, which is a palindrome.""},{""args"":[""0P""],""expected"":false},{""args"":[""ab_a""],""expected"":true},{""args"":[""Madam, I'm Adam""],""expected"":true},{""args"":[""a.""],""expected"":true},{""args"":["".,""],""expected"":true},{""args"":[""No 'x' in Nixon""],""expected"":true}]",Use two pointers moving inward while skipping non-alphanumeric characters.,O(n),O(1),You may delete at most one character (Valid Palindrome II).,"class Solution:
+    def isPalindrome(self, s):
+        t = [c.lower() for c in s if c.isalnum()]
+        return t == t[::-1]","def gen(rng):
+    half = """".join(rng.choice(""abcXYZ019 ,.:"") for _ in range(10**5))
+    return [half + half[::-1]]",,
+longest-palindromic-substring,Longest Palindromic Substring,Medium,ng;sde1,string;dynamic-programming;two-pointers,amazon;microsoft;google,longestPalindrome,s: string,string,exact,"Return the longest palindromic substring of s.
+
+Each test has one longest palindrome, so only one answer is right.","1 <= s.length <= 1000
+s contains digits and English letters only.","[{""args"":[""cbbd""],""expected"":""bb"",""example"":true},{""args"":[""racecarxyz""],""expected"":""racecar"",""example"":true},{""args"":[""a""],""expected"":""a"",""example"":true},{""args"":[""aaaa""],""expected"":""aaaa""},{""args"":[""abacdfgdcaba""],""expected"":""aba""},{""args"":[""forgeeksskeegfor""],""expected"":""geeksskeeg""},{""args"":[""bananas""],""expected"":""anana""},{""args"":[""xyzzyabc""],""expected"":""yzzy""}]",Expand around every odd and even center and keep the longest result.,O(n²),O(1) expand-around-center,Bring it to O(n) with Manacher's algorithm. Is that worth it in an interview?,"class Solution:
+    def longestPalindrome(self, s):
+        best = """"
+        for c in range(2 * len(s) - 1):
+            i, j = c // 2, (c + 1) // 2
+            while i >= 0 and j < len(s) and s[i] == s[j]:
+                i, j = i - 1, j + 1
+            if j - i - 1 > len(best):
+                best = s[i + 1:j]
+        return best","def gen(rng):
+    while True:
+        s = """".join(rng.choice(""ab"") for _ in range(1000))
+        best, found = 0, set()
+        for c in range(2 * len(s) - 1):
+            i, j = c // 2, (c + 1) // 2
+            while i >= 0 and j < len(s) and s[i] == s[j]:
+                i, j = i - 1, j + 1
+            L = j - i - 1
+            if L > best:
+                best, found = L, {s[i + 1:j]}
+            elif L == best:
+                found.add(s[i + 1:j])
+        if len(found) == 1:
+            return [s]",,
+palindromic-substrings,Palindromic Substrings,Medium,ng;sde1,string;dynamic-programming;two-pointers,meta;amazon;linkedin,countSubstrings,s: string,int,exact,"Count all palindromic substrings, counting equal substrings at different positions separately.","1 <= s.length <= 1000
+s contains lowercase English letters only.","[{""args"":[""abc""],""expected"":3,""example"":true,""explanation"":""\""a\"", \""b\"", \""c\"".""},{""args"":[""aaa""],""expected"":6,""example"":true,""explanation"":""\""a\"" three times, \""aa\"" twice, \""aaa\"" once.""},{""args"":[""a""],""expected"":1},{""args"":[""abba""],""expected"":6},{""args"":[""racecar""],""expected"":10},{""args"":[""abcd""],""expected"":4},{""args"":[""aabaa""],""expected"":9}]",Expand around each possible odd and even center and count each successful expansion.,O(n²),O(1),Count only distinct palindromic substrings.,"class Solution:
+    def countSubstrings(self, s):
+        count = 0
+        for c in range(2 * len(s) - 1):
+            i, j = c // 2, (c + 1) // 2
+            while i >= 0 and j < len(s) and s[i] == s[j]:
+                count += 1
+                i, j = i - 1, j + 1
+        return count","def gen(rng):
+    return ["""".join(rng.choice(""ab"") for _ in range(1000))]",,
+encode-and-decode-strings,Encode and Decode Strings,Medium,ng;sde1,string;design,google;meta,Codec,,,exact,"Design encode(strs) and decode(s) so a list of strings can be represented and recovered even when strings contain delimiters.
+
+The tests call decode(encode(strs)) on two separate instances, so nothing can be kept between the calls. Do not use eval or any serialization library.","1 <= strs.length <= 200
+0 <= strs[i].length <= 200
+strs[i] contains any printable ASCII characters.","[{""args"":[[""lint"",""code"",""love"",""you""]],""expected"":[""lint"",""code"",""love"",""you""],""example"":true},{""args"":[[""we"",""say"","":"",""yes""]],""expected"":[""we"",""say"","":"",""yes""],""example"":true},{""args"":[[""""]],""expected"":[""""],""example"":true},{""args"":[[""a#b"",""#"",""1#2#""]],""expected"":[""a#b"",""#"",""1#2#""]},{""args"":[["""","""",""""]],""expected"":["""","""",""""]},{""args"":[[""4#abcd"",""#4#"",""12""]],""expected"":[""4#abcd"",""#4#"",""12""]},{""args"":[[""abc,def"","","",""\""quoted\""""]],""expected"":[""abc,def"","","",""\""quoted\""""]},{""args"":[["" "",""  ""]],""expected"":["" "",""  ""]}]","Prefix each string with its length and a delimiter, then read exactly that many characters.",O(total characters),O(total characters),"Make the encoding work for any Unicode string.
+Can you make it streamable, decoding one string at a time?","class Codec:
+    def encode(self, strs):
+        return """".join(f""{len(s)}#{s}"" for s in strs)
+
+    def decode(self, s):
+        out, i = [], 0
+        while i < len(s):
+            j = s.index(""#"", i)
+            n = int(s[i:j])
+            out.append(s[j + 1:j + 1 + n])
+            i = j + 1 + n
+        return out","def gen(rng):
+    chars = [chr(c) for c in range(32, 127)]
+    return [["""".join(rng.choice(chars) for _ in range(rng.randint(0, 200))) for _ in range(200)]]",roundtrip,"encode(strs: list<string>) -> string
+decode(s: string) -> list<string>"
+maximum-depth-of-binary-tree,Maximum Depth of Binary Tree,Easy,ng;sde1,tree;dfs;bfs,amazon;linkedin;google,maxDepth,root: TreeNode,int,exact,Return the maximum number of nodes on a root-to-leaf path.,"The number of nodes is in the range [0, 10^4].
+-100 <= Node.val <= 100","[{""args"":[[3,9,20,null,null,15,7]],""expected"":3,""example"":true},{""args"":[[1,null,2]],""expected"":2,""example"":true},{""args"":[[]],""expected"":0},{""args"":[[0]],""expected"":1},{""args"":[[1,2,null,3,null,4,null,5]],""expected"":5},{""args"":[[1,2,3,4,5,6,7]],""expected"":3}]",The depth is one plus the maximum depth of the left and right subtrees.,O(n),O(h) DFS stack,"Do it without recursion.
+Return the minimum depth instead.","class Solution:
+    def maxDepth(self, root):
+        depth, level = 0, [root] if root else []
+        while level:
+            depth += 1
+            level = [c for n in level for c in (n.left, n.right) if c]
+        return depth","def gen(rng):
+    v = [rng.randint(-100, 100)]
+    for _ in range(10**4 - 1):
+        v += [rng.randint(-100, 100), None]
+    return [v]",,
+same-tree,Same Tree,Easy,ng;sde1,tree;dfs;bfs,amazon;microsoft;bloomberg,isSameTree,p: TreeNode; q: TreeNode,bool,exact,Determine whether two binary trees have identical structure and node values.,"The number of nodes in both trees is in the range [0, 100].
+-10^4 <= Node.val <= 10^4","[{""args"":[[1,2,3],[1,2,3]],""expected"":true,""example"":true},{""args"":[[1,2],[1,null,2]],""expected"":false,""example"":true},{""args"":[[1,2,1],[1,1,2]],""expected"":false,""example"":true},{""args"":[[],[]],""expected"":true},{""args"":[[1],[]],""expected"":false},{""args"":[[10,5,15],[10,5,null,null,15]],""expected"":false},{""args"":[[1,null,2],[1,null,2]],""expected"":true}]",Recursively compare values and corresponding left and right children.,O(n),O(h),Check if one tree is a mirror of the other (Symmetric Tree).,"class Solution:
+    def isSameTree(self, p, q):
+        if not p or not q:
+            return p is q
+        return p.val == q.val and self.isSameTree(p.left, q.left) and self.isSameTree(p.right, q.right)",,,
+invert-binary-tree,Invert Binary Tree,Easy,ng;sde1,tree;dfs;bfs,google;amazon;meta,invertTree,root: TreeNode,TreeNode,exact,Invert a binary tree by swapping the left and right child of every node.,"The number of nodes is in the range [0, 100].
+-100 <= Node.val <= 100","[{""args"":[[4,2,7,1,3,6,9]],""expected"":[4,7,2,9,6,3,1],""example"":true},{""args"":[[2,1,3]],""expected"":[2,3,1],""example"":true},{""args"":[[]],""expected"":[],""example"":true},{""args"":[[1,2]],""expected"":[1,null,2]},{""args"":[[1,null,2,3]],""expected"":[1,2,null,null,3]},{""args"":[[5]],""expected"":[5]}]",Swap each node's children and recursively or iteratively process descendants.,O(n),O(h),Do it iteratively.,"class Solution:
+    def invertTree(self, root):
+        stack = [root]
+        while stack:
+            n = stack.pop()
+            if n:
+                n.left, n.right = n.right, n.left
+                stack += [n.left, n.right]
+        return root",,,
+binary-tree-maximum-path-sum,Binary Tree Maximum Path Sum,Hard,ng;sde1,tree;dfs;dynamic-programming,meta;amazon;google;microsoft,maxPathSum,root: TreeNode,int,exact,Return the maximum sum of any non-empty path in a binary tree; a path may start and end at any nodes.,"The number of nodes is in the range [1, 3 * 10^4].
+-1000 <= Node.val <= 1000","[{""args"":[[1,2,3]],""expected"":6,""example"":true,""explanation"":""The path 2 -> 1 -> 3.""},{""args"":[[-10,9,20,null,null,15,7]],""expected"":42,""example"":true,""explanation"":""The path 15 -> 20 -> 7.""},{""args"":[[-3]],""expected"":-3},{""args"":[[2,-1]],""expected"":2},{""args"":[[-2,-1]],""expected"":-1},{""args"":[[5,4,8,11,null,13,4,7,2,null,null,null,1]],""expected"":48},{""args"":[[1,-2,3]],""expected"":4}]",Return each node's best one-sided gain while updating a global best path through the node.,O(n),O(h),Return the path itself.,"class Solution:
+    def maxPathSum(self, root):
+        order, stack = [], [root]
+        while stack:
+            n = stack.pop()
+            order.append(n)
+            stack += [c for c in (n.left, n.right) if c]
+        gain, best = {None: 0}, root.val
+        for n in reversed(order):
+            l, r = max(gain[n.left], 0), max(gain[n.right], 0)
+            best = max(best, n.val + l + r)
+            gain[n] = n.val + max(l, r)
+        return best","def gen(rng):
+    n = 3 * 10**4
+    v = [rng.randint(-1000, 1000)]
+    have, slots = 1, 1
+    while have < n:
+        x = rng.randint(-1000, 1000) if rng.random() < 0.7 or slots == 1 else None
+        v.append(x)
+        slots -= 1
+        if x is not None:
+            have += 1
+            slots += 2
+    return [v]",,
+binary-tree-level-order-traversal,Binary Tree Level Order Traversal,Medium,ng;sde1,tree;bfs;queue,amazon;meta;microsoft;linkedin,levelOrder,root: TreeNode,list<list<int>>,exact,Return node values grouped by depth from top to bottom.,"The number of nodes is in the range [0, 2000].
+-1000 <= Node.val <= 1000","[{""args"":[[3,9,20,null,null,15,7]],""expected"":[[3],[9,20],[15,7]],""example"":true},{""args"":[[1]],""expected"":[[1]],""example"":true},{""args"":[[]],""expected"":[],""example"":true},{""args"":[[1,2,3,4,null,null,5]],""expected"":[[1],[2,3],[4,5]]},{""args"":[[1,null,2,null,3]],""expected"":[[1],[2],[3]]},{""args"":[[0,-1,1]],""expected"":[[0],[-1,1]]}]",Use BFS and process the queue one level at a time.,O(n),O(w) queue,"Return the levels in zigzag order.
+Return only the rightmost value of each level.","class Solution:
+    def levelOrder(self, root):
+        out, level = [], [root] if root else []
+        while level:
+            out.append([n.val for n in level])
+            level = [c for n in level for c in (n.left, n.right) if c]
+        return out",,,
+serialize-and-deserialize-binary-tree,Serialize and Deserialize Binary Tree,Hard,ng;sde1,tree;design;dfs,amazon;google;meta;microsoft;linkedin,Codec,,,exact,"Design serialization and deserialization methods that preserve a binary tree's structure and values.
+
+The tests call deserialize(serialize(root)) on two separate instances, so nothing can be kept between the calls. Any string format is fine.","The number of nodes is in the range [0, 10^4].
+-1000 <= Node.val <= 1000","[{""args"":[[1,2,3,null,null,4,5]],""expected"":[1,2,3,null,null,4,5],""example"":true},{""args"":[[]],""expected"":[],""example"":true},{""args"":[[1]],""expected"":[1]},{""args"":[[-1,2,null,-3]],""expected"":[-1,2,null,-3]},{""args"":[[1,2,3,4,5,6,7]],""expected"":[1,2,3,4,5,6,7]},{""args"":[[1,null,2,null,3,null,4]],""expected"":[1,null,2,null,3,null,4]},{""args"":[[0,0,0,null,0]],""expected"":[0,0,0,null,0]}]","Use preorder traversal with explicit null markers, then consume tokens in the same order.",O(n),O(n),"Make the string as short as possible.
+Serialize a binary search tree (it needs no null markers).","class Codec:
+    def serialize(self, root):
+        out, stack = [], [root]
+        while stack:
+            n = stack.pop()
+            if n is None:
+                out.append(""#"")
+            else:
+                out.append(str(n.val))
+                stack += [n.right, n.left]
+        return "","".join(out)
+
+    def deserialize(self, data):
+        vals = iter(data.split("",""))
+        def build():
+            v = next(vals)
+            if v == ""#"":
+                return None
+            n = TreeNode(int(v))
+            n.left = build()
+            n.right = build()
+            return n
+        return build()","def gen(rng):
+    n = 10**4
+    v = [rng.randint(-1000, 1000)]
+    have, slots = 1, 1
+    while have < n:
+        x = rng.randint(-1000, 1000) if rng.random() < 0.6 or slots == 1 else None
+        v.append(x)
+        slots -= 1
+        if x is not None:
+            have += 1
+            slots += 2
+    return [v]",roundtrip,"serialize(root: TreeNode) -> string
+deserialize(data: string) -> TreeNode"
+subtree-of-another-tree,Subtree of Another Tree,Easy,ng;sde1,tree;dfs,amazon;meta;microsoft,isSubtree,root: TreeNode; subRoot: TreeNode,bool,exact,Return whether subRoot is structurally identical to any subtree of root.,"The number of nodes in root is in the range [1, 2000].
+The number of nodes in subRoot is in the range [1, 1000].
+-10^4 <= Node.val <= 10^4","[{""args"":[[3,4,5,1,2],[4,1,2]],""expected"":true,""example"":true},{""args"":[[3,4,5,1,2,null,null,null,null,0],[4,1,2]],""expected"":false,""example"":true,""explanation"":""The node 2 has a child 0 in root, so the shapes differ.""},{""args"":[[1,1],[1]],""expected"":true},{""args"":[[12],[2]],""expected"":false},{""args"":[[1],[1]],""expected"":true},{""args"":[[1,2,3],[2,3]],""expected"":false},{""args"":[[3,4,5,1,null,2],[3,1,2]],""expected"":false},{""args"":[[2,2,2,2,2,2,2,2,2,2,2],[2,2,2,2,2]],""expected"":false}]","At each node, test exact tree equality; otherwise search both children.",O(mn) worst case,O(h) recursion,Can you beat O(m * n)? Hint: serialize or hash subtrees.,"class Solution:
+    def isSubtree(self, root, subRoot):
+        def ser(n):
+            out, stack = [], [n]
+            while stack:
+                x = stack.pop()
+                if x is None:
+                    out.append(""#"")
+                else:
+                    out.append(""^"" + str(x.val))
+                    stack += [x.right, x.left]
+            return "","" + "","".join(out) + "",""
+        return ser(subRoot) in ser(root)","def gen(rng):
+    def tree(n):
+        v = [rng.randint(-2, 2)]
+        have, slots = 1, 1
+        while have < n:
+            x = rng.randint(-2, 2) if rng.random() < 0.7 or slots == 1 else None
+            v.append(x)
+            slots -= 1
+            if x is not None:
+                have += 1
+                slots += 2
+        return v
+    return [tree(2000), tree(1000)]",,
+construct-binary-tree-from-preorder-and-inorder-traversal,Construct Binary Tree from Preorder and Inorder Traversal,Medium,ng;sde1,tree;divide-and-conquer;hash-map,amazon;microsoft;google;bloomberg,buildTree,preorder: int[]; inorder: int[],TreeNode,exact,Reconstruct a binary tree from its preorder and inorder traversal arrays; values are unique.,"1 <= preorder.length <= 3000
+inorder.length == preorder.length
+-3000 <= preorder[i], inorder[i] <= 3000
+All values are unique.
+Both arrays describe the same tree.","[{""args"":[[3,9,20,15,7],[9,3,15,20,7]],""expected"":[3,9,20,null,null,15,7],""example"":true},{""args"":[[-1],[-1]],""expected"":[-1],""example"":true},{""args"":[[1,2],[2,1]],""expected"":[1,2]},{""args"":[[1,2],[1,2]],""expected"":[1,null,2]},{""args"":[[1,2,3],[3,2,1]],""expected"":[1,2,null,3]},{""args"":[[4,2,1,3,6,5,7],[1,2,3,4,5,6,7]],""expected"":[4,2,6,1,3,5,7]}]",The next preorder value is the root; its inorder position splits left and right subtrees.,O(n),O(n),Build it from inorder and postorder instead.,"class Solution:
+    def buildTree(self, preorder, inorder):
+        where = {v: i for i, v in enumerate(inorder)}
+        it = iter(preorder)
+        def build(lo, hi):
+            if lo > hi:
+                return None
+            v = next(it)
+            n = TreeNode(v)
+            n.left = build(lo, where[v] - 1)
+            n.right = build(where[v] + 1, hi)
+            return n
+        return build(0, len(inorder) - 1)","def gen(rng):
+    vals = rng.sample(range(-3000, 3001), 3000)
+    pre, ino = [], []
+    def make(vs):
+        if not vs:
+            return
+        k = rng.randrange(len(vs))
+        pre.append(vs[k])
+        make(vs[:k])
+        ino.append(vs[k])
+        make(vs[k + 1:])
+    make(vals)
+    return [pre, ino]",,
+validate-binary-search-tree,Validate Binary Search Tree,Medium,ng;sde1,tree;dfs,amazon;meta;microsoft;bloomberg,isValidBST,root: TreeNode,bool,exact,"Determine whether a binary tree satisfies strict BST ordering at every node.
+
+A valid BST has every left-subtree value strictly smaller and every right-subtree value strictly larger than the node.","The number of nodes is in the range [1, 10^4].
+-2^31 <= Node.val <= 2^31 - 1","[{""args"":[[2,1,3]],""expected"":true,""example"":true},{""args"":[[5,1,4,null,null,3,6]],""expected"":false,""example"":true,""explanation"":""The root is 5 but its right child is 4.""},{""args"":[[1,1]],""expected"":false},{""args"":[[5,4,6,null,null,3,7]],""expected"":false},{""args"":[[2147483647]],""expected"":true},{""args"":[[-2147483648,null,2147483647]],""expected"":true},{""args"":[[0,-1]],""expected"":true},{""args"":[[3,1,5,0,2,4,6]],""expected"":true}]",Carry exclusive lower and upper bounds down the tree.,O(n),O(h),Why is checking only each node against its children wrong?,"class Solution:
+    def isValidBST(self, root):
+        stack, prev, n = [], None, root
+        while stack or n:
+            while n:
+                stack.append(n)
+                n = n.left
+            n = stack.pop()
+            if prev is not None and n.val <= prev:
+                return False
+            prev, n = n.val, n.right
+        return True",,,
+kth-smallest-element-in-a-bst,Kth Smallest Element in a BST,Medium,ng;sde1,tree;bst;dfs,amazon;google;uber,kthSmallest,root: TreeNode; k: int,int,exact,Return the kth smallest value in a BST.,"The number of nodes is n.
+1 <= k <= n <= 10^4
+0 <= Node.val <= 10^4","[{""args"":[[3,1,4,null,2],1],""expected"":1,""example"":true},{""args"":[[5,3,6,2,4,null,null,1],3],""expected"":3,""example"":true},{""args"":[[1],1],""expected"":1},{""args"":[[2,1,3],3],""expected"":3},{""args"":[[2,1,3],2],""expected"":2},{""args"":[[4,2,6,1,3,5,7],5],""expected"":5}]",Inorder traversal visits BST values in ascending order.,O(h+k) typical,O(h),The tree changes often and you ask for the kth smallest many times. What would you store?,"class Solution:
+    def kthSmallest(self, root, k):
+        stack, n = [], root
+        while True:
+            while n:
+                stack.append(n)
+                n = n.left
+            n = stack.pop()
+            k -= 1
+            if k == 0:
+                return n.val
+            n = n.right","def gen(rng):
+    vals = sorted(rng.sample(range(10**4 + 1), 10**4))
+    def build(lo, hi):
+        if lo > hi:
+            return None
+        m = (lo + hi) // 2
+        return (vals[m], build(lo, m - 1), build(m + 1, hi))
+    out, q, i = [], [build(0, len(vals) - 1)], 0
+    while i < len(q):
+        n = q[i]
+        i += 1
+        if n is None:
+            out.append(None)
+        else:
+            out.append(n[0])
+            q += [n[1], n[2]]
+    while out[-1] is None:
+        out.pop()
+    return [out, rng.randint(1, 10**4)]",,
+lowest-common-ancestor-of-a-binary-search-tree,Lowest Common Ancestor of a Binary Search Tree,Medium,ng;sde1,tree;bst,meta;amazon;microsoft;linkedin,lowestCommonAncestor,root: TreeNode; p: int; q: int,int,exact,"Find the lowest node that has both p and q as descendants, allowing a node to be its own descendant.
+
+Here p and q are given as node values, and you return the value of their lowest common ancestor.","The number of nodes is in the range [2, 10^5].
+-10^9 <= Node.val <= 10^9
+All values are unique.
+p != q, and both are in the tree.","[{""args"":[[6,2,8,0,4,7,9,null,null,3,5],2,8],""expected"":6,""example"":true},{""args"":[[6,2,8,0,4,7,9,null,null,3,5],2,4],""expected"":2,""example"":true,""explanation"":""A node can be its own ancestor.""},{""args"":[[2,1],2,1],""expected"":2,""example"":true},{""args"":[[6,2,8,0,4,7,9,null,null,3,5],3,5],""expected"":4},{""args"":[[6,2,8,0,4,7,9,null,null,3,5],7,9],""expected"":8},{""args"":[[6,2,8,0,4,7,9,null,null,3,5],0,5],""expected"":2},{""args"":[[3,1,4,null,2],2,4],""expected"":3}]","Walk left if both values are smaller, right if both are larger; otherwise the current node is the split.",O(h),O(1) iterative,"The tree is a plain binary tree, not a BST.","class Solution:
+    def lowestCommonAncestor(self, root, p, q):
+        n = root
+        while True:
+            if p < n.val and q < n.val:
+                n = n.left
+            elif p > n.val and q > n.val:
+                n = n.right
+            else:
+                return n.val",,,
+implement-trie-prefix-tree,Implement Trie (Prefix Tree),Medium,ng;sde1,trie;design;string,amazon;google;microsoft;uber,Trie,,,exact,"Implement insert, search, and startsWith for a prefix tree of strings.
+
+Tests list the calls as LeetCode does: operations[i] is called with arguments[i], and the expected list has one result per call (null for the constructor and for insert).","1 <= word.length, prefix.length <= 2000
+word and prefix contain lowercase English letters only.
+At most 3 * 10^4 calls in total.","[{""args"":[[""Trie"",""insert"",""search"",""search"",""startsWith"",""insert"",""search""],[[],[""apple""],[""apple""],[""app""],[""app""],[""app""],[""app""]]],""expected"":[null,null,true,false,true,null,true],""example"":true},{""args"":[[""Trie"",""search"",""startsWith""],[[],[""a""],[""a""]]],""expected"":[null,false,false]},{""args"":[[""Trie"",""insert"",""insert"",""search"",""search"",""startsWith"",""startsWith""],[[],[""ab""],[""abc""],[""a""],[""abc""],[""abcd""],[""ab""]]],""expected"":[null,null,null,false,true,false,true]},{""args"":[[""Trie"",""insert"",""search"",""insert"",""search""],[[],[""z""],[""zz""],[""zz""],[""zz""]]],""expected"":[null,null,false,null,true]}]",Each node maps characters to child nodes and tracks whether a word ends there.,O(L) per operation,O(total stored characters),"Add delete(word).
+How much memory does it use for a million English words, and how would you cut it?","class Trie:
+    def __init__(self):
+        self.root = {}
+
+    def insert(self, word):
+        n = self.root
+        for c in word:
+            n = n.setdefault(c, {})
+        n[""$""] = True
+
+    def _walk(self, s):
+        n = self.root
+        for c in s:
+            if c not in n:
+                return None
+            n = n[c]
+        return n
+
+    def search(self, word):
+        n = self._walk(word)
+        return n is not None and ""$"" in n
+
+    def startsWith(self, prefix):
+        return self._walk(prefix) is not None","def gen(rng):
+    ops, args = [""Trie""], [[]]
+    for _ in range(3 * 10**4 - 1):
+        w = """".join(rng.choice(""abc"") for _ in range(rng.randint(1, 12)))
+        ops.append(rng.choice([""insert"", ""search"", ""startsWith""]))
+        args.append([w])
+    return [ops, args]",design,"insert(word: string) -> void
+search(word: string) -> bool
+startsWith(prefix: string) -> bool"
+design-add-and-search-words-data-structure,Add and Search Word - Data Structure Design,Medium,ng;sde1,trie;backtracking;design,meta;amazon;google,WordDictionary,,,exact,"Design a data structure supporting addWord and search, where '.' matches any one character.
+
+Tests list the calls as LeetCode does: operations[i] is called with arguments[i], and the expected list has one result per call (null for the constructor and for addWord).","1 <= word.length <= 25
+Added words contain lowercase English letters only.
+Searched words contain lowercase letters or '.', with at most 2 dots.
+At most 10^4 calls in total.","[{""args"":[[""WordDictionary"",""addWord"",""addWord"",""addWord"",""search"",""search"",""search"",""search""],[[],[""bad""],[""dad""],[""mad""],[""pad""],[""bad""],["".ad""],[""b..""]]],""expected"":[null,null,null,null,false,true,true,true],""example"":true},{""args"":[[""WordDictionary"",""search"",""addWord"",""search"",""search""],[[],[""a""],[""a""],["".""],[""..""]]],""expected"":[null,false,null,true,false]},{""args"":[[""WordDictionary"",""addWord"",""addWord"",""search"",""search"",""search""],[[],[""at""],[""and""],[""a.""],["".t""],[""a.d""]]],""expected"":[null,null,null,true,true,true]}]","Use a trie; for '.', recursively explore every child.",O(L) add; search can be exponential with wildcards,O(total stored characters),What if searches can contain any number of dots?,"class WordDictionary:
+    def __init__(self):
+        self.root = {}
+
+    def addWord(self, word):
+        n = self.root
+        for c in word:
+            n = n.setdefault(c, {})
+        n[""$""] = True
+
+    def search(self, word):
+        level = [self.root]
+        for c in word:
+            if c == ""."":
+                level = [child for n in level for k, child in n.items() if k != ""$""]
+            else:
+                level = [n[c] for n in level if c in n]
+            if not level:
+                return False
+        return any(""$"" in n for n in level)","def gen(rng):
+    ops, args = [""WordDictionary""], [[]]
+    for _ in range(10**4 - 1):
+        w = [rng.choice(""abc"") for _ in range(rng.randint(1, 25))]
+        if rng.random() < 0.5:
+            ops.append(""addWord"")
+        else:
+            ops.append(""search"")
+            for i in rng.sample(range(len(w)), min(2, len(w))):
+                w[i] = "".""
+        args.append(["""".join(w)])
+    return [ops, args]",design,"addWord(word: string) -> void
+search(word: string) -> bool"
+word-search-ii,Word Search II,Hard,ng;sde1,trie;backtracking;matrix,amazon;microsoft;google;uber,findWords,board: char[][]; words: string[],list<string>,any_order,"Return all dictionary words found in a character grid by adjacent moves without reusing a cell.
+
+Return the words in any order.","m == board.length
+n == board[i].length
+1 <= m, n <= 12
+1 <= words.length <= 3 * 10^4
+1 <= words[i].length <= 10
+board and words contain lowercase English letters only.
+All words are unique.","[{""args"":[[[""o"",""a"",""a"",""n""],[""e"",""t"",""a"",""e""],[""i"",""h"",""k"",""r""],[""i"",""f"",""l"",""v""]],[""oath"",""pea"",""eat"",""rain""]],""expected"":[""oath"",""eat""],""example"":true},{""args"":[[[""a"",""b""],[""c"",""d""]],[""abcb""]],""expected"":[],""example"":true},{""args"":[[[""a""]],[""a""]],""expected"":[""a""]},{""args"":[[[""a"",""a""]],[""aaa""]],""expected"":[]},{""args"":[[[""a"",""b""],[""c"",""d""]],[""ab"",""cb"",""ad"",""bd"",""ac"",""ca"",""da"",""bc"",""db"",""adcb"",""dabc"",""abb"",""acb""]],""expected"":[""ac"",""ab"",""bd"",""ca"",""db""]},{""args"":[[[""o"",""a"",""b"",""n""],[""o"",""t"",""a"",""e""],[""a"",""h"",""k"",""r""],[""a"",""f"",""l"",""v""]],[""oa"",""oaa""]],""expected"":[""oa"",""oaa""]}]","Build a trie for the words and backtrack on the board, pruning trie branches with no remaining words.",Output-sensitive; exponential worst case,O(total dictionary chars + board path),Why is a trie better than running Word Search once per word?,"class Solution:
+    def findWords(self, board, words):
+        trie = {}
+        for w in words:
+            n = trie
+            for c in w:
+                n = n.setdefault(c, {})
+            n[""$""] = w
+        m, k = len(board), len(board[0])
+        found = []
+        def go(r, c, parent):
+            ch = board[r][c]
+            node = parent[ch]
+            if ""$"" in node:
+                found.append(node.pop(""$""))
+            board[r][c] = ""#""
+            for a, b in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+                if 0 <= a < m and 0 <= b < k and board[a][b] in node:
+                    go(a, b, node)
+            board[r][c] = ch
+            if not node:
+                parent.pop(ch)
+        for r in range(m):
+            for c in range(k):
+                if board[r][c] in trie:
+                    go(r, c, trie)
+        return found","def gen(rng):
+    board = [[rng.choice(""abcd"") for _ in range(12)] for _ in range(12)]
+    words = set()
+    while len(words) < 3000:
+        words.add("""".join(rng.choice(""abcd"") for _ in range(rng.randint(3, 10))))
+    return [board, sorted(words)]",,
+find-median-from-data-stream,Find Median from Data Stream,Hard,ng;sde1,heap;design;two-heaps,amazon;google;microsoft;uber,MedianFinder,,,float,"Design addNum and findMedian for a stream of integers.
+
+Tests list the calls as LeetCode does: operations[i] is called with arguments[i], and the expected list has one result per call (null for the constructor and for addNum). Answers within 10^-5 are accepted.","-10^5 <= num <= 10^5
+findMedian is only called after at least one number was added.
+At most 5 * 10^4 calls in total.","[{""args"":[[""MedianFinder"",""addNum"",""addNum"",""findMedian"",""addNum"",""findMedian""],[[],[1],[2],[],[3],[]]],""expected"":[null,null,null,1.5,null,2.0],""example"":true},{""args"":[[""MedianFinder"",""addNum"",""findMedian""],[[],[-7],[]]],""expected"":[null,null,-7.0]},{""args"":[[""MedianFinder"",""addNum"",""addNum"",""addNum"",""addNum"",""findMedian"",""addNum"",""findMedian""],[[],[5],[-3],[10],[1],[],[100000],[]]],""expected"":[null,null,null,null,null,3.0,null,5.0]},{""args"":[[""MedianFinder"",""addNum"",""addNum"",""findMedian""],[[],[-100000],[-100000],[]]],""expected"":[null,null,null,-100000.0]}]","Keep the lower half in a max-heap and the upper half in a min-heap, balanced in size.",O(log n) add; O(1) median,O(n),"All numbers are in [0, 100]. How would you optimise?
+99% of numbers are in [0, 100]. What then?","class MedianFinder:
+    def __init__(self):
+        self.low = []   # max-heap, stored negated
+        self.high = []  # min-heap
+
+    def addNum(self, num):
+        heappush(self.low, -num)
+        heappush(self.high, -heappop(self.low))
+        if len(self.high) > len(self.low):
+            heappush(self.low, -heappop(self.high))
+
+    def findMedian(self):
+        if len(self.low) > len(self.high):
+            return float(-self.low[0])
+        return (self.high[0] - self.low[0]) / 2","def gen(rng):
+    ops, args = [""MedianFinder""], [[]]
+    for i in range(5 * 10**4 - 1):
+        if i % 2 == 0:
+            ops.append(""addNum"")
+            args.append([rng.randint(-10**5, 10**5)])
+        else:
+            ops.append(""findMedian"")
+            args.append([])
+    return [ops, args]",design,"addNum(num: int) -> void
+findMedian() -> double"
