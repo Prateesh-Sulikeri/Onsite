@@ -1,20 +1,23 @@
 "use strict";
 /* Applies the saved theme before first paint (loaded in <head>; the CSP allows no inline script).
-   Saved in localStorage as {family, mode, image, dim}: family is onsite | catppuccin | rosepine |
-   gruvbox, mode is system | light | dark. The custom image itself lives in Rust (app data). */
+   Saved in localStorage as {family, mode, image, plain, dim}: family is onsite | nord | rosepine |
+   gruvbox, mode is system | light | dark, plain = no background
+   picture at all. The custom image itself lives in Rust (app data). */
 (function(){
   const KEY = "onsite.theme";
-  const FAMILIES = ["onsite", "catppuccin", "rosepine", "gruvbox"];
+  const FAMILIES = ["onsite", "nord", "rosepine", "gruvbox"];
   const sys = window.matchMedia("(prefers-color-scheme: dark)");
   let image = null;   // data URL of the custom background, once loaded
   function read(){
     let t = {};
     try{ t = JSON.parse(localStorage.getItem(KEY)) || {}; }catch(e){}
+    if (t.family === "catppuccin") t.family = "nord";   // Catppuccin was replaced by Nord
     return {
       family: FAMILIES.includes(t.family) ? t.family : "onsite",
       // Dark by default: it's how Onsite looked before themes existed.
       mode: ["system", "light", "dark"].includes(t.mode) ? t.mode : "dark",
       image: !!t.image,
+      plain: !!t.plain,
       dim: Number.isFinite(t.dim) ? Math.min(85, Math.max(0, t.dim)) : 35,
     };
   }
@@ -31,6 +34,9 @@
     } else if (t.image){
       // The image is still loading: show nothing rather than flash the theme's own.
       r.style.setProperty("--backdrop", "none");
+    } else if (t.plain){
+      r.style.setProperty("--backdrop", "none");
+      r.style.removeProperty("--backdrop-pos");
     } else {
       r.style.removeProperty("--backdrop");
       r.style.removeProperty("--backdrop-pos");

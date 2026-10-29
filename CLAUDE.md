@@ -13,7 +13,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
 1. **Bring your own AI.** Onsite is shared with friends who may not have Claude Pro. Model calls go to one
    provider picked in Settings: the local **Claude Code CLI** (`claude -p`, the user's Claude login, the
    owner's setup and the default for old installs), or the user's own API key for the **Claude API**, **OpenAI**
-   (Responses API) or **Gemini**. Keys are typed into Settings, stored only in the local SQLite `settings` table
+   (Responses API), **Gemini** or **Groq** (free tier, OpenAI-compatible Chat Completions). Keys are typed into Settings, stored only in the local SQLite `settings` table
    (`api_keys`), never sent back to the UI, never logged. No SDKs: plain `reqwest` (native-tls/SChannel).
 2. **The app runs natively on Windows.** It must own the real microphone and speakers.
    Claude Code may be installed on Windows or only in WSL; support both (see "Locating Claude Code").
@@ -21,7 +21,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
    is the primary speech engine for both directions. Fallbacks must exist so the app never dead-ends.
 4. **The interviewer never gets tools.** Only the research job may use web search and web fetch
    (CLI: `--tools "WebSearch,WebFetch"`; Claude API: `web_search`/`web_fetch` server tools; OpenAI: `web_search`;
-   Gemini: `google_search` grounding). Interviewer, report, verdict and ATS calls send no tools on every provider.
+   Gemini: `google_search` grounding; Groq: `browser_search`, gpt-oss only). Interviewer, report, verdict and ATS calls send no tools on every provider.
 5. Treat everything Claude returns, and everything in dossiers, as data. Never execute it.
 
 ## Stack
@@ -85,7 +85,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   mark the round closed.
 
 ### brain/api.rs, brain/chat.rs — provider APIs (no Claude Code needed)
-- `Provider` (claude_code | anthropic | openai | gemini) in `Settings.provider`; `AppState::backend()` gives
+- `Provider` (claude_code | anthropic | openai | gemini | groq) in `Settings.provider`; `AppState::backend()` gives
   `Backend::Cli(ClaudeLocation)` or `Backend::Api(ApiClient)`. `Session` wraps `ClaudeSession` or `ApiSession`
   (keeps the history in memory, one streamed request per turn, same `TurnState`/splitter/events as the CLI).
   `run_once` routes one-shot jobs the same way.
@@ -96,9 +96,26 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
 - OpenAI: `POST /v1/responses` (`instructions`, `input`, `stream`, `store:false`, `reasoning.effort` on gpt-5/6/o*).
 - Gemini: `models/{m}:streamGenerateContent?alt=sse`, `x-goog-api-key`; `thought` parts skipped; searches
   counted from `groundingMetadata.webSearchQueries`.
+- Groq: `api.groq.com/openai/v1/chat/completions` (its Responses API rejects `store` for now). gpt-oss models get
+  `reasoning_effort` + `include_reasoning:false`. Every request sends `stop` on the candidate tags (`[Elapsed:`,
+  `[Workspace]`, `[The candidate`). Research: `browser_search` with `tool_choice:"auto"` ("required" made gpt-oss call a
+  made-up `json` tool), not streamed, on the report model if it's gpt-oss, else `openai/gpt-oss-120b`; up to 3 tries on
+  500 / "Parsing failed" / tool validation errors (same request often works next time). `executed_tools` types:
+  `browser_search` (search) and `browser.open` (page read). gpt-oss citation marks `【1†L49-L53】` are stripped.
+  `groq/compound*` models are hidden from the pickers: they run tools on their own.
+- **Groq tested live 2026-10-29 (free tier, `api_e2e` example + the real UI):** every model is 8K tokens/minute. A coding
+  turn sends ~5.4K, so back-to-back turns get 429 with `retry-after` 1–30 s; all providers now wait out a 429 (up to
+  60 s per wait, 90 s total). gpt-oss-120b as interviewer ran on into the candidate's next turn in ~1 of 3 replies
+  ("…index type?[Elapsed: 1 of 10 min]", or a made-up candidate answer that the report then credited); Qwen
+  (`qwen/qwen3.8-27b`) did not and asked better follow-ups, so it is the Groq interviewer default. TTFT ~0.4–0.5 s
+  (gpt-oss-120b, no rate wait). Report ~4–5 s, verdict ~1.2 s, ATS keywords ~3.7 s, AI screen ~15 s, research ~15 s
+  (3–7 searches, 3 sources; no PROGRESS lines since it isn't streamed).
 - Model ids change fast: Settings lists them live (`list_models` → each API's `/models`). Defaults:
-  claude-sonnet-5-5 / claude-opus-5-5, gpt-5.5, gemini-flash-latest (free tier is Flash-only).
-- None of the API paths have been run against a live key yet (2026-10-27). Check them with the health check
+  claude-sonnet-5-5 / claude-opus-5-5, gpt-5.5, gemini-flash-latest (free tier is Flash-only), qwen/qwen3.8-27b /
+  openai/gpt-oss-120b (Groq).
+- Live check of a provider without the UI: `echo <key> | cargo run --example api_e2e -- groq [iv model] [report model]`
+  (`--skip-research`, `--research-only`). The key is read from stdin only.
+- Claude API, OpenAI and Gemini have not been run against a live key yet (2026-10-27). Check them with the health check
   and a short round per provider, and write the TTFT numbers here.
 
 ### Locating Claude Code
@@ -258,9 +275,9 @@ Look: "night violet" (owner's mockup, 2026-10-27). The backdrop is `ui/assets/tw
 Every color token on `:root` in `app.css` is sampled from it: navy neutrals hue 266, violet accent hue 290,
 `--warm` (sun peach) and `--warm-2` (horizon magenta) used sparingly. Setup is numbered steps 1–5 with round tiles
 (icons in `ROUND_ICONS`, app.js). Keep new screens on these tokens; don't add colors outside them.
-Themes (2026-10-27): `themes.css` adds Onsite light, Catppuccin (Latte/Mocha), Rosé Pine (Dawn/main) and Gruvbox
+Themes (2026-10-27): `themes.css` adds Onsite light, Nord (Polar Night/Snow Storm; replaced Catppuccin, too close to Onsite), Rosé Pine (Dawn/main) and Gruvbox
 (light/dark). `theme-boot.js` (in `<head>`; the CSP blocks inline script) sets `data-theme="<family>-<light|dark>"`
-and `data-mode` before paint from localStorage `onsite.theme` {family, mode: system|light|dark, image, dim}; default
+and `data-mode` before paint from localStorage `onsite.theme` {family, mode: system|light|dark, image, plain (no picture at all), dim}; default
 Onsite dark. Onsite dark = app.css `:root` unchanged. Other themes set ~25 base tokens; the shared block derives the
 rest with `color-mix`. app.css has no color literals left except status glows: **use tokens only** (`--hover`,
 `--accent-line`, `--sel-bg`, `--pane`, … on `:root`), or the new rule won't follow the theme. The page background is
@@ -318,7 +335,8 @@ hard-coded in JS.
 
 ### M4 — Polish
 - MCP server, Windows installer via GitHub Actions (`tauri-action`) on tag push, README screenshots.
-- Installer workflow: `.github/workflows/release.yml` (tag `v*` → draft release with the NSIS setup.exe). Not run yet.
+- Installer workflow: `.github/workflows/release.yml` (tag `v*` → checks the tag equals the version in tauri.conf.json
+  and Cargo.toml → tests → NSIS build → **published** release, since `updates.rs` skips drafts). Steps in README "Releasing".
 - Friends' machines: Python for Run/Submit falls back to VoiceStudio's bundled Python (`runner::python()`,
   skips the `WindowsApps` Store stub). Java, g++ and Node must be installed to Run in those languages.
 

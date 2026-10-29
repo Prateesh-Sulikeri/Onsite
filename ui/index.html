@@ -437,6 +437,7 @@
                   <p class="hint">Put your own picture behind every page except the call. It stays on this computer.</p>
                   <div class="btn-row" style="margin-top:0">
                     <button class="btn" id="bgPick"><svg><use href="#i-upload"/></svg>Choose image</button>
+                    <button class="btn ghost" id="bgNone">Remove image</button>
                     <button class="btn ghost" id="bgClear" hidden>Use the theme’s</button>
                     <input type="file" id="bgFile" accept="image/jpeg,image/png,image/webp" hidden>
                   </div>
@@ -457,6 +458,7 @@
                 <button class="ai-pick" role="radio" aria-checked="false" data-provider="anthropic"><b>Claude API key</b><small>Any Claude account. Pay per use.</small></button>
                 <button class="ai-pick" role="radio" aria-checked="false" data-provider="openai"><b>OpenAI key</b><small>ChatGPT models. Billed apart from ChatGPT Plus.</small></button>
                 <button class="ai-pick" role="radio" aria-checked="false" data-provider="gemini"><b>Gemini key</b><small>Free key from Google, with daily limits.</small></button>
+                <button class="ai-pick" role="radio" aria-checked="false" data-provider="groq"><b>Groq key</b><small>Free key. Open models (Qwen, GPT-OSS), very fast.</small></button>
               </div>
               <div id="aiCli">
                 <dl class="kv"><dt>Using</dt><dd id="clPath">Not found yet</dd></dl>
@@ -552,7 +554,7 @@
               </ul>
               <h3>What leaves this computer</h3>
               <ul>
-                <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI or Gemini): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
+                <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI, Gemini or Groq): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
                 <li><b>Research jobs</b> ask that provider to search the web. The company, role and job description you enter are part of the request.</li>
                 <li><b>Update checks</b> ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
               </ul>

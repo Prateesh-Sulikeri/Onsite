@@ -1,7 +1,7 @@
 /* Themes. `data-theme` on <html> is "<family>-<light|dark>" (set by theme-boot.js before paint).
    Onsite dark is app.css's :root as is. Every other theme sets the base palette below; the
    shared block derives the rest (lines, washes, glows) from it with color-mix, so app.css
-   needs no per-theme rules. Palettes: catppuccin.com, rosepinetheme.com, gruvbox (morhetz). */
+   needs no per-theme rules. Palettes: nordtheme.com, rosepinetheme.com, gruvbox (morhetz). */
 
 :root[data-theme]:not([data-theme="onsite-dark"]){
   --backdrop: none;
@@ -68,21 +68,22 @@
   --syn-kw:#7a3fd6; --syn-type:#2a62b8; --syn-fn:#b0571d; --syn-str:#2b8a4a; --syn-num:#b8327a; --syn-comment:#8a84a3; --syn-meta:#9a6a00; --syn-gutter:#a49fbd;
 }
 
-/* ---- Catppuccin: Mocha (dark), Latte (light). Accent: mauve, lavender ---- */
-:root[data-theme="catppuccin-dark"]{
+/* ---- Nord: Polar Night (dark), Snow Storm (light). Accent: frost blue. Aurora colors for
+   status; on light they are darkened a step so text on paper stays readable ---- */
+:root[data-theme="nord-dark"]{
   color-scheme: dark;
-  --bg:#1e1e2e; --side:#181825; --surface:#24243a; --surface-2:#313244; --surface-3:#45475a;
-  --ink:#cdd6f4; --ink-2:#bac2de; --muted:#9399b2;
-  --accent:#cba6f7; --accent-hi:#b4befe; --accent-ink:#11111b; --accent-text:#cba6f7;
-  --warm:#fab387; --warm-2:#f5c2e7; --ok:#a6e3a1; --warn:#f9e2af; --bad:#f38ba8; --code-bg:#181825;
-  --syn-kw:#cba6f7; --syn-type:#f9e2af; --syn-fn:#89b4fa; --syn-str:#a6e3a1; --syn-num:#fab387; --syn-comment:#7f849c; --syn-meta:#f5c2e7; --syn-gutter:#6c7086;
+  --bg:#2e3440; --side:#272c36; --surface:#3b4252; --surface-2:#434c5e; --surface-3:#4c566a;
+  --ink:#eceff4; --ink-2:#d8dee9; --muted:#a7b1c2;
+  --accent:#88c0d0; --accent-hi:#8fbcbb; --accent-ink:#2e3440; --accent-text:#88c0d0;
+  --warm:#d08770; --warm-2:#b48ead; --ok:#a3be8c; --warn:#ebcb8b; --bad:#e08a92; --code-bg:#272c36;
+  --syn-kw:#81a1c1; --syn-type:#8fbcbb; --syn-fn:#88c0d0; --syn-str:#a3be8c; --syn-num:#b48ead; --syn-comment:#7b88a1; --syn-meta:#d08770; --syn-gutter:#616e88;
 }
-:root[data-theme="catppuccin-light"]{
-  --bg:#eff1f5; --side:#e6e9ef; --surface:#f9fafb; --surface-2:#e6e9ef; --surface-3:#ccd0da;
-  --ink:#4c4f69; --ink-2:#5c5f77; --muted:#7c7f93;
-  --accent:#8839ef; --accent-hi:#7287fd; --accent-ink:#ffffff; --accent-text:#8839ef;
-  --warm:#fe640b; --warm-2:#ea76cb; --ok:#40a02b; --warn:#df8e1d; --bad:#d20f39; --code-bg:#e6e9ef;
-  --syn-kw:#8839ef; --syn-type:#df8e1d; --syn-fn:#1e66f5; --syn-str:#40a02b; --syn-num:#fe640b; --syn-comment:#8c8fa1; --syn-meta:#ea76cb; --syn-gutter:#9ca0b0;
+:root[data-theme="nord-light"]{
+  --bg:#eceff4; --side:#e5e9f0; --surface:#f8f9fb; --surface-2:#e5e9f0; --surface-3:#d8dee9;
+  --ink:#2e3440; --ink-2:#3b4252; --muted:#5b6579;
+  --accent:#4f6f9a; --accent-hi:#5e81ac; --accent-ink:#ffffff; --accent-text:#4b6a94;
+  --warm:#b8653f; --warm-2:#8f6589; --ok:#4c7337; --warn:#80600f; --bad:#b0484f; --code-bg:#f8f9fb;
+  --syn-kw:#5e81ac; --syn-type:#3f7f7e; --syn-fn:#3b6e99; --syn-str:#4c7337; --syn-num:#8f6589; --syn-comment:#7b88a1; --syn-meta:#b8653f; --syn-gutter:#9aa5b8;
 }
 
 /* ---- Rosé Pine: main (dark), Dawn (light). Accent: iris, rose ---- */

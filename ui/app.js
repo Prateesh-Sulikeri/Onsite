@@ -115,6 +115,8 @@ const PROVIDERS = {
   openai: {name: "OpenAI", key: "OpenAI API key", hint: "Create one at platform.openai.com, under API keys. ChatGPT Plus doesn’t cover API use, so add a little credit there."},
   gemini: {name: "Gemini", key: "Gemini API key", hint: "Get a free key at aistudio.google.com (Get API key). The free tier is enough for practice, with daily limits.",
     models: {"gemini-flash-latest": "Gemini Flash (latest) — free tier"}},
+  groq: {name: "Groq", key: "Groq API key", hint: "Get a free key at console.groq.com, under API Keys. It starts with gsk_. The free tier has low per-minute limits, so long rounds may hit them.",
+    models: {"qwen/qwen3.8-27b": "Qwen 3.8 27B — best interviewer", "openai/gpt-oss-120b": "GPT-OSS 120B — has web search", "openai/gpt-oss-20b": "GPT-OSS 20B"}},
 };
 const provider = () => (SETTINGS && SETTINGS.provider) || "claude_code";
 function aiReady(){ const p = provider(); return p === "claude_code" ? !!(SETTINGS && SETTINGS.claude) : !!AIKEYS[p]; }
@@ -2049,7 +2051,7 @@ $("#setNav").onclick = e => { const b = e.target.closest("button[data-sec]"); if
 /* Swatches are the themes' own palette colors (bg, panel, accent, text), as in themes.css. */
 const THEMES = {
   onsite:     {name: "Onsite",     dark: ["#16122b", "#221d3d", "#8b5cf6", "#f3f0ff"], light: ["#f3f1fa", "#ffffff", "#6a3de8", "#1c1633"]},
-  catppuccin: {name: "Catppuccin", dark: ["#1e1e2e", "#313244", "#cba6f7", "#cdd6f4"], light: ["#eff1f5", "#f9fafb", "#8839ef", "#4c4f69"]},
+  nord:       {name: "Nord",       dark: ["#2e3440", "#434c5e", "#88c0d0", "#eceff4"], light: ["#eceff4", "#f8f9fb", "#4f6f9a", "#2e3440"]},
   rosepine:   {name: "Rosé Pine",  dark: ["#191724", "#26233a", "#c4a7e7", "#e0def4"], light: ["#faf4ed", "#fffaf3", "#907aa9", "#575279"]},
   gruvbox:    {name: "Gruvbox",    dark: ["#282828", "#3c3836", "#fe8019", "#ebdbb2"], light: ["#fbf1c7", "#f9f5d7", "#af3a03", "#3c3836"]},
 };
@@ -2059,7 +2061,9 @@ function renderAppearance(){
   $("#themeGrid").innerHTML = Object.entries(THEMES).map(([k, v]) =>
     `<button class="theme-card" role="radio" aria-checked="${t.family === k}" data-family="${k}"><span class="theme-sw">${sw(v.light)}${sw(v.dark)}</span><b>${esc(v.name)}</b></button>`).join("");
   $$("#modeSeg button").forEach(b => b.setAttribute("aria-checked", b.dataset.mode === t.mode));
-  $("#bgClear").hidden = !t.image; $("#bgDimField").hidden = !t.image;
+  // "Remove image" only while a picture shows; "Use the theme's" only when the theme's is overridden.
+  $("#bgNone").hidden = getComputedStyle(document.documentElement).getPropertyValue("--backdrop").trim() === "none" && !t.image;
+  $("#bgClear").hidden = !t.image && !t.plain; $("#bgDimField").hidden = !t.image;
   $("#bgDim").value = t.dim; $("#bgDimVal").textContent = `${t.dim}%`;
 }
 function saveTheme(patch){ OnsiteTheme.save({...OnsiteTheme.read(), ...patch}); renderAppearance(); }
@@ -2094,14 +2098,18 @@ $("#bgFile").onchange = async () => {
     const data = await shrinkImage(f);
     await api.invoke("set_backdrop", {data});
     OnsiteTheme.setImage(data);
-    saveTheme({image: true});
+    saveTheme({image: true, plain: false});
     msg("#bgMsg", "");
   }catch(e){ msg("#bgMsg", esc(errText(e)), "err"); }
 };
-$("#bgClear").onclick = async () => {
-  try{ await api.invoke("clear_backdrop"); OnsiteTheme.setImage(null); saveTheme({image: false}); }
-  catch(e){ msg("#bgMsg", esc(errText(e)), "err"); }
-};
+async function dropImage(plain){
+  try{
+    if (OnsiteTheme.read().image){ await api.invoke("clear_backdrop"); OnsiteTheme.setImage(null); }
+    saveTheme({image: false, plain});
+  }catch(e){ msg("#bgMsg", esc(errText(e)), "err"); }
+}
+$("#bgClear").onclick = () => dropImage(false);
+$("#bgNone").onclick = () => dropImage(true);
 
 /* ---- interviewers ---- */
 function renderPersonas(){
@@ -2566,7 +2574,7 @@ $("#roomMic").addEventListener("change", () => {
   if (!aiReady()){
     SET_SEC = "models";
     nav("settings");
-    msg("#clResult", "Connect an AI model to start. Claude Code needs Claude Pro or Max; otherwise paste a Claude, OpenAI or Gemini key.");
+    msg("#clResult", "Connect an AI model to start. Claude Code needs Claude Pro or Max; otherwise paste a Claude, OpenAI, Gemini or Groq key.");
     return;
   }
   nav("dashboard");
