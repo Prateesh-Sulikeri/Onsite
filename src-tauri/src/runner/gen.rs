@@ -1011,7 +1011,46 @@ pub fn cpp_main(q: &Question) -> String {
     CPP_MAIN.replace("/*STRUCTS*/", &structs).replace("/*NODE_IO*/", &io).replace("/*RUN*/", &run)
 }
 
-const CPP_MAIN: &str = r#"#include <bits/stdc++.h>
+// Not <bits/stdc++.h>: that is GCC-only, and `g++` on a Mac is clang. These are the headers it
+// pulls in that LeetCode solutions use without including them.
+const CPP_MAIN: &str = r#"#include <algorithm>
+#include <array>
+#include <bitset>
+#include <cassert>
+#include <cctype>
+#include <chrono>
+#include <climits>
+#include <cmath>
+#include <complex>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <iterator>
+#include <limits>
+#include <list>
+#include <map>
+#include <memory>
+#include <numeric>
+#include <optional>
+#include <queue>
+#include <random>
+#include <regex>
+#include <set>
+#include <sstream>
+#include <stack>
+#include <string>
+#include <tuple>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
 using namespace std;
 /*STRUCTS*/
 #include "solution.cpp"
