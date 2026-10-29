@@ -1,0 +1,11 @@
+# LF everywhere, also on Windows checkouts (the CI runner): prompt templates and the question
+# bank are read byte for byte, and tests match "\n".
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.docx binary
+*.woff2 binary
