@@ -107,7 +107,9 @@ async fn wrong_answer_compile_error_runtime_error_and_tle() {
         assert_eq!(r.status, Status::TimeLimit, "{r:#?}");
     }
     if have(Lang::Cpp).await {
-        let r = run_all("two-sum", Lang::Cpp, "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        int* p = nullptr; return {*p};\n    }\n};\n").await;
+        // A real crash. Not a null dereference: that's undefined, and clang at -O2 (`g++` on a Mac)
+        // optimised it away and returned garbage.
+        let r = run_all("two-sum", Lang::Cpp, "class Solution {\npublic:\n    vector<int> twoSum(vector<int>& nums, int target) {\n        abort(); return {};\n    }\n};\n").await;
         assert_eq!(r.status, Status::RuntimeError, "{r:#?}");
         assert!(r.cases[0].error.as_deref().unwrap().contains("crashed"));
     }
