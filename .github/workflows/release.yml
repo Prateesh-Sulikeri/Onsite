@@ -83,8 +83,12 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.os }}
+      # The npm package ships a prebuilt CLI: seconds, where `cargo install tauri-cli` compiled for ~5 min.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Install the Tauri CLI
-        run: cargo install tauri-cli --version "^2" --locked
+        run: npm install -g @tauri-apps/cli@^2
       - name: Test
         working-directory: src-tauri
         run: cargo test
@@ -93,7 +97,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tauriScript: cargo tauri
+          tauriScript: tauri
           args: ${{ matrix.args }}
           releaseId: ${{ needs.draft.outputs.id }}
       - name: Keep the files (dry run)
