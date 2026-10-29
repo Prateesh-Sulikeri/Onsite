@@ -2151,7 +2151,7 @@ function drawReleases(){
   ib.hidden = !u.latest; ib.dataset.tag = u.latest || ""; ib.innerHTML = `${icon("download")}Update to ${esc(u.latest || "")}`;
   $("#upList").innerHTML = u.releases.length ? u.releases.map(r => {
     const tagLine = [r.compared === 0 ? `<span class="pill ok">This version</span>` : "", r.prerelease ? `<span class="pill">Pre-release</span>` : ""].join(" ");
-    const action = r.compared === 0 ? "" : !r.installer ? `<span class="muted small">No Windows installer</span>`
+    const action = r.compared === 0 ? "" : !r.installer ? `<span class="muted small">No ${esc(u.package)}</span>`
       : `<button class="btn ${r.compared > 0 ? "" : "ghost"} sm" data-install="${esc(r.tag)}">${r.compared > 0 ? "Install" : "Downgrade"}</button>`;
     return `<div class="ver-row"><div><b>${esc(r.name)}</b> ${tagLine}<br><small>${esc([r.tag !== r.name ? r.tag : "", r.published_at.slice(0, 10), r.size ? fmtBytes(r.size) : ""].filter(Boolean).join(" · "))}</small></div>${action}
       ${r.notes.trim() ? `<details><summary>Release notes</summary><pre>${esc(r.notes.trim())}</pre></details>` : ""}</div>`;
@@ -2179,12 +2179,12 @@ async function installVersion(tag){
   const r = UPDATES && UPDATES.releases.find(x => x.tag === tag);
   const older = r && r.compared < 0;
   if (!await ask(older ? `Go back to ${tag}?` : `Update to ${tag}?`,
-    `Onsite downloads the installer from GitHub${r && r.size ? ` (${fmtBytes(r.size)})` : ""}, then closes so it can run. Your data stays.${older ? " An older version may not read data saved by this one." : ""}`,
+    `Onsite ${UPDATES.how}${r && r.size ? ` (${fmtBytes(r.size)})` : ""}. Your data stays.${older ? " An older version may not read data saved by this one." : ""}`,
     older ? "Downgrade" : "Update")) return;
   $("#upBar").hidden = false; $("#upBar i").style.width = "0%";
   msg("#upMsg", "Downloading…");
   $$("[data-install], #upInstall, #upCheck").forEach(x => x.disabled = true);
-  try{ await api.invoke("install_update", {tag}); msg("#upMsg", "Starting the installer. Onsite will close.", "ok"); }
+  try{ msg("#upMsg", esc(await api.invoke("install_update", {tag})), "ok"); $("#upBar").hidden = true; }
   catch(e){ msg("#upMsg", esc(errText(e)), "err"); $("#upBar").hidden = true; }
   finally{ $$("[data-install], #upInstall, #upCheck").forEach(x => x.disabled = false); }
 }

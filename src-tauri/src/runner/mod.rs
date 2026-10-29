@@ -301,7 +301,12 @@ fn plan(lang: Lang, q: &Question, code: &str, dir: &Path) -> std::io::Result<Pla
             w("solution.cpp", code)?;
             w("main.cpp", &gen::cpp_main(q))?;
             let mut compile = command("g++");
-            compile.args(["-std=c++17", "-O2", "-static", "-Wl,--stack,268435456", "-o", "main.exe", "main.cpp"]);
+            compile.args(["-std=c++17", "-O2", "-o", "main.exe", "main.cpp"]);
+            // MinGW: a static exe with a 256 MB stack for deep recursion. macOS can't link
+            // statically and Linux sets the stack with ulimit, so they build a plain binary.
+            if cfg!(windows) {
+                compile.args(["-static", "-Wl,--stack,268435456"]);
+            }
             let mut run = command(if cfg!(windows) { "main.exe" } else { "./main.exe" });
             // Windows resolves a bare program name against PATH, not the working directory.
             if cfg!(windows) {

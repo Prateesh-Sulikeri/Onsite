@@ -29,9 +29,18 @@ impl Default for Limits {
     }
 }
 
-/// %LOCALAPPDATA%\Onsite\onsite.log (the app has no console window).
+/// Windows: %LOCALAPPDATA%\Onsite\onsite.log (the app has no console window).
+/// macOS: ~/Library/Logs/Onsite. Linux: $XDG_STATE_HOME/Onsite, else ~/.local/state/Onsite.
 pub fn log_path() -> PathBuf {
-    std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("Onsite").join("onsite.log")
+    let var = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+    let base = if cfg!(windows) {
+        var("LOCALAPPDATA")
+    } else if cfg!(target_os = "macos") {
+        var("HOME").map(|h| h.join("Library").join("Logs"))
+    } else {
+        var("XDG_STATE_HOME").or_else(|| var("HOME").map(|h| h.join(".local").join("state")))
+    };
+    base.unwrap_or_else(std::env::temp_dir).join("Onsite").join("onsite.log")
 }
 
 fn file_size(p: &Path) -> u64 {
@@ -155,10 +164,14 @@ pub fn open_folder(path: &Path) -> Result<()> {
     if !path.exists() {
         return Err(AppError::NotFound("That folder doesn't exist yet.".into()));
     }
-    #[cfg(windows)]
-    std::process::Command::new("explorer.exe").arg(path).spawn()?;
-    #[cfg(not(windows))]
-    std::process::Command::new("xdg-open").arg(path).spawn()?;
+    let opener = if cfg!(windows) {
+        "explorer.exe"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(opener).arg(path).spawn()?;
     Ok(())
 }
 

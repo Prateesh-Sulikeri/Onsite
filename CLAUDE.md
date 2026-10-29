@@ -335,8 +335,13 @@ hard-coded in JS.
 
 ### M4 — Polish
 - MCP server, Windows installer via GitHub Actions (`tauri-action`) on tag push, README screenshots.
-- Installer workflow: `.github/workflows/release.yml` (tag `v*` → checks the tag equals the version in tauri.conf.json
-  and Cargo.toml → tests → NSIS build → **published** release, since `updates.rs` skips drafts). Steps in README "Releasing".
+- Release workflow `.github/workflows/release.yml` (tag `v*`): tag must equal the version in tauri.conf.json and
+  Cargo.toml → draft release → tests + build on windows-latest (nsis), macos-latest (universal dmg, ad-hoc signed,
+  not notarized), ubuntu-22.04 (AppImage + deb) → publish when all three uploaded (`updates.rs` skips drafts).
+  Manual run = dry run with artifacts. `updates::Package` picks the asset per OS; macOS opens the dmg, an AppImage
+  swaps itself ($APPIMAGE) and restarts, a .deb goes to Downloads. On macOS/Linux the app takes PATH from the login
+  shell at startup (Dock/desktop launches get a bare PATH). macOS mic permission text: `src-tauri/Info.plist`.
+  macOS and Linux builds have not been run by a person yet (2026-10-29).
 - Friends' machines: Python for Run/Submit falls back to VoiceStudio's bundled Python (`runner::python()`,
   skips the `WindowsApps` Store stub). Java, g++ and Node must be installed to Run in those languages.
 

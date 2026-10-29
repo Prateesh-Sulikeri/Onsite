@@ -1,47 +1,122 @@
-# Builds the Windows installer (NSIS) when a version tag is pushed and publishes it as a GitHub
-# release. Settings → Updates in the app lists these releases (published, tag vX.Y.Z, a *-setup.exe
-# asset), so the tag must match the version in tauri.conf.json and Cargo.toml.
+# Builds Onsite for Windows, macOS and Linux when a version tag is pushed, and publishes one
+# GitHub release with all of them. Settings → Updates in the app reads these releases: it skips
+# drafts, needs a vX.Y.Z tag, and picks the file for its system (`*-setup.exe`, `*.dmg`,
+# `*.AppImage` or `*.deb`). So the release stays a draft until every build has uploaded, and the
+# tag must match the version in tauri.conf.json and Cargo.toml.
+#
+# Run it by hand (Actions → Release → Run workflow) for a dry run: same builds, files kept as
+# workflow artifacts, no release.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  draft:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      id: ${{ steps.create.outputs.id }}
     steps:
       - uses: actions/checkout@v4
       - name: Tag matches the app version
-        shell: bash
         run: |
           tag="${GITHUB_REF_NAME#v}"
           conf=$(grep -m1 '"version"' src-tauri/tauri.conf.json | sed -E 's/.*"version": *"([^"]+)".*/\1/')
           cargo=$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/version *= *"([^"]+)"/\1/')
           echo "tag $tag, tauri.conf.json $conf, Cargo.toml $cargo"
           [ "$tag" = "$conf" ] && [ "$tag" = "$cargo" ] || { echo "::error::Tag $GITHUB_REF_NAME doesn't match the app version"; exit 1; }
+      - name: Create the draft release
+        id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
+          cat > notes.md <<'EOF'
+          **Download for your system:**
+          - **Windows 10/11:** `Onsite_*_x64-setup.exe`
+          - **macOS 11+ (Apple Silicon and Intel):** `Onsite_*_universal.dmg`
+          - **Linux (x86-64):** `Onsite_*_amd64.AppImage` (any distro), or `Onsite_*_amd64.deb` (Debian, Ubuntu)
+
+          Install VoiceStudio (Windows, macOS or Linux) for spoken rounds; without it rounds are typed. On first launch, pick an AI in Settings:
+          Claude Code (Pro/Max), or paste a Claude, OpenAI, Gemini or Groq API key (Gemini and Groq have free tiers).
+
+          Already installed? Settings → Updates → Check for updates.
+          macOS: the app isn't notarized. If macOS says it's damaged or can't be opened, run
+          `xattr -dr com.apple.quarantine /Applications/Onsite.app` once.
+          EOF
+          gh release create "$GITHUB_REF_NAME" --draft $pre --title "Onsite $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
+          echo "id=$(gh release view "$GITHUB_REF_NAME" --json databaseId --jq .databaseId)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: draft
+    # Runs after the draft on a tag, and on its own for a manual dry run.
+    if: always() && (needs.draft.result == 'success' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --bundles nsis
+          - os: macos-latest
+            args: --target universal-apple-darwin --bundles dmg
+          - os: ubuntu-22.04
+            args: --bundles appimage,deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Linux build packages
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.os }}
       - name: Install the Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
       - name: Test
         working-directory: src-tauri
         run: cargo test
       - uses: tauri-apps/tauri-action@v0
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tauriScript: cargo tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: Onsite ${{ github.ref_name }}
-          releaseBody: |
-            Install VoiceStudio first, then run the Onsite installer (`Onsite_*_x64-setup.exe` below).
-            On first launch, pick an AI in Settings: Claude Code (Pro/Max), or paste a Claude, OpenAI, Gemini or Groq API key (Gemini and Groq have free tiers).
-            Already installed? Settings → Updates → Check for updates installs this version.
-          # Published, not draft: the app's Updates screen skips drafts.
-          releaseDraft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: ${{ matrix.args }}
+          releaseId: ${{ needs.draft.outputs.id }}
+      - name: Keep the files (dry run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: onsite-${{ matrix.os }}
+          path: |
+            src-tauri/target/**/bundle/nsis/*-setup.exe
+            src-tauri/target/**/bundle/dmg/*.dmg
+            src-tauri/target/**/bundle/appimage/*.AppImage
+            src-tauri/target/**/bundle/deb/*.deb
+
+  publish:
+    needs: [draft, build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+          gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false

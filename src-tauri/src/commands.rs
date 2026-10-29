@@ -488,7 +488,7 @@ pub async fn check_updates(app: AppHandle) -> Result<crate::updates::UpdateInfo>
 
 /// Downloads that version's installer, starts it and quits. Works for older versions too.
 #[tauri::command]
-pub async fn install_update(app: AppHandle, tag: String) -> Result<()> {
+pub async fn install_update(app: AppHandle, tag: String) -> Result<String> {
     crate::updates::install(&app, &tag).await
 }
 

@@ -142,8 +142,42 @@ fn init_logging() {
     }
 }
 
+/// Apps started from the Dock, Finder or a desktop launcher get a bare PATH (/usr/bin:/bin…),
+/// so `claude`, `node`, `java` and `g++` from Homebrew, nvm or ~/.local/bin aren't found.
+/// Take PATH from the user's login shell once at startup, as a terminal would have it.
+#[cfg(unix)]
+fn path_from_login_shell() {
+    use std::io::Read;
+    let shell = std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "/bin/sh".into());
+    let child = std::process::Command::new(&shell)
+        .args(["-ilc", "printf '__PATH__%s__PATH__' \"$PATH\""])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+    let Ok(mut child) = child else { return };
+    // A slow or prompting shell profile must not hold up the app.
+    let started = std::time::Instant::now();
+    while started.elapsed() < std::time::Duration::from_secs(3) {
+        if let Ok(Some(_)) = child.try_wait() {
+            let mut out = String::new();
+            let _ = child.stdout.take().map(|mut o| o.read_to_string(&mut out));
+            if let Some(path) = out.split("__PATH__").nth(1).filter(|p| !p.is_empty()) {
+                tracing::info!("PATH from {shell}");
+                std::env::set_var("PATH", path);
+            }
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let _ = child.kill();
+    tracing::warn!("{shell} took too long to report PATH; keeping the app's own");
+}
+
 pub fn run() {
     init_logging();
+    #[cfg(unix)]
+    path_from_login_shell();
 
     tauri::Builder::default()
         .setup(|app| {

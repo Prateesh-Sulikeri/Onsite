@@ -112,7 +112,15 @@ fn find_windows_exe() -> Option<PathBuf> {
     let names: &[&str] = if cfg!(windows) { &["claude.exe", "claude.cmd"] } else { &["claude"] };
     let mut dirs: Vec<PathBuf> = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect()).unwrap_or_default();
     if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
-        dirs.push(PathBuf::from(home).join(".local").join("bin"));
+        let home = PathBuf::from(home);
+        dirs.push(home.join(".local").join("bin"));
+        if !cfg!(windows) {
+            // Where the npm and older installers put it.
+            dirs.extend([home.join(".claude").join("local"), home.join(".npm-global").join("bin")]);
+        }
+    }
+    if !cfg!(windows) {
+        dirs.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
     }
     dirs.iter().flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| p.is_file())
 }

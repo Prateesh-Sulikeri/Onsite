@@ -1,5 +1,7 @@
 //! Updates: Onsite's versions come from its GitHub releases. Any listed version can be
-//! installed (newer or older) by downloading that release's installer and running it.
+//! installed (newer or older) by downloading that release's package for this system: the NSIS
+//! installer on Windows (run, then quit), the disk image on macOS (opened for the user to drag),
+//! the AppImage on Linux (swapped in place, then restarted) or else the .deb (saved to Downloads).
 //! VoiceStudio's installed and latest versions are only shown; it updates itself.
 //! Nothing here runs unless the user opens Updates.
 
@@ -35,7 +37,7 @@ pub struct Release {
     pub published_at: String,
     pub prerelease: bool,
     pub notes: String,
-    /// The Windows installer, when the release has one.
+    /// The package for this system, when the release has one.
     pub installer: Option<String>,
     pub size: u64,
     /// -1 older than this app, 0 this version, 1 newer.
@@ -49,6 +51,69 @@ pub struct UpdateInfo {
     pub releases: Vec<Release>,
     /// The newest stable release above `current`, if any.
     pub latest: Option<String>,
+    /// What this system downloads, e.g. "Windows installer".
+    pub package: String,
+    /// What installing does here, for the confirm dialog.
+    pub how: String,
+}
+
+/// The kind of release file that installs on this machine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Package {
+    Nsis,
+    Dmg,
+    /// Running from an AppImage ($APPIMAGE is set): the new one replaces it.
+    AppImage,
+    Deb,
+}
+
+impl Package {
+    pub fn current() -> Self {
+        if cfg!(windows) {
+            Self::Nsis
+        } else if cfg!(target_os = "macos") {
+            Self::Dmg
+        } else if std::env::var_os("APPIMAGE").is_some() {
+            Self::AppImage
+        } else {
+            Self::Deb
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Nsis => "Windows installer",
+            Self::Dmg => "Mac disk image",
+            Self::AppImage => "AppImage",
+            Self::Deb => ".deb package",
+        }
+    }
+
+    fn how(self) -> &'static str {
+        match self {
+            Self::Nsis => "downloads the installer from GitHub, then closes so it can run",
+            Self::Dmg => "downloads the disk image from GitHub and opens it; drag Onsite into Applications to replace this one",
+            Self::AppImage => "downloads the new AppImage from GitHub, swaps it in for this one and restarts",
+            Self::Deb => "downloads the .deb package from GitHub to your Downloads folder for you to install",
+        }
+    }
+
+    /// Release files are named like `Onsite_0.2.0_x64-setup.exe`, `Onsite_0.2.0_universal.dmg`,
+    /// `Onsite_0.2.0_amd64.AppImage`, `Onsite_0.2.0_amd64.deb`.
+    pub fn matches(self, name: &str, arch: &str) -> bool {
+        let n = name.to_lowercase();
+        let linux_arch = || match arch {
+            "x86_64" => n.contains("amd64") || n.contains("x86_64"),
+            "aarch64" => n.contains("arm64") || n.contains("aarch64"),
+            _ => false,
+        };
+        match self {
+            Self::Nsis => n.ends_with("-setup.exe"),
+            Self::Dmg => n.ends_with(".dmg") && (n.contains("universal") || n.contains(if arch == "aarch64" { "aarch64" } else { "x64" })),
+            Self::AppImage => n.ends_with(".appimage") && linux_arch(),
+            Self::Deb => n.ends_with(".deb") && linux_arch(),
+        }
+    }
 }
 
 fn client() -> reqwest::Client {
@@ -72,11 +137,12 @@ async fn get_json(url: &str) -> Result<Value> {
     }
 }
 
-fn installer_asset(r: &Value) -> Option<&Value> {
-    r["assets"].as_array()?.iter().find(|a| a["name"].as_str().is_some_and(|n| n.to_lowercase().ends_with("-setup.exe")))
+fn installer_asset(r: &Value, pkg: Package) -> Option<&Value> {
+    let arch = std::env::consts::ARCH;
+    r["assets"].as_array()?.iter().find(|a| a["name"].as_str().is_some_and(|n| pkg.matches(n, arch)))
 }
 
-pub fn parse_releases(v: &Value, current: &str) -> UpdateInfo {
+pub fn parse_releases(v: &Value, current: &str, pkg: Package) -> UpdateInfo {
     let cur = version_key(current);
     let mut releases: Vec<Release> = v
         .as_array()
@@ -86,7 +152,7 @@ pub fn parse_releases(v: &Value, current: &str) -> UpdateInfo {
         .filter_map(|r| {
             let tag = r["tag_name"].as_str()?.to_string();
             let key = version_key(&tag)?;
-            let asset = installer_asset(r);
+            let asset = installer_asset(r, pkg);
             Some(Release {
                 name: r["name"].as_str().filter(|n| !n.is_empty()).unwrap_or(&tag).to_string(),
                 published_at: r["published_at"].as_str().unwrap_or_default().to_string(),
@@ -101,7 +167,7 @@ pub fn parse_releases(v: &Value, current: &str) -> UpdateInfo {
         .collect();
     releases.sort_by_key(|r| std::cmp::Reverse(version_key(&r.tag)));
     let latest = releases.iter().find(|r| r.compared > 0 && !r.prerelease && r.installer.is_some()).map(|r| r.tag.clone());
-    UpdateInfo { current: current.to_string(), releases, latest }
+    UpdateInfo { current: current.to_string(), releases, latest, package: pkg.label().into(), how: pkg.how().into() }
 }
 
 pub async fn check(app: &AppHandle) -> Result<UpdateInfo> {
@@ -110,7 +176,7 @@ pub async fn check(app: &AppHandle) -> Result<UpdateInfo> {
         Err(AppError::NotFound(_)) => Value::Array(vec![]),
         other => other?,
     };
-    Ok(parse_releases(&v, &current))
+    Ok(parse_releases(&v, &current, Package::current()))
 }
 
 #[derive(Clone, Serialize)]
@@ -120,9 +186,9 @@ struct Progress {
     total: u64,
 }
 
-/// Downloads `tag`'s installer, starts it, and quits so it can replace the app.
-/// The release is looked up again here; the UI only names the tag.
-pub async fn install(app: &AppHandle, tag: &str) -> Result<()> {
+/// Downloads `tag`'s package for this system and installs it the way the system expects.
+/// The release is looked up again here; the UI only names the tag. Returns what happens next.
+pub async fn install(app: &AppHandle, tag: &str) -> Result<String> {
     let state = app.state::<AppState>();
     if !state.rounds.lock().await.is_empty() {
         return Err(AppError::Invalid("Finish or leave the interview first.".into()));
@@ -130,23 +196,71 @@ pub async fn install(app: &AppHandle, tag: &str) -> Result<()> {
     if !state.research.lock().unwrap().is_empty() {
         return Err(AppError::Invalid("A research job is running. Wait for it or cancel it first.".into()));
     }
+    let pkg = Package::current();
     let r = get_json(&format!("{ONSITE_TAG}{tag}")).await?;
-    let asset = installer_asset(&r).ok_or_else(|| AppError::NotFound("That version has no Windows installer.".into()))?;
+    let asset = installer_asset(&r, pkg).ok_or_else(|| AppError::NotFound(format!("That version has no {}.", pkg.label())))?;
     let url = asset["browser_download_url"].as_str().unwrap_or_default();
     let name = asset["name"].as_str().unwrap_or("Onsite-setup.exe");
     // Only GitHub's own download host; the name must be a plain file name.
-    if !url.starts_with("https://github.com/") || name.contains(['/', '\\']) {
+    if !url.starts_with("https://github.com/") || name.contains(['/', '\\']) || name.starts_with('.') {
         return Err(AppError::Invalid("That download link doesn't look like a GitHub release.".into()));
     }
-    let dir: PathBuf = std::env::temp_dir().join("onsite-update");
+    let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
+    let dir: PathBuf = match pkg {
+        Package::Nsis => std::env::temp_dir().join("onsite-update"),
+        // Same folder as the running AppImage, so the swap is a rename on one disk.
+        Package::AppImage => appimage.as_ref().and_then(|p| p.parent()).map(PathBuf::from).unwrap_or_else(std::env::temp_dir),
+        Package::Dmg | Package::Deb => app.path().download_dir().unwrap_or_else(|_| std::env::temp_dir()),
+    };
     std::fs::create_dir_all(&dir)?;
-    let path = dir.join(name);
+    let path = dir.join(if pkg == Package::AppImage { format!(".{name}.part") } else { name.to_string() });
+    download(app, tag, url, &path).await?;
+    tracing::info!(%tag, path = %path.display(), ?pkg, "update downloaded");
+    let quit = |app: &AppHandle| {
+        // Give the installer (or the new copy) a moment to open, then get out of its way.
+        let handle = app.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            handle.exit(0);
+        });
+    };
+    match pkg {
+        Package::Nsis => {
+            std::process::Command::new(&path).spawn().map_err(|e| AppError::Invalid(format!("Couldn't start the installer: {e}")))?;
+            quit(app);
+            Ok("Starting the installer. Onsite will close.".into())
+        }
+        Package::Dmg => {
+            std::process::Command::new("open").arg(&path).spawn().map_err(|e| AppError::Invalid(format!("Couldn't open the disk image: {e}")))?;
+            Ok(format!("Opened {name} from Downloads. Quit Onsite, drag the new Onsite into Applications and replace the old one, then open it again."))
+        }
+        Package::AppImage => {
+            let target = appimage.ok_or_else(|| AppError::Invalid("Couldn't find the running AppImage.".into()))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))?;
+            }
+            // A running AppImage can be replaced: the old file stays open until this process ends.
+            std::fs::rename(&path, &target).map_err(|e| AppError::Invalid(format!("Couldn't replace {}: {e}", target.display())))?;
+            std::process::Command::new(&target).spawn().map_err(|e| AppError::Invalid(format!("Updated, but couldn't restart: {e}. Open Onsite again.")))?;
+            quit(app);
+            Ok("Updated. Onsite is restarting.".into())
+        }
+        Package::Deb => {
+            let _ = std::process::Command::new("xdg-open").arg(&dir).spawn();
+            Ok(format!("Saved {name} to {}. Install it (double-click it, or run: sudo apt install ./{name}), then open Onsite again.", dir.display()))
+        }
+    }
+}
+
+async fn download(app: &AppHandle, tag: &str, url: &str, path: &std::path::Path) -> Result<()> {
     let resp = client().get(url).timeout(Duration::from_secs(30 * 60)).send().await.map_err(|e| AppError::Invalid(format!("Download failed: {e}")))?;
     if !resp.status().is_success() {
         return Err(AppError::Invalid(format!("Download failed: HTTP {}.", resp.status().as_u16())));
     }
     let total = resp.content_length().unwrap_or(0);
-    let mut file = tokio::fs::File::create(&path).await?;
+    let mut file = tokio::fs::File::create(path).await?;
     let mut body = resp.bytes_stream();
     let mut received = 0u64;
     let mut last = 0u64;
@@ -162,16 +276,9 @@ pub async fn install(app: &AppHandle, tag: &str) -> Result<()> {
     file.flush().await?;
     drop(file);
     if total > 0 && received != total {
+        let _ = std::fs::remove_file(path);
         return Err(AppError::Invalid("The download was cut short. Try again.".into()));
     }
-    tracing::info!(%tag, path = %path.display(), "starting installer");
-    std::process::Command::new(&path).spawn().map_err(|e| AppError::Invalid(format!("Couldn't start the installer: {e}")))?;
-    // Give the installer a moment to open, then get out of its way.
-    let handle = app.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(800)).await;
-        handle.exit(0);
-    });
     Ok(())
 }
 
@@ -229,11 +336,24 @@ mod tests {
             {"tag_name": "v0.2.5", "assets": []},
             {"tag_name": "v9.0.0", "draft": true, "assets": asset("x-setup.exe")}
         ]);
-        let info = parse_releases(&v, "0.1.0");
+        let info = parse_releases(&v, "0.1.0", Package::Nsis);
         let tags: Vec<_> = info.releases.iter().map(|r| (r.tag.as_str(), r.compared)).collect();
         assert_eq!(tags, [("v0.3.0-rc1", 1), ("v0.2.5", 1), ("v0.2.0", 1), ("v0.1.0", 0)]);
         // Pre-releases and releases without an installer are not offered as "the update".
         assert_eq!(info.latest.as_deref(), Some("v0.2.0"));
-        assert_eq!(parse_releases(&v, "0.2.0").releases.last().unwrap().compared, -1);
+        assert_eq!(parse_releases(&v, "0.2.0", Package::Nsis).releases.last().unwrap().compared, -1);
+        // A Mac sees no installer in Windows-only releases.
+        assert!(parse_releases(&v, "0.1.0", Package::Dmg).latest.is_none());
+    }
+
+    #[test]
+    fn packages_pick_their_file() {
+        let names = ["Onsite_0.2.0_x64-setup.exe", "Onsite_0.2.0_universal.dmg", "Onsite_0.2.0_amd64.AppImage", "Onsite_0.2.0_amd64.deb", "Onsite_universal.app.tar.gz"];
+        let pick = |p: Package, arch: &str| names.iter().filter(|n| p.matches(n, arch)).copied().collect::<Vec<_>>();
+        assert_eq!(pick(Package::Nsis, "x86_64"), ["Onsite_0.2.0_x64-setup.exe"]);
+        assert_eq!(pick(Package::Dmg, "aarch64"), ["Onsite_0.2.0_universal.dmg"]);
+        assert_eq!(pick(Package::AppImage, "x86_64"), ["Onsite_0.2.0_amd64.AppImage"]);
+        assert_eq!(pick(Package::Deb, "x86_64"), ["Onsite_0.2.0_amd64.deb"]);
+        assert!(pick(Package::Deb, "aarch64").is_empty());
     }
 }
