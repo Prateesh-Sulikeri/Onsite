@@ -1,0 +1,25 @@
+Hi, thanks for joining today.
+Can you hear me okay?
+Let's start with a quick introduction.
+Tell me about a system you built that you're proud of.
+Okay, that makes sense. Let's go a bit deeper.
+How would you make that payment API idempotent?
+What happens if the Kafka consumer crashes after it writes to PostgreSQL but before it commits the offset?
+Why Redis here, and not a local cache?
+What's the time complexity of that, in Big-O terms?
+So you'd call getUserById first, and then check the cache?
+Walk me through what happens when the HashMap needs to resize.
+A thirty-two bit integer can hold about two to the power of thirty-two values.
+Your service has 99.9 percent availability. How much downtime is that in a month?
+Say the system takes ten thousand requests per second, with a p99 latency of two hundred milliseconds.
+I spoke with Priya and Karthik from the platform team before this call.
+Hmm. Interesting. Why did you pick that approach over a queue?
+Right, right. And how would you test it?
+Take your time. There's no rush.
+Can you think of an edge case where that breaks? For example, an empty array, or a list with one node?
+Good. Now imagine the database is in another region, and the network between them is slow and sometimes drops packets for a few seconds at a time.
+No, that's not quite it.
+We have about five minutes left, so let's wrap up the coding part.
+Before we finish, do you have any questions for me?
+Thanks, that was a good conversation. You'll hear back from the recruiter within a week.
+Okay.

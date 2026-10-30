@@ -1,0 +1,19 @@
+{
+  "how_to": "Record each answer with: cargo run --example voice_spike -- record <id>. Answer the prompt in your own words, as in a real round. Then type exactly what you said into \"text\" (keep fillers like 'um' out; keep repeated words in). The WAVs go to answers/, which is gitignored.",
+  "answers": [
+    { "id": "intro_short", "kind": "short", "prompt": "Introduce yourself in one or two sentences.", "text": "" },
+    { "id": "kafka_idem", "kind": "tech", "prompt": "How do you make a Kafka consumer idempotent when it writes to PostgreSQL?", "text": "" },
+    { "id": "redis_cache", "kind": "tech", "prompt": "When would you put Redis in front of PostgreSQL, and what goes wrong with cache invalidation?", "text": "" },
+    { "id": "idempotency_key", "kind": "tech", "prompt": "Explain how an idempotency key works in a payments API.", "text": "" },
+    { "id": "big_o", "kind": "tech", "prompt": "Give the Big-O of two-sum with a hash map, and of sorting first then two pointers.", "text": "" },
+    { "id": "numbers", "kind": "numbers", "prompt": "Estimate the storage for one year of payment events: say the rate, the size per event and the total.", "text": "" },
+    { "id": "latency", "kind": "numbers", "prompt": "Describe a latency fix you made, with the p50/p99 numbers before and after.", "text": "" },
+    { "id": "names", "kind": "names", "prompt": "Name the people, teams and tools you worked with on your last project (e.g. Razorpay, Spring Boot, Grafana, Debezium).", "text": "" },
+    { "id": "yes_short", "kind": "short", "prompt": "Answer: 'Can you hear me?' (about 3 seconds).", "text": "" },
+    { "id": "clarify_short", "kind": "short", "prompt": "Ask a short clarifying question about the input size and whether it can have duplicates.", "text": "" },
+    { "id": "design_long", "kind": "long", "prompt": "Design a payment ledger: walk through it for 60–90 seconds, with natural pauses.", "text": "" },
+    { "id": "outbox_long", "kind": "long", "prompt": "Explain the outbox pattern with Debezium and Kafka, 60–90 seconds.", "text": "" },
+    { "id": "thinking_aloud", "kind": "thinking", "prompt": "Solve 'merge k sorted lists' out loud: think, pause, change your mind, as you really would.", "text": "" },
+    { "id": "code_aloud", "kind": "tech", "prompt": "Read out a few lines of Java: a method signature with generics, a for loop and a HashMap lookup.", "text": "" }
+  ]
+}
