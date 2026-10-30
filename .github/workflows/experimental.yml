@@ -89,10 +89,10 @@ jobs:
             echo
             bash .github/scripts/release-notes.sh "$TAG"
           } > notes.md
-          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --prerelease --latest=false --target "$GITHUB_SHA" \
-            --title "Onsite $TAG (experimental)" --notes-file notes.md
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | head -n1)
-          [ -n "$id" ] || { echo "::error::Could not find the draft release for $TAG"; exit 1; }
+          # Take the id from the create call: listing releases right after creating one can miss the new draft.
+          id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" \
+            -f name="Onsite $TAG (experimental)" -F body=@notes.md -F draft=true -F prerelease=true -f make_latest=false --jq .id)
+          [ -n "$id" ] || { echo "::error::Could not create the draft release for $TAG"; exit 1; }
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
