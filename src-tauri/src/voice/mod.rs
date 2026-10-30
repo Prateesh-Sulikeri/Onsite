@@ -3,6 +3,9 @@
 //! then interrupts: the rest of the reply is dropped and the mic opens.
 
 pub mod audio;
+pub mod builtin;
+pub mod engine;
+pub mod models;
 pub mod stt;
 pub mod vs;
 pub mod whisper;
@@ -17,12 +20,17 @@ use stt::{ListenCtl, ListenEnd};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::oneshot;
-use vs::{Profile, VoiceStudio, TTS_RATE};
+use engine::{Engine, Tts, VoiceEngine};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct VoiceSettings {
     pub enabled: bool,
+    /// Built-in (default for new installs) or VoiceStudio (kept by installs that had no choice yet).
+    #[serde(default = "engine::legacy_engine")]
+    pub engine: VoiceEngine,
+    /// Built-in engine: the voice for rounds without a panel interviewer (a clip id from `builtin::VOICES`).
+    pub builtin_voice: String,
     pub base_url: String,
     /// VoiceStudio profile id, or "" for the first profile. VoiceStudio's own "default"
     /// voice is never used: it picks a new random speaker on every call.
@@ -44,6 +52,8 @@ impl Default for VoiceSettings {
     fn default() -> Self {
         Self {
             enabled: true,
+            engine: VoiceEngine::Builtin,
+            builtin_voice: builtin::DEFAULT_VOICE.into(),
             base_url: "http://127.0.0.1:3900".into(),
             voice: String::new(),
             steps: 8,
@@ -185,13 +195,12 @@ impl Voice {
 
     /// Starts the voice loop for a round. Speech follows `say`/`turn_done` calls, but nothing
     /// plays until `go` is sent (or dropped), so the loader can finish first.
-    pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings) -> Result<VoiceStart> {
+    pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings, engine: Engine) -> Result<VoiceStart> {
         self.end();
         stt::reset_model_choice();
         // Normally already loaded at app start; restarts it if it died.
         whisper::start();
         let player = self.player()?;
-        let vs = VoiceStudio::new(&settings.base_url);
         let (tx, mut rx) = unbounded_channel::<Cmd>();
         let (ready_tx, ready) = oneshot::channel();
         let (go, go_rx) = oneshot::channel::<()>();
@@ -227,17 +236,14 @@ impl Voice {
         let (speaking_flag, cut): (Arc<AtomicBool>, Arc<AtomicBool>) = Default::default();
         let (task_speaking, task_cut) = (speaking_flag.clone(), cut.clone());
         let task = tokio::spawn(async move {
-            // One concrete profile for the whole round, so every sentence is the same voice.
-            let resolved = match &settings.persona {
-                Some(p) => vs.persona_voice(p).await,
-                None => vs.resolve_voice(&settings.voice).await,
-            };
+            // One concrete voice for the whole round, so every sentence is the same speaker.
+            let resolved = engine.voice(&settings).await;
             // Sent to the loader once the voice has spoken (or can't).
-            let mut warm = resolved.as_ref().map(|p| p.name.clone()).map_err(|e| e.to_string());
+            let mut warm = resolved.as_ref().map(|v| v.name()).map_err(|e| e.to_string());
             let voice = match resolved {
-                Ok(p) => {
-                    tracing::info!(id = %p.id, name = %p.name, seed = ?p.seed, "interviewer voice");
-                    Some(p)
+                Ok(v) => {
+                    tracing::info!(name = %v.name(), "interviewer voice");
+                    Some(v)
                 }
                 Err(e) => {
                     tracing::warn!("no interviewer voice: {e}");
@@ -248,13 +254,18 @@ impl Voice {
             // `/model/status` can't tell us which. Warm up while Claude writes its first reply;
             // sentences queue meanwhile.
             // Skipped when VoiceStudio spoke recently (app start, last round): it adds ~1-2 s
-            // before the first line.
-            if let Some(v) = voice.as_ref().filter(|_| !vs::spoke_within(Duration::from_secs(300))) {
+            // before the first line. The built-in engine always warms up (it loads the voice clip, ~1 s).
+            let warm_up = match &voice {
+                Some(Tts::Studio { .. }) => !vs::spoke_within(Duration::from_secs(300)),
+                Some(Tts::Builtin { .. }) => true,
+                None => false,
+            };
+            if let Some(v) = voice.as_ref().filter(|_| warm_up) {
                 let t = Instant::now();
-                match vs.speak("Okay, let's begin.", v, settings.steps, settings.speed, |_| {}).await {
-                    Ok(()) => tracing::info!(ms = t.elapsed().as_millis() as u64, "VoiceStudio warm for the round"),
+                match v.speak("Okay, let's begin.", settings.steps, settings.speed, |_| {}).await {
+                    Ok(()) => tracing::info!(ms = t.elapsed().as_millis() as u64, "voice warm for the round"),
                     Err(e) => {
-                        tracing::warn!("VoiceStudio warm-up failed: {e}");
+                        tracing::warn!("voice warm-up failed: {e}");
                         warm = Err(e.to_string());
                     }
                 }
@@ -310,7 +321,7 @@ impl Voice {
                         // Playback runs from the Player queue, so the next batch is generated
                         // while this one plays. A cut-in abandons the call still generating.
                         tokio::select! {
-                            _ = speak_into(&vs, &player, voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &emit) => {}
+                            _ = speak_into(&player, voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &emit) => {}
                             _ = until_set(&task_cut) => {}
                         }
                     }
@@ -328,12 +339,12 @@ impl Voice {
                         emit(VoiceEvent::Speaking { active: false });
                         awaiting_answer = !ended;
                         if should_listen(awaiting_answer, task_muted.load(Ordering::SeqCst)) {
-                            awaiting_answer = !listen_once(&vs, &settings, &task_ctl, &task_hold, &task_answered, &emit).await;
+                            awaiting_answer = !listen_once(&engine, &settings, &task_ctl, &task_hold, &task_answered, &emit).await;
                         }
                     }
                     Cmd::Listen => {
                         if should_listen(awaiting_answer, task_muted.load(Ordering::SeqCst)) {
-                            awaiting_answer = !listen_once(&vs, &settings, &task_ctl, &task_hold, &task_answered, &emit).await;
+                            awaiting_answer = !listen_once(&engine, &settings, &task_ctl, &task_hold, &task_answered, &emit).await;
                         }
                     }
                     Cmd::AnswerSent => {
@@ -435,34 +446,33 @@ impl Voice {
         }
     }
 
-    pub async fn test_speak(&self, settings: &VoiceSettings, text: &str) -> Result<u64> {
-        let vs = VoiceStudio::new(&settings.base_url);
-        let voice = vs.resolve_voice(&settings.voice).await?;
-        self.speak_as(settings, &voice, text).await
+    /// Speaks `text` once in the voice chosen in `settings`.
+    pub async fn test_speak(&self, engine: &Engine, settings: &VoiceSettings, text: &str) -> Result<u64> {
+        let voice = engine.voice(settings).await?;
+        self.speak_as(&voice, settings, text).await
     }
 
     /// Speaks `text` once in a given voice (a panel interviewer's preview). Returns ms to first audio.
-    pub async fn speak_as(&self, settings: &VoiceSettings, voice: &vs::Profile, text: &str) -> Result<u64> {
+    pub async fn speak_as(&self, voice: &Tts, settings: &VoiceSettings, text: &str) -> Result<u64> {
         let player = self.player()?;
-        let vs = VoiceStudio::new(&settings.base_url);
         let started = Instant::now();
         let mut first_ms = None;
-        let mut rs = player.resampler_from(TTS_RATE);
-        vs.speak(text, voice, settings.steps, settings.speed, |pcm| {
-            first_ms.get_or_insert(started.elapsed().as_millis() as u64);
-            player.push(&mut rs, pcm);
-        })
-        .await?;
-        first_ms.ok_or_else(|| AppError::Voice("VoiceStudio returned no audio.".into()))
+        let mut rs = player.resampler_from(voice.rate());
+        voice
+            .speak(text, settings.steps, settings.speed, |pcm| {
+                first_ms.get_or_insert(started.elapsed().as_millis() as u64);
+                player.push(&mut rs, pcm);
+            })
+            .await?;
+        first_ms.ok_or_else(|| AppError::Voice("The voice returned no audio.".into()))
     }
 }
 
 /// One TTS call into the speaker queue. Errors are reported, never replaced by another voice.
 #[allow(clippy::too_many_arguments)]
 async fn speak_into(
-    vs: &VoiceStudio,
     player: &Player,
-    voice: &Profile,
+    voice: &Tts,
     settings: &VoiceSettings,
     text: &str,
     answered_at: &Mutex<Option<Instant>>,
@@ -470,11 +480,11 @@ async fn speak_into(
     cut: &AtomicBool,
     emit: &impl Fn(VoiceEvent),
 ) {
-    let mut rs = player.resampler_from(TTS_RATE);
+    let mut rs = player.resampler_from(voice.rate());
     let started = Instant::now();
     let mut first_ms: Option<u64> = None;
-    let res = vs
-        .speak(text, voice, settings.steps, settings.speed, |pcm| {
+    let res = voice
+        .speak(text, settings.steps, settings.speed, |pcm| {
             if !alive.load(Ordering::SeqCst) || cut.load(Ordering::SeqCst) {
                 return;
             }
@@ -505,7 +515,7 @@ async fn until_set(flag: &AtomicBool) {
 
 /// Listens for one answer. True when it produced text (the answer is no longer due).
 async fn listen_once(
-    vs: &VoiceStudio,
+    engine: &Engine,
     settings: &VoiceSettings,
     ctl_slot: &Mutex<Arc<ListenCtl>>,
     hold: &AtomicBool,
@@ -516,7 +526,7 @@ async fn listen_once(
     let ctl = Arc::new(ListenCtl::default());
     hold.store(false, Ordering::SeqCst);
     *ctl_slot.lock().unwrap() = ctl.clone();
-    match stt::listen(vs, settings.pause_ms, &ctl, emit.clone()).await {
+    match stt::listen(engine, settings.pause_ms, &ctl, emit.clone()).await {
         Ok(ListenEnd::Text { text, stt_ms }) => {
             *answered_at.lock().unwrap() = Some(Instant::now() - Duration::from_millis(stt_ms));
             emit(VoiceEvent::Final { text, stt_ms });
@@ -585,6 +595,18 @@ mod tests {
         assert!(should_listen(true, false));
         assert!(!should_listen(true, true), "muted");
         assert!(!should_listen(false, false), "interviewer still talking or thinking");
+    }
+
+    #[test]
+    fn engine_default_depends_on_saved_blob() {
+        // Fresh install: no saved settings, so Default (built-in). Older install: a blob without the field keeps VoiceStudio.
+        assert_eq!(VoiceSettings::default().engine, VoiceEngine::Builtin);
+        let old: VoiceSettings = serde_json::from_str(r#"{"enabled":true,"steps":16,"base_url":"http://127.0.0.1:3900"}"#).unwrap();
+        assert_eq!(old.engine, VoiceEngine::Voicestudio);
+        assert_eq!(old.builtin_voice, "ethan_brooks");
+        let chosen: VoiceSettings = serde_json::from_str(r#"{"engine":"builtin","builtin_voice":"priya_shah"}"#).unwrap();
+        assert_eq!((chosen.engine, chosen.builtin_voice.as_str()), (VoiceEngine::Builtin, "priya_shah"));
+        assert_eq!(serde_json::to_value(VoiceSettings::default()).unwrap()["engine"], "builtin");
     }
 
     #[test]

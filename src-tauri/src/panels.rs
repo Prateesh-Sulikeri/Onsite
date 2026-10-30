@@ -51,6 +51,8 @@ pub struct Persona {
     /// VoiceStudio voice-design tags, e.g. "male, middle-aged, low pitch, indian accent".
     pub voice_instruct: String,
     pub voice_states: Value,
+    /// Built-in engine voice clip (women: Priya, everyone else: Ethan).
+    pub clip: String,
     /// Multiplies the user's speaking speed: brisk people talk a little faster.
     pub speed_factor: f32,
 }
@@ -75,6 +77,7 @@ fn build_persona(panel: &Value, iv: &Value) -> Persona {
         panel_name: s(&panel["name"]),
         voice_instruct: instruct,
         voice_states: states,
+        clip: crate::voice::builtin::clip_for_gender(&s(&iv["voice"]["gender"])).into(),
         speed_factor: match s(&iv["voice"]["pace"]).as_str() {
             "brisk" => 1.05,
             "relaxed" | "measured" => 0.96,
@@ -283,6 +286,18 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn every_persona_has_a_shipped_voice_clip() {
+        let voices = Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts/voices");
+        let all = repo().all_personas();
+        assert!(!all.is_empty());
+        for p in &all {
+            assert!(voices.join(format!("{}.wav", p.clip)).is_file(), "{} -> {}", p.id, p.clip);
+        }
+        // Priya is for the women on the panels, Ethan for the men.
+        assert!(all.iter().any(|p| p.clip == "priya_shah") && all.iter().any(|p| p.clip == "ethan_brooks"));
     }
 
     fn panel_missing(panel: &str, key: &str) -> Persona {

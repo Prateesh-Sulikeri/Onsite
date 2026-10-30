@@ -1,14 +1,54 @@
 # VOICE — `src/voice/`, `sidecar/whisper_server.py`
 
-Spoken rounds: local STT/TTS via VoiceStudio (`127.0.0.1:3900`) + Whisper large-v3 sidecar. Verified VoiceStudio
-endpoints, field names, quirks and timings: CLAUDE.md → *tts/*, *stt/*.
+Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`), plus the Whisper large-v3 sidecar.
+- **builtin** (default for fresh installs): Pocket TTS + Parakeet TDT run inside Onsite via the `sherpa-onnx` crate. See *Built-in engine*.
+- **voicestudio** (kept by installs that predate the setting): VoiceStudio on `127.0.0.1:3900`. Verified endpoints,
+  field names, quirks and timings: CLAUDE.md → *tts/*, *stt/*. Plan for dropping it: `docs/plans/voice-without-voicestudio.md`.
+
+## Built-in engine (Phase 1, built 2026-10-30, not yet used in real rounds)
+
+| File | Contents |
+|---|---|
+| `engine.rs` | `VoiceEngine {Builtin, Voicestudio}`, `legacy_engine`, `Engine {Studio(VoiceStudio), Builtin(Arc<Builtin{tts,stt}>)}` (`from_settings` loads models, `voice(&settings)` -> `Tts`), `Tts {Studio{vs,profile}, Builtin{tts,clip}}` (`name`, `rate`, `speak(text, steps, speed, on_pcm)`) |
+| `builtin.rs` | `PocketTts::{load, speak}` (sentence callback -> mpsc, audio capped at 0.7 s/word + 2.5 s), `ParakeetStt::{load, transcribe, caption}`, `Cache` (models kept in `AppState.builtin`), `VOICES`, `clip_for_gender`, `known_clip` |
+| `models.rs` | pinned list `PINS` (id, url, bytes, sha256, unpacked), `install`, `delete`, `status`, `installed`, `allowed_host`, `Progress` (`voice_model` event) |
+| `stt.rs` | `Source {Ws(url), Local(ParakeetStt)}`; `spawn_decode` (finished segment), `spawn_caption` (every 500 ms), `end_segment` |
+
+- Models (GitHub release assets of k2-fsa/sherpa-onnx; size / SHA-256 checked, see `models.rs`):
+  `sherpa-onnx-pocket-tts-int8-2026-01-26` (tag `tts-models`, 98.3 MB, 195 MB unpacked) and
+  `sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8` (tag `asr-models`, 482.5 MB, 631 MB unpacked).
+  Installed = `<app data>/models/<id>/` with the files in `Pin.files`. Work dir `models/.partial/<id>/`, one rename at the end.
+  Only github.com and `*.githubusercontent.com` (GitHub's release CDN redirect) over https; redirect policy enforces it.
+  Disk check: (download + unpacked) x 1.1 free, else "Needs X GB free to install ...". Network error: "Couldn't reach GitHub. Check your connection and press Retry."
+- TTS: Pocket int8, CPU, 4 threads, `extra` `{max_reference_audio_len: 25.0, seed: 42}`, `speed` = persona pace x user speed. Reference
+  clip per call. Output 24 kHz (read from the model). Two voices only: Ethan (`ethan_brooks`, American male), Priya (`priya_shah`, British
+  female); clips `prompts/voices/<id>.wav` (~21 s). Panel persona -> `Persona.clip` via `voice.gender` ("f..." -> Priya, else Ethan);
+  other rounds use `VoiceSettings.builtin_voice` (default Ethan). Indian accents are out of scope (owner's call, see voice-spike-results.md).
+- STT: Parakeet TDT v2 int8 (`nemo_transducer`, CPU, 4 threads), offline model. Same VAD/segment cuts as VoiceStudio. Finished segment
+  -> `spawn_blocking` decode -> sent through the same channel as a VoiceStudio summary (`final_kind: summary`), so `Answer`,
+  Whisper-first preference and `clean_transcript` are shared. Captions = re-decode of the open segment every 500 ms (`spawn_caption`;
+  skipped while one runs, while a final decode holds the recognizer, or when the audio hasn't grown); text is a `partial`. Whisper
+  sidecar is independent and still preferred when Ready.
+- Settings: `VoiceSettings.engine` (`"builtin"` | `"voicestudio"`; a saved blob without it deserializes as voicestudio, no blob = builtin),
+  `builtin_voice`. Switching in Settings applies at the next round start, no restart.
+- Lifecycle: models load when a round starts (`live::start_voice` -> `Engine::from_settings`), then stay in `AppState.builtin` for later
+  rounds. Not installed -> loader step `voicestudio` ("Voice models") fails, rest "off", round typed, message points to Settings > Voice.
+  Loader steps: `voicestudio` = models installed, `voice` = Pocket loaded + "Okay, let's begin." warm-up (~1 s), `stt` = Parakeet loaded,
+  `whisper` unchanged. App start does no VoiceStudio warm-up/persona prebuild unless engine = voicestudio (still starts the Whisper sidecar).
+- Commands: `voice_status` (adds `engine`, `models`, `voices`; for builtin `up` = both models installed), `voice_model_download(id)`,
+  `voice_model_delete(id)`, `voice_models_reload`, `voice_builtin_preview(voice)`; `voice_persona_preview`, `voice_test_speak`,
+  `voice_test_listen` work for both engines. `open_folder("models")`.
+- Check without the UI: `cargo run --release --example builtin_check -- [--download] [--models <root>] [--wav f.wav]`.
+- TODO: resume (HTTP Range) and cancel for downloads; unload models after ~15 min idle (they stay loaded until app exit or Reload models);
+  GPU providers (DirectML/CoreML/CUDA); preload at app start; checksum-failure retry hint is text only; macOS/Linux untested; the sherpa-onnx
+  tarball README calls Pocket weights non-commercial (licence note in voice-spike-results.md).
 
 ## Map
 
 | File | Contents |
 |---|---|
-| `mod.rs` | `VoiceSettings`, `VoiceEvent`, `Voice` (player + current `RoundVoice`), `begin` (round loop task), `say`, `turn_done`, `answer_sent`, `end`, mute/listen/interrupt, `Batch`, `coalesce_wait`, `listen_once`, `speak_into` |
-| `stt.rs` | `listen`/`listen_with`/`run`: mic → VAD → segments → WS per segment → Whisper → `ListenEnd {Text{text,stt_ms}, Cancelled{heard}, NoSpeech}`; `SttState`; `clean_transcript` (`collapse_repeats`, `fix_vocab` Levenshtein); `domain_vocab`; model choice (`english_model`, `prepare`, `undemote`, `reset_model_choice`) |
+| `mod.rs` | `VoiceSettings {engine, builtin_voice, ...}`, `VoiceEvent`, `Voice` (player + current `RoundVoice`), `begin` (round loop task), `say`, `turn_done`, `answer_sent`, `end`, mute/listen/interrupt, `Batch`, `coalesce_wait`, `listen_once`, `speak_into` |
+| `stt.rs` | (VoiceStudio path; the built-in path is in the table above) `listen`/`listen_with`/`run`: mic → VAD → segments → WS per segment → Whisper → `ListenEnd {Text{text,stt_ms}, Cancelled{heard}, NoSpeech}`; `SttState`; `clean_transcript` (`collapse_repeats`, `fix_vocab` Levenshtein); `domain_vocab`; model choice (`english_model`, `prepare`, `undemote`, `reset_model_choice`) |
 | `audio.rs` | `Mic`, `Player` (queue, `is_idle`, `clear`, level), `Vad`, `LowPass` (windowed sinc), `Downsampler` (→16 kHz), `Resampler`, `on_audio_thread`, `set_devices`, `list_devices` |
 | `vs.rs` | `VoiceStudio` HTTP client: `health`, `ready`, `profiles`, `speak` (`/v1/audio/speech` pcm), `resolve_voice`, `persona_voice` (build/rebuild clone profile), `render_persona_sample` + `score_sample`/`sample_ok`/`sample_penalty`, `speech_body`, `spoke_within`, `bytes_to_i16`, `wav_bytes` |
 | `whisper.rs` | sidecar lifecycle (`start`, `launch`, `status` → `WhisperStatus {Loading, Ready{model}, Off{reason}}`), `transcribe(pcm, prompt)`, `prompt_for(vocab)`, model dirs |
@@ -36,8 +76,8 @@ Whisper sidecar: VoiceStudio's bundled Python + its HF cache weights (large-v3 �
 
 ## Speaking (round loop in `Voice::begin`)
 
-- Resolve one profile for the round: persona → `persona_voice`, else `resolve_voice(settings.voice)`.
-- Warm-up: if VoiceStudio hasn't spoken in 5 min, generate "Okay, let's begin." and discard; then `ready` → loader.
+- Resolve one voice for the round (`Engine::voice`): VoiceStudio: persona → `persona_voice`, else `resolve_voice(settings.voice)`; built-in: clip name.
+- Warm-up: if VoiceStudio hasn't spoken in 5 min (built-in: always), generate "Okay, let's begin." and discard; then `ready` → loader.
   Nothing plays until `go`.
 - `Cmd::Say`: drop if `cut`. Short sentence (< 4 words or < 24 chars) waits for more: ≤ 150 ms if player idle, ≤ 300 ms if
   playing; merge ≤ 220 chars (`MAX_BATCH_CHARS`). Generate next batch while current plays.

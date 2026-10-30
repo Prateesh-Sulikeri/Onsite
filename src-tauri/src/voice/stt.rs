@@ -18,6 +18,8 @@
 //! its prompt. Parakeet gives the live caption; Whisper's text is what gets sent, when it works.
 
 use super::audio::{i16_to_f32, rms, Level, Mic, Vad, VadEvent, MIC_RATE};
+use super::builtin::ParakeetStt;
+use super::engine::Engine;
 use super::vs::VoiceStudio;
 use super::{whisper, VoiceEvent};
 use crate::error::{AppError, Result};
@@ -25,7 +27,8 @@ use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Notify;
@@ -553,34 +556,82 @@ fn seg_pause_ms(seg_samples: usize) -> Option<u32> {
 }
 
 /// Listens until the pause after speech (or `finish`), then returns the transcript.
-pub async fn listen(vs: &VoiceStudio, pause_ms: u32, ctl: &ListenCtl, emit: impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
-    listen_with(vs, pause_ms, ctl, &SttOptions::default(), emit).await
+pub async fn listen(engine: &Engine, pause_ms: u32, ctl: &ListenCtl, emit: impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
+    listen_with(engine, pause_ms, ctl, &SttOptions::default(), emit).await
+}
+
+/// Where a segment's text comes from.
+enum Source {
+    /// VoiceStudio: one WebSocket per segment (URL).
+    Ws(String),
+    /// Built-in: Parakeet decodes the segment in this process.
+    Local(Arc<ParakeetStt>),
+}
+
+/// The built-in engine re-decodes the open segment this often to show a caption.
+const CAPTION_EVERY: Duration = Duration::from_millis(500);
+
+/// Decodes a finished segment off the async runtime and reports it like VoiceStudio's summary message.
+fn spawn_decode(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, tx: UnboundedSender<SegMsg>) {
+    tokio::task::spawn_blocking(move || {
+        let text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| stt.transcribe(&pcm)));
+        let _ = tx.send(match text {
+            Ok(text) => SegMsg::Msg(idx, serde_json::json!({"type": "final", "final_kind": "summary", "text": text})),
+            Err(_) => SegMsg::Closed(idx),
+        });
+    });
+}
+
+/// Decodes the open segment for a live caption. Never more than one at a time (`busy`); skipped
+/// while a finished segment is being decoded.
+fn spawn_caption(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, busy: Arc<AtomicBool>, tx: UnboundedSender<SegMsg>) {
+    busy.store(true, Ordering::SeqCst);
+    tokio::task::spawn_blocking(move || {
+        let text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| stt.caption(&pcm))).ok().flatten();
+        busy.store(false, Ordering::SeqCst);
+        if let Some(text) = text.filter(|t| !t.is_empty()) {
+            let _ = tx.send(SegMsg::Msg(idx, serde_json::json!({"type": "partial", "text": text})));
+        }
+    });
 }
 
 /// [`listen`] with a model and vocabulary of the caller's choice.
 pub async fn listen_with(
-    vs: &VoiceStudio,
+    engine: &Engine,
     pause_ms: u32,
     ctl: &ListenCtl,
     opts: &SttOptions,
     mut emit: impl FnMut(VoiceEvent),
 ) -> Result<ListenEnd> {
-    let model = match &opts.model {
-        Some(m) => Some(m.clone()).filter(|m| !m.is_empty()),
-        None => choose_model(vs).await,
+    let src = match engine {
+        Engine::Studio(vs) => {
+            let model = match &opts.model {
+                Some(m) => Some(m.clone()).filter(|m| !m.is_empty()),
+                None => choose_model(vs).await,
+            };
+            Source::Ws(match &model {
+                Some(m) => format!("{}&model={m}", vs.stt_ws_url(MIC_RATE)),
+                None => vs.stt_ws_url(MIC_RATE),
+            })
+        }
+        Engine::Builtin(b) => Source::Local(b.stt.clone()),
     };
-    let url = match &model {
-        Some(m) => format!("{}&model={m}", vs.stt_ws_url(MIC_RATE)),
-        None => vs.stt_ws_url(MIC_RATE),
-    };
-    let r = run(&url, pause_ms, ctl, opts, &mut emit).await;
+    let r = run(&src, pause_ms, ctl, opts, &mut emit).await;
     if r.is_err() {
         *MODEL.lock().unwrap() = None; // re-probe next time
     }
     r
 }
 
-async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit: &mut impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
+/// Ends segment `i`: the built-in engine starts decoding it, then Whisper gets the audio too.
+async fn end_segment(ans: &mut Answer, i: usize, prompt: &str, src: &Source, tx: &UnboundedSender<SegMsg>) -> Result<()> {
+    if let Source::Local(stt) = src {
+        spawn_decode(stt.clone(), i, ans.segs[i].pcm.clone(), tx.clone());
+    }
+    ans.end(i, prompt).await
+}
+
+async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit: &mut impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
     let (tx, mut rx) = unbounded_channel::<Vec<i16>>();
     let (seg_tx, mut seg_rx) = unbounded_channel::<SegMsg>();
     let mic = Mic::open(tx)?;
@@ -597,6 +648,11 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
     let prompt = whisper::prompt_for(&opts.vocab);
     let mut health = tokio::time::interval(Duration::from_millis(500));
     let mut mic_lost = false;
+    let mut caption = tokio::time::interval(CAPTION_EVERY);
+    caption.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let caption_busy = Arc::new(AtomicBool::new(false));
+    // (segment, samples) of the last caption started: no re-decode of audio that hasn't grown.
+    let mut captioned = (usize::MAX, 0usize);
     emit(VoiceEvent::Listening { active: true });
 
     loop {
@@ -612,6 +668,15 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
                 mic_lost = true;
                 break;
             },
+            _ = caption.tick(), if matches!(src, Source::Local(_)) => {
+                if let (Source::Local(stt), Some(i)) = (src, active) {
+                    let n = ans.segs[i].pcm.len();
+                    if n >= MIC_RATE as usize / 2 && captioned != (i, n) && !caption_busy.load(Ordering::SeqCst) {
+                        captioned = (i, n);
+                        spawn_caption(stt.clone(), i, ans.segs[i].pcm.clone(), caption_busy.clone(), seg_tx.clone());
+                    }
+                }
+            }
             m = seg_rx.recv() => {
                 let Some(m) = m else { continue };
                 if ans.on_msg(m)? {
@@ -648,15 +713,21 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
                     if ans.segs.is_empty() {
                         emit(VoiceEvent::SpeechStart);
                     }
-                    let (w, _) = tokio_tungstenite::connect_async(url)
-                        .await
-                        .map_err(|e| AppError::Voice(format!("VoiceStudio STT connect: {e}")))?;
-                    let (mut sink, stream) = w.split();
                     let head: Vec<i16> = preroll.drain(..).collect();
-                    sink.send(Message::Binary(pcm_bytes(&head).into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
                     let idx = ans.segs.len();
-                    readers.0.push(spawn_reader(idx, stream, seg_tx.clone()));
-                    ans.segs.push(Seg::new(Some(sink), head.clone()));
+                    let sink = match src {
+                        Source::Ws(url) => {
+                            let (w, _) = tokio_tungstenite::connect_async(url.as_str())
+                                .await
+                                .map_err(|e| AppError::Voice(format!("VoiceStudio STT connect: {e}")))?;
+                            let (mut sink, stream) = w.split();
+                            sink.send(Message::Binary(pcm_bytes(&head).into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
+                            readers.0.push(spawn_reader(idx, stream, seg_tx.clone()));
+                            Some(sink)
+                        }
+                        Source::Local(_) => None,
+                    };
+                    ans.segs.push(Seg::new(sink, head.clone()));
                     active = Some(idx);
                     seg_samples = head.len();
                 }
@@ -671,7 +742,7 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
                         // decode runs while the candidate keeps talking.
                         let cut = seg_pause_ms(seg_samples).is_some_and(|p| vad.quiet_ms() >= p);
                         if !ended && vad.is_speaking() && cut {
-                            ans.end(i, &prompt).await?;
+                            end_segment(&mut ans, i, &prompt, src, &seg_tx).await?;
                             active = None;
                             preroll.clear();
                         }
@@ -700,7 +771,7 @@ async fn run(url: &str, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit:
     }
     let ended_at = Instant::now();
     if let Some(i) = active {
-        ans.end(i, &prompt).await?;
+        end_segment(&mut ans, i, &prompt, src, &seg_tx).await?;
     }
     // Whisper first. When every segment has Whisper's text, Parakeet's summaries aren't needed.
     for seg in ans.segs.iter_mut() {

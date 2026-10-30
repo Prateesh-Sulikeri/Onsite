@@ -413,7 +413,7 @@
         <nav class="set-nav" aria-label="Settings sections" id="setNav">
           <button data-sec="appearance"><svg><use href="#i-sparkle"/></svg>Appearance</button>
           <button data-sec="models"><svg><use href="#i-chat"/></svg>AI model</button>
-          <button data-sec="voice"><svg><use href="#i-mic"/></svg>VoiceStudio</button>
+          <button data-sec="voice"><svg><use href="#i-mic"/></svg>Voice</button>
           <button data-sec="updates"><svg><use href="#i-download"/></svg>Updates</button>
           <button data-sec="privacy"><svg><use href="#i-shield"/></svg>Privacy</button>
           <button data-sec="storage"><svg><use href="#i-folder"/></svg>Storage</button>
@@ -488,24 +488,42 @@
             </div>
           </section>
 
-          <section class="set-sec" data-sec="voice" aria-label="VoiceStudio" hidden>
+          <section class="set-sec" data-sec="voice" aria-label="Voice" hidden>
             <div class="panel">
-              <div class="panel-head"><h2>VoiceStudio</h2><span class="pill" id="vsPill">Checking…</span></div>
-              <dl class="kv"><dt>Version</dt><dd id="vsVer">—</dd></dl>
-              <p class="muted" id="vsInfo">VoiceStudio speaks for the interviewer and transcribes your answers, locally.</p>
-              <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
+              <div class="panel-head"><h2>Voice engine</h2><span class="pill" id="vsPill">Checking…</span></div>
+              <div class="form-grid">
+                <label class="field"><span>Engine</span>
+                  <select id="vEngine"><option value="builtin">Built-in — runs inside Onsite</option><option value="voicestudio">VoiceStudio — separate app</option></select></label>
+              </div>
+              <p class="muted" id="vEngineInfo"></p>
+              <div id="biBlock">
+                <h3 class="sub-h">Voice models</h3>
+                <div class="rows" id="biModels"></div>
+                <div class="btn-row"><button class="btn" id="biFolder"><svg><use href="#i-folder"/></svg>Open models folder</button><button class="btn" id="biReload"><svg><use href="#i-refresh"/></svg>Reload models</button></div>
+                <p class="form-msg" id="biMsg" role="status"></p>
+              </div>
+              <div id="vsBlock">
+                <dl class="kv"><dt>Version</dt><dd id="vsVer">—</dd></dl>
+                <p class="muted" id="vsInfo">VoiceStudio speaks for the interviewer and transcribes your answers, locally.</p>
+                <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><h2>Speaking and listening</h2></div>
               <label class="switch"><input type="checkbox" id="vEnabled"><span class="track"></span><span>Spoken interviews</span></label>
               <div class="form-grid">
                 <label class="field"><span>Microphone</span><select id="vMic"></select></label>
                 <label class="field"><span>Speaker</span><select id="vSpk"></select></label>
-                <label class="field"><span>Interviewer voice</span><select id="vVoice"></select></label>
-                <label class="field"><span>Voice quality</span>
+                <label class="field" id="vVoiceField"><span>Interviewer voice</span><select id="vVoice"></select></label>
+                <label class="field" id="vBiVoiceField"><span>Interviewer voice</span><select id="vBiVoice"></select></label>
+                <label class="field" id="vStepsField"><span>Voice quality</span>
                   <select id="vSteps"><option value="8">Fast — about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best — slow</option></select></label>
                 <label class="field"><span>Speaking speed</span>
                   <select id="vSpeed"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select></label>
                 <label class="field"><span>Send my answer after I stop talking for</span>
                   <select id="vPause"><option value="1800">1.8 seconds</option><option value="3000">3 seconds</option><option value="5000">5 seconds</option><option value="0">Never — I tap the mic</option></select></label>
               </div>
+              <div id="biVoices" class="rows"></div>
               <div class="btn-row">
                 <button class="btn" id="vTestSpeak"><svg><use href="#i-speaker"/></svg>Test voice</button>
                 <button class="btn" id="vTestMic"><svg><use href="#i-mic"/></svg>Test mic</button>
@@ -516,7 +534,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><h2>Interviewers</h2><span class="muted small">Same people, same voices, every session</span></div>
-              <p class="hint">Pick a panel on the interview screen to meet these people. A voice is built in VoiceStudio the first time you play it (5–15 s).</p>
+              <p class="hint">Pick a panel on the interview screen to meet these people. With the built-in engine, women use Priya and everyone else uses Ethan. With VoiceStudio, a voice is built the first time you play it (5–15 s).</p>
               <div id="personaGrid"></div>
             </div>
           </section>
@@ -548,7 +566,7 @@
               <h3>What stays on this computer</h3>
               <ul>
                 <li>Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite’s database in your app data folder.</li>
-                <li>Your voice. VoiceStudio and Whisper run locally; audio is never uploaded by Onsite.</li>
+                <li>Your voice. The built-in voice engine, VoiceStudio and Whisper all run on this computer; audio is never uploaded by Onsite.</li>
                 <li>API keys, stored in the same local database. They are not encrypted, so anyone with access to your Windows account can read them. Remove a key in AI model when you stop using it.</li>
                 <li>The log file, which holds errors and timings, not transcripts or keys.</li>
               </ul>
@@ -556,6 +574,7 @@
               <ul>
                 <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI, Gemini or Groq): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
                 <li><b>Research jobs</b> ask that provider to search the web. The company, role and job description you enter are part of the request.</li>
+                <li><b>Voice models</b> (built-in engine) download once from github.com when you press Download in Settings. GitHub sees your IP address. Speech itself never leaves this computer.</li>
                 <li><b>Update checks</b> ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
               </ul>
               <h3>What Onsite never does</h3>

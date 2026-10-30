@@ -102,6 +102,7 @@ pub fn info(state: &AppState) -> Result<StorageInfo> {
         item("Dossier files", &d.join("dossiers"), dir_size(&d.join("dossiers")), true, "A JSON copy of each dossier."),
         item("Background image", backdrop.as_deref().unwrap_or(&d.join("backdrop.jpg")), backdrop.as_deref().map_or(0, file_size), true, "Your custom background, if set."),
         item("Log", &log_path(), file_size(&log_path()), true, "Errors and timings, for debugging. No transcripts."),
+        item("Voice models", &crate::voice::models::root(d), dir_size(&crate::voice::models::root(d)), true, "Built-in voice engine models (Pocket TTS, Parakeet). Delete them in Settings > Voice."),
         item("Temporary files", &tmp.join("onsite-update"), dir_size(&tmp.join("onsite-update")) + dir_size(&tmp.join("onsite-stt")), true, "Downloaded installers and speech scratch files."),
     ];
     if let Some(l) = &local {

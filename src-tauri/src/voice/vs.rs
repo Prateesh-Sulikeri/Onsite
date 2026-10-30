@@ -37,6 +37,8 @@ pub struct PersonaVoice {
     pub name: String,
     pub instruct: String,
     pub states: serde_json::Value,
+    /// Built-in engine: which shipped voice clip this person uses (`builtin::VOICES`).
+    pub clip: String,
 }
 
 pub fn persona_profile_name(person: &str) -> String {

@@ -44,6 +44,7 @@ prompts_dir: PathBuf; data_dir: PathBuf        // dev: repo prompts/; release: b
 research: Mutex<HashMap<i64, research::Running>>               // live jobs: counters + AbortHandle
 rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>  // held across .await
 voice: voice::Voice                            // speaker + current round voice loop
+builtin: voice::builtin::Cache                 // Pocket TTS + Parakeet, loaded on first use
 prep_gen: AtomicU64                            // loader cancellation generation
 ```
 
@@ -71,7 +72,7 @@ Commands (registered in `lib.rs::run`, `generate_handler!`):
 | catalog/settings | `get_catalog get_panels get_settings save_settings set_provider ai_keys set_api_key list_models detect_claude health_check ui_log` |
 | rounds | `create_loop start_round cancel_start send_answer end_round run_code set_round_lang get_round delete_round history` |
 | feedback | `generate_report get_report loop_verdict loop_feedback get_loop_feedback get_goal set_goal` |
-| voice | `voice_status voice_launch voice_test_speak voice_test_listen voice_finish voice_mute voice_cancel_listen voice_interrupt voice_set_devices audio_devices mic_monitor_start mic_monitor_stop voice_persona_preview` |
+| voice | `voice_status voice_launch voice_test_speak voice_test_listen voice_finish voice_mute voice_cancel_listen voice_interrupt voice_set_devices audio_devices mic_monitor_start mic_monitor_stop voice_persona_preview voice_model_download voice_model_delete voice_models_reload voice_builtin_preview` |
 | research | `research_start research_cancel research_retry research_dismiss research_jobs list_dossiers delete_dossier import_dossier export_dossier` |
 | resume | `read_document ats_check ats_screen ats_last` |
 | app | `app_version check_updates install_update voicestudio_version storage_info set_storage_limits clear_log clear_temp vacuum_db open_folder get_backdrop set_backdrop clear_backdrop` |
@@ -114,7 +115,7 @@ sequenceDiagram
 
 `init_logging` → (unix) `path_from_login_shell` → open `onsite.db` → `delete_unanswered_rounds` → `fail_running_jobs` →
 load catalog/panels/bank → `manage(AppState)` → `research::seed` (once) → `storage::enforce` → spawn warm-up (if voice
-enabled: `whisper::start`, `commands::warm_voice`, prebuild every persona voice profile).
+enabled: `whisper::start`; engine = voicestudio also `commands::warm_voice` + prebuild every persona voice profile; built-in loads models at round start).
 
 ## Concurrency
 

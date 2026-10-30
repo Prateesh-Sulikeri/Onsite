@@ -916,3 +916,7 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 .case code, .case pre, .run-err{font:12.5px/1.5 var(--mono); white-space:pre-wrap; margin:0}
 .run-err{color:var(--bad)}
 .run-btns .btn{margin-left:0}
+
+/* built-in voice models (Settings > Voice) */
+.vm .vm-act{display:flex; align-items:center; gap:10px}
+.vm .pbar{margin:8px 0 2px}

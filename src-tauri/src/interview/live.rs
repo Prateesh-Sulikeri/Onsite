@@ -145,8 +145,10 @@ fn prep(app: &AppHandle, step: &str, state: &str, detail: &str) {
 /// Loader steps that need VoiceStudio.
 const VOICE_STEPS: [&str; 5] = ["voice", "stt", "whisper", "speaker", "mic"];
 
-/// Opens the speaker and starts the voice loop, if spoken interviews are on and VoiceStudio is up.
+/// Opens the speaker and starts the voice loop, if spoken interviews are on and the engine is ready
+/// (VoiceStudio up, or the built-in models installed and loaded).
 async fn start_voice(app: &AppHandle, round_id: i64, settings: &crate::voice::VoiceSettings) -> Option<crate::voice::VoiceStart> {
+    use crate::voice::engine::{Engine, VoiceEngine};
     let state = app.state::<AppState>();
     let skip = |why: &str| VOICE_STEPS.iter().for_each(|s| prep(app, s, "off", why));
     if !settings.enabled {
@@ -154,18 +156,44 @@ async fn start_voice(app: &AppHandle, round_id: i64, settings: &crate::voice::Vo
         skip("Typed round");
         return None;
     }
-    prep(app, "voicestudio", "run", "Connecting");
-    let health = match crate::voice::vs::VoiceStudio::new(&settings.base_url).health().await {
-        Ok(h) => h,
-        Err(_) => {
-            prep(app, "voicestudio", "fail", "Not running. This round will be typed.");
-            skip("Needs VoiceStudio");
-            return None;
+    let engine = match settings.engine {
+        VoiceEngine::Voicestudio => {
+            prep(app, "voicestudio", "run", "Connecting");
+            let vs = crate::voice::vs::VoiceStudio::new(&settings.base_url);
+            let health = match vs.health().await {
+                Ok(h) => h,
+                Err(_) => {
+                    prep(app, "voicestudio", "fail", "Not running. This round will be typed.");
+                    skip("Needs VoiceStudio");
+                    return None;
+                }
+            };
+            prep(app, "voicestudio", "ok", health["device"].as_str().unwrap_or("Running"));
+            Engine::Studio(vs)
+        }
+        VoiceEngine::Builtin => {
+            // The step id stays "voicestudio"; the UI labels it "Voice models" for this engine.
+            prep(app, "voicestudio", "run", "Checking the voice models");
+            if !crate::voice::models::all_installed(&state.data_dir) {
+                prep(app, "voicestudio", "fail", "Not downloaded yet. Settings > Voice > Download. This round will be typed.");
+                skip("Needs the voice models");
+                return None;
+            }
+            prep(app, "voicestudio", "ok", "Installed");
+            prep(app, "voice", "run", "Loading Pocket TTS");
+            prep(app, "stt", "run", "Loading Parakeet");
+            match Engine::from_settings(&state, settings).await {
+                Ok(e) => e,
+                Err(e) => {
+                    tracing::warn!("built-in voice models: {e}");
+                    prep(app, "voice", "fail", &e.to_string());
+                    ["stt", "whisper", "speaker", "mic"].iter().for_each(|s| prep(app, s, "off", "Needs the voice models"));
+                    return None;
+                }
+            }
         }
     };
-    let device = health["device"].as_str().unwrap_or("Running");
-    prep(app, "voicestudio", "ok", device);
-    match state.voice.begin(app, round_id, settings.clone()) {
+    match state.voice.begin(app, round_id, settings.clone(), engine) {
         Ok(v) => {
             prep(app, "speaker", "ok", "Open");
             Some(v)
@@ -214,11 +242,12 @@ async fn wait_claude(
 /// Waits for the interviewer's voice, speech recognition and the mic. Returns `go` when the
 /// round can be spoken; None makes it a typed round.
 async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, start: Option<crate::voice::VoiceStart>) -> Option<oneshot::Sender<()>> {
-    use crate::voice::{audio, stt, vs::VoiceStudio, whisper::{self, WhisperStatus}};
+    use crate::voice::{audio, engine::VoiceEngine, stt, vs::VoiceStudio, whisper::{self, WhisperStatus}};
     let crate::voice::VoiceStart { ready, go } = start?;
+    let builtin = settings.engine == VoiceEngine::Builtin;
     let vs = VoiceStudio::new(&settings.base_url);
     let voice = async {
-        prep(app, "voice", "run", "Loading the voice model. Up to a minute when VoiceStudio is cold.");
+        prep(app, "voice", "run", if builtin { "Warming up the voice" } else { "Loading the voice model. Up to a minute when VoiceStudio is cold." });
         let (state, detail) = match tokio::time::timeout(Duration::from_secs(240), ready).await {
             Ok(Ok(Ok(name))) => ("ok", name),
             Ok(Ok(Err(e))) => ("fail", e),
@@ -229,6 +258,9 @@ async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, 
         state == "ok"
     };
     let recognizer = async {
+        if builtin {
+            return prep(app, "stt", "ok", "Parakeet TDT v2, English, on this PC");
+        }
         prep(app, "stt", "run", "Choosing the speech model");
         match stt::prepare(&vs).await {
             Some(m) if m == stt::ENGLISH_MODEL => prep(app, "stt", "ok", "Parakeet TDT v2, English"),
@@ -352,7 +384,7 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     // A panel interviewer always speaks in their own voice, at their own pace.
     if let Some(p) = state.panels.persona(&setup.panel, &plan.key) {
         settings.voice.speed *= p.speed_factor;
-        settings.voice.persona = Some(crate::voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states });
+        settings.voice.persona = Some(crate::voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states, clip: p.clip });
     }
     // A newer start (or cancel_start) bumps this; the loader below then gives up.
     let me = state.prep_gen.fetch_add(1, Ordering::SeqCst) + 1;

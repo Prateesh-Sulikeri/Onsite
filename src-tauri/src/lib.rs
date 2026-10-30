@@ -63,6 +63,8 @@ pub struct AppState {
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
     pub bank: bank::Bank,
     pub voice: voice::Voice,
+    /// Built-in voice engine models, loaded on first use and kept.
+    pub builtin: voice::builtin::Cache,
     /// Bumped by every round start and by `cancel_start`; a start whose number is stale stops loading.
     pub prep_gen: std::sync::atomic::AtomicU64,
 }
@@ -207,6 +209,7 @@ pub fn run() {
                 research: Default::default(),
                 rounds: Default::default(),
                 voice: Default::default(),
+                builtin: Default::default(),
                 prep_gen: Default::default(),
             });
             research::seed(&app.state::<AppState>(), &resource(app, "dossiers"));
@@ -221,12 +224,15 @@ pub fn run() {
                 if settings.enabled {
                     // Loads Whisper onto the GPU (~10 s) while VoiceStudio warms up.
                     voice::whisper::start();
+                }
+                // The built-in engine loads its models when a round starts. Nothing to warm up here.
+                if settings.enabled && settings.engine == voice::engine::VoiceEngine::Voicestudio {
                     commands::warm_voice(&settings).await;
                     // Build panel voices now, so a round never waits on one (~5-15 s each, once).
                     let personas = handle.state::<AppState>().panels.all_personas();
                     let vs = voice::vs::VoiceStudio::new(&settings.base_url);
                     for p in personas {
-                        let pv = voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states };
+                        let pv = voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states, clip: p.clip };
                         if let Err(e) = vs.persona_voice(&pv).await {
                             tracing::warn!(name = %pv.name, "interviewer voice prebuild: {e}");
                         }
@@ -289,6 +295,10 @@ pub fn run() {
             commands::set_round_lang,
             commands::voice_status,
             commands::voice_launch,
+            commands::voice_model_download,
+            commands::voice_model_delete,
+            commands::voice_models_reload,
+            commands::voice_builtin_preview,
             commands::voice_test_speak,
             commands::voice_test_listen,
             commands::voice_finish,

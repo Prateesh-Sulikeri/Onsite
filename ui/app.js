@@ -15,7 +15,7 @@ const LS = {
 
 let CAT = null;          // catalog from prompts/catalog.json
 let SETTINGS = null;     // Rust Settings
-let VS = {up:false, loaded:false, profiles:[]};
+let VS = {up:false, loaded:false, profiles:[], models:[], voices:[]};
 let AIKEYS = {};         // provider id → a key is saved
 let loop = null;         // {id, setup, count}
 let session = null;      // the live round
@@ -118,6 +118,7 @@ const PROVIDERS = {
   groq: {name: "Groq", key: "Groq API key", hint: "Get a free key at console.groq.com, under API Keys. It starts with gsk_. The free tier has low per-minute limits, so long rounds may hit them.",
     models: {"qwen/qwen3.8-27b": "Qwen 3.8 27B — best interviewer", "openai/gpt-oss-120b": "GPT-OSS 120B — has web search", "openai/gpt-oss-20b": "GPT-OSS 20B"}},
 };
+const builtinVoice = () => !!(VS && VS.engine === "builtin");
 const provider = () => (SETTINGS && SETTINGS.provider) || "claude_code";
 function aiReady(){ const p = provider(); return p === "claude_code" ? !!(SETTINGS && SETTINGS.claude) : !!AIKEYS[p]; }
 
@@ -129,8 +130,10 @@ async function refreshStatus(){
   cl.className = "sys " + (aiReady() ? "ok" : "bad");
   $("#sysClaudeName").textContent = name;
   cl.title = aiReady() ? `${name} connected` : `${name} isn’t set up. Open Settings.`;
-  const vs = $("#sysVoice"); vs.className = "sys " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
-  vs.title = !VS.up ? "VoiceStudio is not running" : VS.loaded ? "VoiceStudio ready" : "VoiceStudio is loading its voice model";
+  const vs = $("#sysVoice"), bi = builtinVoice(); vs.className = "sys " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
+  vs.querySelector("span").textContent = bi ? "Voice" : "VoiceStudio";
+  vs.title = bi ? (VS.up ? "Built-in voice ready" : "Voice models aren’t downloaded. Open Settings.")
+    : !VS.up ? "VoiceStudio is not running" : VS.loaded ? "VoiceStudio ready" : "VoiceStudio is loading its voice model";
 }
 setInterval(() => { if (!session) refreshStatus(); }, 15000);
 
@@ -703,7 +706,7 @@ function openPrep(index, who){
   $("#prepIc").textContent = companyLabel(loop.setup)[0];
   $("#prepTitle").textContent = "Getting the room ready";
   $("#prepSub").textContent = `${loopRound(index).name} with ${who.full || who.name}. The call opens when everything below is ready.`;
-  $("#prepList").innerHTML = PREP_STEPS.map(([id, name]) =>
+  $("#prepList").innerHTML = PREP_STEPS.map(([id, name]) => [id, id === "voicestudio" && builtinVoice() ? "Voice models" : name]).map(([id, name]) =>
     `<li class="wait" data-step="${id}"><i class="dot"></i><div><b>${esc(name)}</b><small></small></div><span>Waiting</span></li>`).join("");
   msg("#prepMsg", "");
   prepButtons(`<button class="btn ghost" data-prep="cancel">Cancel</button>`, {cancel: cancelPrep});
@@ -2000,9 +2003,16 @@ async function renderSettings(){
   renderAi();
   $("#vEnabled").checked = s.voice.enabled;
   $("#vSteps").value = String(s.voice.steps); $("#vSpeed").value = String(s.voice.speed); $("#vPause").value = String(s.voice.pause_ms);
+  const bi = builtinVoice();
+  $("#vEngine").value = bi ? "builtin" : "voicestudio";
+  $("#biBlock").hidden = !bi; $("#vsBlock").hidden = bi;
+  $("#vVoiceField").hidden = bi; $("#vStepsField").hidden = bi; $("#vBiVoiceField").hidden = !bi; $("#biVoices").hidden = !bi;
+  $("#vEngineInfo").textContent = bi ? "Speech runs inside Onsite on your CPU. Download the voice models once; after that it works offline, with no other app."
+    : "VoiceStudio is a separate app that speaks and transcribes locally. Start it before a spoken round.";
   const vp = $("#vsPill");
   vp.className = "pill " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
-  vp.textContent = !VS.up ? "Not running" : VS.loaded ? "Ready" : "Loading voice model";
+  vp.textContent = bi ? (VS.up ? "Ready" : "Models needed") : !VS.up ? "Not running" : VS.loaded ? "Ready" : "Loading voice model";
+  if (bi) renderBuiltin();
   $("#vsInfo").textContent = VS.up ? `VoiceStudio is running${VS.device ? " on " + VS.device : ""}. It speaks for the interviewer and transcribes your answers, locally.` : "VoiceStudio isn’t running. Interviews fall back to typing until it is.";
   $("#vsLaunchRow").hidden = VS.up || !VS.installed;
   $("#vsVer").textContent = VS.version ? `${VS.version}${VS.up ? "" : " (installed, not running)"}` : (VS.installed ? "Installed" : "Not installed");
@@ -2029,9 +2039,68 @@ async function renderSettings(){
   vv.value = saved || (profiles[0] || {}).id || "";
   vv.disabled = !profiles.length;
   // Persist the voice actually in use, so it can't change between rounds.
-  if (!saved && profiles.length) saveSettings();
+  if (!saved && profiles.length && !bi) saveSettings();
   setTesting(false);
 }
+/* ---- built-in voice engine ---- */
+const modelState = {};   // id -> latest `voice_model` event while a download runs
+function renderBuiltin(){
+  const dl = m => modelState[m.id] || (m.downloading ? {state: "downloading", done: 0, total: m.bytes} : null);
+  $("#biModels").innerHTML = (VS.models || []).map(m => {
+    const p = dl(m), busy = p && ["downloading", "verifying", "unpacking"].includes(p.state);
+    const pct = busy && p.total ? Math.round(p.done / p.total * 100) : 0;
+    const status = busy ? (p.state === "downloading" ? `Downloading ${pct}%` : p.state === "verifying" ? "Checking the file…" : "Unpacking…") : m.installed ? "Installed" : "Not downloaded";
+    return `<div class="row-item vm" data-model="${esc(m.id)}">
+      <span class="row-ic">${icon(m.id.includes("pocket") ? "speaker" : "mic")}</span>
+      <span class="row-tx"><b>${esc(m.label)}</b><span>${esc(m.purpose)} · ${fmtBytes(m.bytes)} download</span>
+        ${busy ? `<div class="pbar" role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>` : ""}</span>
+      <span class="vm-act"><span class="pill ${m.installed ? "ok" : busy ? "warn" : ""}">${status}</span>
+        ${m.installed ? `<button class="btn ghost sm" data-del-model="${esc(m.id)}">${icon("trash")}Delete</button>`
+          : `<button class="btn sm primary" data-get-model="${esc(m.id)}" ${busy ? "disabled" : ""}>${icon("download")}${p && p.state === "error" ? "Retry" : "Download"}</button>`}</span>
+    </div>`;
+  }).join("");
+  const err = Object.values(modelState).find(p => p.state === "error");
+  if (err) msg("#biMsg", esc(err.message), "err");
+  else if (!(VS.models || []).every(m => m.installed)) msg("#biMsg", "Until both models are downloaded, spoken rounds are typed.");
+  else msg("#biMsg", "");
+  const cur = SETTINGS.voice.builtin_voice || "ethan_brooks";
+  $("#vBiVoice").innerHTML = (VS.voices || []).map(v => `<option value="${esc(v.id)}">${esc(v.name)} — ${esc(v.accent)}</option>`).join("");
+  $("#vBiVoice").value = cur;
+  $("#biVoices").innerHTML = (VS.voices || []).map(v => `<div class="row-item vm">
+      <span class="row-ic">${esc(v.name[0])}</span><span class="row-tx"><b>${esc(v.name)}</b><span>${esc(v.accent)}${v.id === cur ? " · default" : ""}</span></span>
+      <button class="btn sm" data-play-voice="${esc(v.id)}" ${VS.up ? "" : "disabled"}>${icon("speaker")}Play</button></div>`).join("");
+}
+api.listen("voice_model", ev => {
+  modelState[ev.id] = ev;
+  if (ev.state === "done") delete modelState[ev.id];
+  if (!$("#view-settings").hidden && builtinVoice()) {
+    if (ev.state === "done" || ev.state === "error") renderSettings(); else renderBuiltin();
+  }
+});
+$("#biModels").onclick = async e => {
+  const get = e.target.closest("[data-get-model]"), del = e.target.closest("[data-del-model]");
+  if (get){
+    const id = get.dataset.getModel;
+    delete modelState[id]; modelState[id] = {id, state: "downloading", done: 0, total: 1};
+    renderBuiltin();
+    try{ await api.invoke("voice_model_download", {id}); }
+    catch(err){ modelState[id] = {id, state: "error", message: errText(err)}; }
+    await renderSettings();
+  }
+  if (del){
+    try{ await api.invoke("voice_model_delete", {id: del.dataset.delModel}); }catch(err){ toast(errText(err), "err"); }
+    await renderSettings();
+  }
+};
+$("#biVoices").onclick = async e => {
+  const b = e.target.closest("[data-play-voice]"); if (!b || b.disabled) return;
+  const label = b.innerHTML; b.disabled = true; b.classList.add("is-busy");
+  try{ await api.invoke("voice_builtin_preview", {voice: b.dataset.playVoice}); }
+  catch(err){ toast(errText(err), "err"); }
+  finally{ b.disabled = false; b.classList.remove("is-busy"); b.innerHTML = label; }
+};
+$("#biFolder").onclick = () => api.invoke("open_folder", {which: "models"}).catch(e => toast(errText(e), "err"));
+$("#biReload").onclick = async () => { await api.invoke("voice_models_reload"); toast("Models will load again at the next round.", "ok"); };
 /* ---- sections ---- */
 let SET_SEC = LS.get("onsite.setSec", "appearance");
 function setSection(sec){
@@ -2307,7 +2376,7 @@ $("#aiKeyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#a
 $("#aiKeyRemove").onclick = () => saveKey("");
 
 function formVoice(){
-  return {...SETTINGS.voice, enabled: $("#vEnabled").checked, voice: $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
+  return {...SETTINGS.voice, enabled: $("#vEnabled").checked, engine: $("#vEngine").value, builtin_voice: $("#vBiVoice").value || SETTINGS.voice.builtin_voice || "ethan_brooks", voice: $("#vEngine").value === "builtin" ? SETTINGS.voice.voice : $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
 }
 function msg(sel, text, kind = ""){ const el = $(sel); el.className = "form-msg " + kind; el.innerHTML = text; }
 
@@ -2324,8 +2393,12 @@ function saveSettings(){
       clearTimeout(savedT); savedT = setTimeout(() => msg("#saveMsg", "Changes save automatically."), 4000);
     }catch(e){ msg("#saveMsg", `Couldn’t save: ${esc(errText(e))}`, "err"); }
   });
+  return saveChain;
 }
-["#ivModel","#repModel","#vEnabled","#vVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
+["#ivModel","#repModel","#vEnabled","#vVoice","#vBiVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
+/* Switching engine takes effect at the next round start; no restart. */
+$("#vEngine").addEventListener("change", async () => { await saveSettings(); await renderSettings(); });
+$("#vBiVoice").addEventListener("change", () => setTimeout(renderSettings, 300));
 $("#vMic").addEventListener("change", () => setDevices($("#vMic").value, null));
 $("#vSpk").addEventListener("change", () => setDevices(null, $("#vSpk").value));
 
@@ -2385,7 +2458,7 @@ function setTesting(on){
   testing = on;
   Object.values(TESTERS).forEach(t => [t.speak, t.mic].forEach(sel => {
     $(sel).disabled = on || !VS.up;
-    $(sel).title = !VS.up && !on ? "Start VoiceStudio first" : "";
+    $(sel).title = !VS.up && !on ? (builtinVoice() ? "Download the voice models first" : "Start VoiceStudio first") : "";
   }));
 }
 async function testSpeak(t){
@@ -2444,6 +2517,11 @@ async function setDevices(input, output, relisten = false){
 /* Where English-only speech recognition stands. */
 function showLang(sel){
   const e = VS.english, w = VS.whisper || {}, el = $(sel);
+  if (builtinVoice() && VS.up){
+    el.textContent = w.state === "ready" ? "Speech recognition: Whisper large-v3 on your GPU, English only. Parakeet writes the live captions."
+      : "Speech recognition: Parakeet TDT v2 on your CPU, English only. It may mishear some tech terms.";
+    return;
+  }
   if (!VS.up || !e){ el.textContent = ""; return; }
   const engine = w.state === "ready" ? "Speech recognition: Whisper large-v3 on your GPU, English only."
     : w.state === "loading" ? "Loading Whisper onto your GPU… until then, answers use the faster but less accurate Parakeet."
@@ -2499,8 +2577,9 @@ async function renderAudioCheck(){
   $("#acVoiceRow").hidden = on || !VS.up;
   const p = $("#acPill");
   p.className = "pill " + (!SETTINGS.voice.enabled ? "" : !on ? "bad" : VS.loaded ? "ok" : "warn");
-  p.textContent = !SETTINGS.voice.enabled ? "Voice off" : !VS.up ? "VoiceStudio off" : VS.loaded ? "Ready" : "Loading";
+  p.textContent = !SETTINGS.voice.enabled ? "Voice off" : !VS.up ? (builtinVoice() ? "Models needed" : "VoiceStudio off") : VS.loaded ? "Ready" : "Loading";
   const off = !SETTINGS.voice.enabled ? "Spoken interviews are off, so this round will be typed."
+    : !VS.up && builtinVoice() ? "The voice models aren’t downloaded, so this round will be typed. Download them in Settings > Voice to talk."
     : !VS.up ? "VoiceStudio isn’t running, so this round will be typed. Start it in Settings to talk." : "";
   if (!testing && (off || / will be typed/.test($("#acResult").textContent))) msg("#acResult", off);
   $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";

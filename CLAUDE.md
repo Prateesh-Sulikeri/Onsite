@@ -151,6 +151,11 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   driven by `voice/whisper.rs`). Parakeet gives the live caption; Whisper's text is what gets sent.
   If Whisper is missing or fails, Parakeet's text is used.
 
+### Built-in voice engine (2026-10-30)
+Speech can also run inside Onsite (Pocket TTS + Parakeet TDT through the `sherpa-onnx` crate, models downloaded from
+github.com into `<app data>/models`), selected in Settings > Voice; VoiceStudio stays as the other engine. Details,
+files, pins and TODOs: `docs/engineering/VOICE.md`; plan: `docs/plans/voice-without-voicestudio.md`.
+
 ### tts/ — text to speech
 - Trait `Speaker { speak(text), stop(), is_busy() }` with a queue and barge-in support.
 - Primary: VoiceStudio streaming TTS over `ws://127.0.0.1:3900/ws/tts`:
