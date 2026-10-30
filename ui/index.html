@@ -184,6 +184,7 @@
                 <label class="field span-2"><span>Interviewers</span>
                   <span class="sel"><svg><use href="#i-users"/></svg><select id="panel"><option value="">Mixed — a different interviewer each round</option></select></span>
                   <small class="hint" id="panelPeople"></small>
+                  <small class="hint warn" id="panelWarn" hidden></small>
                 </label>
                 <label class="field"><span>Level</span><span class="sel"><svg><use href="#i-chart"/></svg><select id="level"></select></span></label>
                 <label class="field"><span>Coding language</span>
@@ -311,6 +312,8 @@
           <span class="room-ic" id="readyIc">D</span>
           <h2 id="readyRound"></h2>
           <p class="muted" id="readyWho"></p>
+          <p class="ready-mode" id="readyMode"></p>
+          <p class="form-msg err" id="readyPanelWarn" hidden></p>
           <button class="btn primary lg" id="readyJoin">Join interview<svg><use href="#i-arrow"/></svg></button>
           <label class="check"><input type="checkbox" id="readyEvery"><span>Check before every round</span></label>
         </aside>
@@ -534,7 +537,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><h2>Interviewers</h2><span class="muted small">Same people, same voices, every session</span></div>
-              <p class="hint">Pick a panel on the interview screen to meet these people. With the built-in engine, women use Priya and everyone else uses Ethan. With VoiceStudio, a voice is built the first time you play it (5–15 s).</p>
+              <p class="hint">Pick a panel on the interview screen to meet these people. With the built-in engine, women use Charlotte and everyone else uses Ethan. With VoiceStudio, a voice is built the first time you play it (5–15 s).</p>
               <div id="personaGrid"></div>
             </div>
           </section>
@@ -663,12 +666,19 @@
           <div><h1 id="roomTitle"></h1><p id="roomSub"></p></div>
         </div>
         <div class="room-meta">
+          <span class="voice-chip" id="voiceChip"><svg><use href="#i-speaker"/></svg><b></b></span>
           <label class="room-mic" title="Microphone"><svg><use href="#i-mic"/></svg><select id="roomMic" class="sm" aria-label="Microphone"></select></label>
           <span class="timer" id="timer"><i class="rec"></i><b id="timerText">00:00</b> <span id="timerLabel">remaining</span></span>
           <button class="btn ghost sm rail-btn" id="railBtn" aria-pressed="true" aria-controls="rail" title="Hide round context"><svg><use href="#i-panel"/></svg><span>Context</span></button>
           <button class="btn ghost danger sm" id="termBtn" title="Stop now, no feedback, nothing saved">Terminate</button>
         </div>
       </header>
+
+      <div class="voice-warn" id="voiceWarn" role="alert" hidden>
+        <span id="voiceWarnText"></span>
+        <button type="button" class="linkbtn" data-nav="settings" data-sec="voice">Voice settings</button>
+        <button type="button" class="btn ghost sm" id="voiceWarnX" aria-label="Dismiss">Dismiss</button>
+      </div>
 
       <div class="room-body">
         <div class="convo">

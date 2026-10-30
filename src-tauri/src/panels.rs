@@ -51,7 +51,7 @@ pub struct Persona {
     /// VoiceStudio voice-design tags, e.g. "male, middle-aged, low pitch, indian accent".
     pub voice_instruct: String,
     pub voice_states: Value,
-    /// Built-in engine voice clip (women: Priya, everyone else: Ethan).
+    /// Built-in engine voice clip (women: Charlotte, everyone else: Ethan).
     pub clip: String,
     /// Multiplies the user's speaking speed: brisk people talk a little faster.
     pub speed_factor: f32,
@@ -296,7 +296,7 @@ mod tests {
         for p in &all {
             assert!(voices.join(format!("{}.wav", p.clip)).is_file(), "{} -> {}", p.id, p.clip);
         }
-        // Priya is for the women on the panels, Ethan for the men.
+        // Charlotte (id priya_shah) is for the women on the panels, Ethan for the men.
         assert!(all.iter().any(|p| p.clip == "priya_shah") && all.iter().any(|p| p.clip == "ethan_brooks"));
     }
 

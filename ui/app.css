@@ -920,3 +920,18 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 /* built-in voice models (Settings > Voice) */
 .vm .vm-act{display:flex; align-items:center; gap:10px}
 .vm .pbar{margin:8px 0 2px}
+
+/* Which voice runs this round */
+.voice-chip{display:inline-flex; align-items:center; gap:7px; padding:7px 12px; border-radius:999px; border:1px solid var(--accent-line); background:var(--tint); color:var(--ink); font-size:13px; white-space:nowrap}
+.voice-chip svg{width:15px; height:15px; flex:none}
+.voice-chip b{font-weight:600}
+.voice-chip.off{border-color:var(--line-2); background:var(--field); color:var(--ink-2)}
+.voice-chip.warn{border-color:var(--warn); background:var(--warn-soft); color:var(--warn)}
+.voice-warn{display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px; padding:10px 24px; border-bottom:1px solid var(--warn); background:var(--warn-soft); color:var(--ink)}
+.voice-warn span{flex:1 1 280px}
+.voice-warn[hidden]{display:none}
+.hint.warn{color:var(--warn)}
+.ready-mode{font-weight:600; color:var(--ink)}
+.ready-card .form-msg{text-align:left}
+.persona .meta .vs-only{color:var(--warn)}
+@media (max-width: 720px){ .room-meta{flex-wrap:wrap} .voice-warn{padding:10px 16px} }

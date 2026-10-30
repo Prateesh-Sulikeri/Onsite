@@ -17,7 +17,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
 /// The two shipped voices: (clip id = file in `prompts/voices/`, name shown in Settings, accent).
-pub const VOICES: [(&str, &str, &str); 2] = [("ethan_brooks", "Ethan", "American, male"), ("priya_shah", "Priya", "British, female")];
+// The id and clip file stay "priya_shah" so saved settings and paths keep working; the voice is shown and spoken as Charlotte.
+pub const VOICES: [(&str, &str, &str); 2] = [("ethan_brooks", "Ethan", "American, male"), ("priya_shah", "Charlotte", "British, female")];
 pub const DEFAULT_VOICE: &str = "ethan_brooks";
 const THREADS: i32 = 4;
 /// Pocket reads at most this much of the reference clip; the clips are ~21 s. Longer references held the voice steady.
@@ -25,7 +26,7 @@ const MAX_REFERENCE_S: f64 = 25.0;
 /// Fixed seed: the same line sounds the same on every run.
 const SEED: i64 = 42;
 
-/// Panel interviewers share the two voices: women get Priya, everyone else Ethan.
+/// Panel interviewers share the two voices: women get Charlotte, everyone else Ethan.
 pub fn clip_for_gender(gender: &str) -> &'static str {
     if gender.trim().to_lowercase().starts_with("f") {
         "priya_shah"

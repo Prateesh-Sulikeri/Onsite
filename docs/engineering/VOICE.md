@@ -21,8 +21,8 @@ Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`)
   Only github.com and `*.githubusercontent.com` (GitHub's release CDN redirect) over https; redirect policy enforces it.
   Disk check: (download + unpacked) x 1.1 free, else "Needs X GB free to install ...". Network error: "Couldn't reach GitHub. Check your connection and press Retry."
 - TTS: Pocket int8, CPU, 4 threads, `extra` `{max_reference_audio_len: 25.0, seed: 42}`, `speed` = persona pace x user speed. Reference
-  clip per call. Output 24 kHz (read from the model). Two voices only: Ethan (`ethan_brooks`, American male), Priya (`priya_shah`, British
-  female); clips `prompts/voices/<id>.wav` (~21 s). Panel persona -> `Persona.clip` via `voice.gender` ("f..." -> Priya, else Ethan);
+  clip per call. Output 24 kHz (read from the model). Two voices only: Ethan (`ethan_brooks`, American male), Charlotte (id `priya_shah`, shown as Charlotte, British
+  female); clips `prompts/voices/<id>.wav` (~21 s). Panel persona -> `Persona.clip` via `voice.gender` ("f..." -> Charlotte, else Ethan);
   other rounds use `VoiceSettings.builtin_voice` (default Ethan). Indian accents are out of scope (owner's call, see voice-spike-results.md).
 - STT: Parakeet TDT v2 int8 (`nemo_transducer`, CPU, 4 threads), offline model. Same VAD/segment cuts as VoiceStudio. Finished segment
   -> `spawn_blocking` decode -> sent through the same channel as a VoiceStudio summary (`final_kind: summary`), so `Answer`,

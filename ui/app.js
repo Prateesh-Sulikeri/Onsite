@@ -119,6 +119,20 @@ const PROVIDERS = {
     models: {"qwen/qwen3.8-27b": "Qwen 3.8 27B — best interviewer", "openai/gpt-oss-120b": "GPT-OSS 120B — has web search", "openai/gpt-oss-20b": "GPT-OSS 20B"}},
 };
 const builtinVoice = () => !!(VS && VS.engine === "builtin");
+/* Which voice speaks for an interviewer. The built-in engine has two voices, picked by gender. */
+const clipFor = voice => /^\s*f/i.test(voice || "") ? "priya_shah" : "ethan_brooks";
+const bvClip = who => who && who.voice ? clipFor(who.voice) : ((SETTINGS && SETTINGS.voice.builtin_voice) || "ethan_brooks");
+const bvName = id => ((VS.voices || []).find(v => v.id === id) || {}).name || (id === "priya_shah" ? "Charlotte" : "Ethan");
+/* A panel needs VoiceStudio when any of its people has an Indian accent (the built-in voices are American and British). */
+const needsVS = p => !!p && p.interviewers.some(iv => /indian/i.test(iv.voice || ""));
+const wantsVoice = () => !!(SETTINGS && SETTINGS.voice.enabled);
+const panelBlocked = p => wantsVoice() && builtinVoice() && needsVS(p);
+const voiceSettingsLink = `<button type="button" class="linkbtn" data-nav="settings" data-sec="voice">Voice settings</button>`;
+/* "Spoken · Built-in voice (Ethan)" / "Spoken · VoiceStudio" / "Typed" for a round that has not started. */
+function modeLine(who){
+  if (!(wantsVoice() && VS.up)) return "Typed";
+  return builtinVoice() ? `Spoken · Built-in voice (${bvName(bvClip(who))})` : "Spoken · VoiceStudio";
+}
 const provider = () => (SETTINGS && SETTINGS.provider) || "claude_code";
 function aiReady(){ const p = provider(); return p === "claude_code" ? !!(SETTINGS && SETTINGS.claude) : !!AIKEYS[p]; }
 
@@ -134,6 +148,7 @@ async function refreshStatus(){
   vs.querySelector("span").textContent = bi ? "Voice" : "VoiceStudio";
   vs.title = bi ? (VS.up ? "Built-in voice ready" : "Voice models aren’t downloaded. Open Settings.")
     : !VS.up ? "VoiceStudio is not running" : VS.loaded ? "VoiceStudio ready" : "VoiceStudio is loading its voice model";
+  syncPanels();
 }
 setInterval(() => { if (!session) refreshStatus(); }, 15000);
 
@@ -418,7 +433,7 @@ function initSetup(){
   setMode(c.mode === "company" ? "company" : "general", false);
   loadDossiers();
   renderPanelPeople();
-  $("#panel").addEventListener("change", renderPanelPeople);
+  $("#panel").addEventListener("change", () => { panelNote = ""; renderPanelPeople(); });
   $("#roundList").onclick = e => {
     const b = e.target.closest(".chip"); if (!b) return;
     b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true");
@@ -544,11 +559,36 @@ function hookDrop(dropSel, inputSel, textSel, msgSel, label){
 function interviewerFor(i, key, panelId){
   const panel = PANELS.find(p => p.id === panelId);
   const iv = panel && panel.interviewers.find(x => x.id === (panel.round_owner || {})[key]);
-  return iv ? {name: iv.name.split(" ")[0], full: iv.name, role: iv.role} : {name: CAT.NAMES[(i*5+3) % CAT.NAMES.length], full: null, role: null};
+  return iv ? {name: iv.name.split(" ")[0], full: iv.name, role: iv.role, voice: iv.voice} : {name: CAT.NAMES[(i*5+3) % CAT.NAMES.length], full: null, role: null};
 }
 function persona(i){ return interviewerFor(i, selectedRounds()[i], $("#panel").value).name; }
+/* With the built-in voice, a panel of Indian-accent people can't be spoken. Grey it out and say why. */
+let panelNote = "";
+function syncPanels(){
+  const sel = $("#panel"); if (!sel || !PANELS.length) return;
+  [...sel.options].forEach(o => {
+    const p = PANELS.find(x => x.id === o.value); if (!p) return;
+    const bad = panelBlocked(p);
+    o.disabled = bad;
+    o.textContent = `${p.name} — ${bad ? "needs VoiceStudio voices" : "the same five people every time"}`;
+  });
+  const cur = PANELS.find(p => p.id === sel.value);
+  if (cur && panelBlocked(cur)){
+    const alt = PANELS.find(p => !panelBlocked(p));
+    sel.value = alt ? alt.id : "";
+    panelNote = `Switched to ${alt ? alt.name : "Mixed"}. `;
+    saveCfg();
+  }
+  if (!PANELS.some(panelBlocked)) panelNote = "";
+  renderPanelPeople();
+}
 function renderPanelPeople(){
   const panel = PANELS.find(p => p.id === $("#panel").value);
+  const w = $("#panelWarn");
+  if (w){
+    w.hidden = !PANELS.some(panelBlocked);
+    w.textContent = `${panelNote}The built-in voice has American and British voices only. Switch to VoiceStudio in Settings › Voice to use the Indian panel.`;
+  }
   $("#panelPeople").textContent = panel ? panel.interviewers.map(iv => `${iv.name} (${iv.role})`).join(" · ") : "Names rotate. Pick a panel to meet the same people every time.";
 }
 function tileMinutes(b){ return Number($("#roundLen").value) || Number(b.dataset.min); }
@@ -630,6 +670,7 @@ async function openRoom(index){
   const voiceOn = !!(SETTINGS && SETTINGS.voice.enabled && VS.up);
   const s = session = {roundId: null, index, key: k, name: loopRound(index).name, persona: name, minutes: loopRound(index).minutes, startedAt: Date.now(),
              shared: [], closed: false, busy: true, pendingEl: null, live: "", draftEl: null,
+             who, engine: builtinVoice() ? "builtin" : "voicestudio", wanted: wantsVoice(), voiceWhy: "", warnOff: false,
              voiceOn, muted: false, phase: "thinking", heldBase: null, fromHeld: false, transcribeT: null, abandoned: false};
   // The room fills in behind the loader, so the first question streams in while voice loads.
   openPrep(index, who);
@@ -680,6 +721,7 @@ async function openRoom(index){
     if (s.phase !== "thinking" || !s.busy) setPhase("idle");
   }
   if (lostVoice && !await prepTyped(s)) return;
+  applyVoiceUi();
   enterRoom(s);
 }
 function enterRoom(s){
@@ -705,7 +747,7 @@ function openPrep(index, who){
   nav("prep");
   $("#prepIc").textContent = companyLabel(loop.setup)[0];
   $("#prepTitle").textContent = "Getting the room ready";
-  $("#prepSub").textContent = `${loopRound(index).name} with ${who.full || who.name}. The call opens when everything below is ready.`;
+  $("#prepSub").textContent = `${loopRound(index).name} with ${who.full || who.name}. ${modeLine(who)}. The call opens when everything below is ready.`;
   $("#prepList").innerHTML = PREP_STEPS.map(([id, name]) => [id, id === "voicestudio" && builtinVoice() ? "Voice models" : name]).map(([id, name]) =>
     `<li class="wait" data-step="${id}"><i class="dot"></i><div><b>${esc(name)}</b><small></small></div><span>Waiting</span></li>`).join("");
   msg("#prepMsg", "");
@@ -720,6 +762,7 @@ function prepButtons(html, actions){
 }
 api.listen("prep", ev => {
   if ($("#view-prep").hidden) return;
+  if (session && !session.voiceWhy && ["warn", "fail"].includes(ev.state) && ["voicestudio", "voice", "speaker", "mic"].includes(ev.step) && ev.detail) session.voiceWhy = ev.detail.replace(/\.?$/, ".");
   const li = $(`#prepList li[data-step="${ev.step}"]`); if (!li) return;
   if (ev.state === "run" && !li.classList.contains("run")) li.dataset.since = Date.now();
   li.className = ev.state;
@@ -766,7 +809,22 @@ function applyVoiceUi(){
   $("#roomMic").disabled = !s.voiceOn;
   $("#view-room").classList.toggle("typed", !s.voiceOn);
   $("#answer").placeholder = s.voiceOn ? "Type instead…" : "Type your answer…";
+  renderVoiceChip();
 }
+/* The chip and the warning show what this round really does, not just what Settings says. */
+function renderVoiceChip(){
+  const s = session; if (!s) return;
+  const bi = s.engine === "builtin", fell = s.wanted && !s.voiceOn;
+  const chip = $("#voiceChip");
+  chip.className = "voice-chip" + (fell ? " warn" : s.voiceOn ? "" : " off");
+  chip.querySelector("b").textContent = s.voiceOn ? (bi ? `Built-in voice · ${bvName(bvClip(s.who))}` : `VoiceStudio · ${s.persona}`) : "Typed";
+  chip.title = s.voiceOn ? (bi ? "Speech runs inside Onsite. Change the engine in Settings > Voice." : "Speech comes from the VoiceStudio app. Change the engine in Settings > Voice.")
+    : fell ? "Voice didn’t start, so you type your answers." : "Voice is off, so you type your answers.";
+  const w = $("#voiceWarn");
+  w.hidden = !fell || s.warnOff;
+  if (!w.hidden) $("#voiceWarnText").textContent = `Voice isn’t working, so this round is typed. ${s.voiceWhy || (bi ? "The built-in voice isn’t ready." : "VoiceStudio isn’t ready.")}`;
+}
+$("#voiceWarnX").onclick = () => { if (session) session.warnOff = true; renderVoiceChip(); };
 
 /* Stops the round. Resolves once Rust has saved it, so a report call sees the final transcript.
    Resolves false when Rust dropped the round because the candidate never answered. */
@@ -2191,7 +2249,7 @@ function renderPersonas(){
         <div><b>${esc(iv.name)}</b><small>${esc(iv.role)}</small></div></div>
       <div class="traits">${iv.traits.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
       <p title="${esc(iv.backstory)}">${esc(iv.backstory || iv.style)}</p>
-      <div class="meta">Strictness ${dots(iv.strictness)}<br>${iv.rounds.length ? `Runs: ${esc(iv.rounds.map(roundName).join(", "))}<br>` : ""}Voice: ${esc(iv.voice)}</div>
+      <div class="meta">Strictness ${dots(iv.strictness)}<br>${iv.rounds.length ? `Runs: ${esc(iv.rounds.map(roundName).join(", "))}<br>` : ""}Voice: ${esc(iv.voice)}${builtinVoice() ? `<br><b class="${needsVS(p) ? "vs-only" : ""}">${needsVS(p) ? "VoiceStudio only" : `Built-in voice: ${esc(bvName(clipFor(iv.voice)))}`}</b>` : ""}</div>
       <button class="btn sm" data-play="${esc(iv.id)}">${icon("speaker")}Play voice</button>
     </article>`).join("")}</div></div>`).join("");
 }
@@ -2582,6 +2640,11 @@ async function renderAudioCheck(){
     : !VS.up && builtinVoice() ? "The voice models aren’t downloaded, so this round will be typed. Download them in Settings > Voice to talk."
     : !VS.up ? "VoiceStudio isn’t running, so this round will be typed. Start it in Settings to talk." : "";
   if (!testing && (off || / will be typed/.test($("#acResult").textContent))) msg("#acResult", off);
+  const who = interviewerFor(readyIndex, loop.setup.rounds[readyIndex], loop.setup.panel);
+  $("#readyMode").textContent = modeLine(who);
+  const badPanel = panelBlocked(PANELS.find(p => p.id === loop.setup.panel));
+  $("#readyPanelWarn").hidden = !badPanel;
+  if (badPanel) $("#readyPanelWarn").innerHTML = `The built-in voice can’t do Indian accents, so these interviewers will sound American or British. ${voiceSettingsLink}`;
   $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";
   showLang("#acLang");
   setTesting(testing);

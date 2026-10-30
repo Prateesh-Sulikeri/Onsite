@@ -96,6 +96,12 @@ Flow: dashboard → interviews → (resume check) → ready → prep → room �
 5. New data → command in `commands.rs` + register in `lib.rs`; logic in a module.
 6. Retake screenshots if the human PDFs get refreshed (`docs/engineering/tools`: `npm run shots`).
 
+## Voice visibility (which engine runs a round)
+- Helpers near `builtinVoice` in app.js: `clipFor/bvClip/bvName` (built-in voice per interviewer by gender; id `priya_shah` is shown as Charlotte), `needsVS(panel)` (any interviewer `voice` string mentions "indian"; data-driven, no ids), `panelBlocked(panel)` (voice enabled + engine builtin + needsVS), `modeLine(who)` ("Spoken · Built-in voice (Ethan)" / "Spoken · VoiceStudio" / "Typed").
+- Room: `#voiceChip` in `.room-meta` and `#voiceWarn` banner under `.room-head`, both drawn by `renderVoiceChip()` (called from `applyVoiceUi`, so it follows `s.voiceOn` after `start_round`). Banner shows when `s.wanted && !s.voiceOn`; reason = first warn/fail `prep` detail for voicestudio/voice/speaker/mic (`s.voiceWhy`); dismiss sets `s.warnOff`. Not shown when voice is off in Settings.
+- Setup: `syncPanels()` (run at end of `refreshStatus`) disables blocked `<option>`s, relabels them, moves a blocked selection to the first allowed panel or Mixed (`panelNote`), shows `#panelWarn`.
+- Get ready: `#readyMode` line and `#readyPanelWarn` (loop already made with a blocked panel; does not block). Loader subtitle includes `modeLine`. Persona cards in Settings show the built-in voice, or "VoiceStudio only", when engine is builtin.
+
 ## Gaps
 
 Whiteboard theme fixed dark · no full keyboard support in whiteboard · `--muted` contrast over photos depends on dim.
