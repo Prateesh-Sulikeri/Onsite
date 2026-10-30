@@ -58,7 +58,7 @@ function nav(view){
   $("#app").classList.toggle("in-call", view === "room");
   $(".main").scrollTop = 0;
   if (view === "dashboard") renderDashboard();
-  if (view === "interviews") renderAgenda();
+  if (view === "interviews"){ renderAgenda(); voiceNudge(); }
   if (view !== "ready") stopMonitor();
   if (view === "feedback") renderHistory();
   if (view === "settings"){ renderSettings(); setSection(SET_SEC); }
@@ -127,11 +127,36 @@ const bvName = id => ((VS.voices || []).find(v => v.id === id) || {}).name || (i
 const needsVS = p => !!p && p.interviewers.some(iv => /indian/i.test(iv.voice || ""));
 const wantsVoice = () => !!(SETTINGS && SETTINGS.voice.enabled);
 const panelBlocked = p => wantsVoice() && builtinVoice() && needsVS(p);
+/* How the candidate answers: spoken (both talk), listen (the interviewer talks, the candidate types), typed (chat only).
+   Saved in settings, so it holds when Get ready is skipped. */
+const talkMode = () => !SETTINGS || !SETTINGS.voice.enabled ? "typed" : SETTINGS.voice.listen_only ? "listen" : "spoken";
+const TALK_HINT = {
+  spoken: "You both talk. Needs a mic and speaker.",
+  listen: "The interviewer talks, you type. The mic stays off; unmute in the call if you want to talk.",
+  typed: "Chat only. No mic, speaker or voice models needed.",
+};
+function showTalk(){
+  const m = talkMode();
+  $$(".talk-seg button").forEach(b => b.setAttribute("aria-checked", String(b.dataset.talk === m)));
+  $("#vTalkHint").textContent = TALK_HINT[m];
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest(".talk-seg button");
+  if (!b || !SETTINGS || b.dataset.talk === talkMode()) return;
+  const m = b.dataset.talk;
+  SETTINGS = {...SETTINGS, voice: {...SETTINGS.voice, enabled: m !== "typed", listen_only: m === "listen"}};
+  showTalk();
+  // In Settings the form is filled, so the usual save keeps every other field; elsewhere save SETTINGS as is.
+  if (!$("#view-settings").hidden) saveSettings();
+  else try{ await api.invoke("save_settings", {settings: SETTINGS}); }catch(err){ toast(`Couldn’t save: ${errText(err)}`, "err"); }
+  if (!$("#view-ready").hidden) renderAudioCheck();
+});
 const voiceSettingsLink = `<button type="button" class="linkbtn" data-nav="settings" data-sec="voice">Voice settings</button>`;
 /* "Spoken · Built-in voice (Ethan)" / "Spoken · VoiceStudio" / "Typed" for a round that has not started. */
 function modeLine(who){
   if (!(wantsVoice() && VS.up)) return "Typed";
-  return builtinVoice() ? `Spoken · Built-in voice (${bvName(bvClip(who))})` : "Spoken · VoiceStudio";
+  const how = talkMode() === "listen" ? "Interviewer speaks, you type" : "Spoken";
+  return builtinVoice() ? `${how} · Built-in voice (${bvName(bvClip(who))})` : `${how} · VoiceStudio`;
 }
 const provider = () => (SETTINGS && SETTINGS.provider) || "claude_code";
 function aiReady(){ const p = provider(); return p === "claude_code" ? !!(SETTINGS && SETTINGS.claude) : !!AIKEYS[p]; }
@@ -150,7 +175,54 @@ async function refreshStatus(){
     : !VS.up ? "VoiceStudio is not running" : VS.loaded ? "VoiceStudio ready" : "VoiceStudio is loading its voice model";
   syncPanels();
 }
-setInterval(() => { if (!session) refreshStatus(); }, 15000);
+setInterval(async () => {
+  if (session) return;
+  const was = VS && VS.up;
+  await refreshStatus();
+  // Voice came up or went away (VoiceStudio started, a model folder changed): redraw an open Settings page.
+  if (VS.up !== was && !$("#view-settings").hidden && !testing) renderSettings();
+}, 15000);
+
+/* Once per app run: opening Interviews with no way to speak (built-in models missing, VoiceStudio not running)
+   offers the model download. Skipped when spoken rounds are off. */
+let voiceNudged = false;
+async function voiceNudge(){
+  if (voiceNudged || !wantsVoice()) return;
+  await refreshStatus();
+  const models = VS.models || [];
+  if (!models.length || models.every(m => m.installed) || VS.studio_up || session || $("#view-interviews").hidden) return;
+  voiceNudged = true;
+  const size = fmtBytes(models.filter(m => !m.installed).reduce((n, m) => n + m.bytes, 0));
+  const d = $("#voiceDlg");
+  $("#voiceDlgBody").textContent = `Spoken rounds need a voice. Download the built-in voice models once (${size}) and they work offline, with no other app.`
+    + (VS.installed ? " Or start VoiceStudio." : "") + " Or use typed interviews: chat only, no voice needed.";
+  $("#voiceDlgStudio").hidden = !VS.installed;
+  d.returnValue = ""; d.showModal();
+  d.querySelector(".btn.primary").focus();
+  const pick = await new Promise(r => d.addEventListener("close", () => r(d.returnValue), {once: true}));
+  if (pick === "typed"){
+    const s = {...SETTINGS, voice: {...SETTINGS.voice, enabled: false}};
+    try{ await api.invoke("save_settings", {settings: s}); SETTINGS = s; toast("Interviews are typed now. Change it on Get ready or in Settings > Voice.", "ok"); }
+    catch(e){ toast(`Couldn’t save: ${errText(e)}`, "err"); }
+    return;
+  }
+  if (pick !== "models" && pick !== "studio") return;
+  const engine = pick === "models" ? "builtin" : "voicestudio";
+  if (SETTINGS.voice.engine !== engine){
+    const s = {...SETTINGS, voice: {...SETTINGS.voice, engine}};
+    try{ await api.invoke("save_settings", {settings: s}); SETTINGS = s; }catch(e){ toast(`Couldn’t save: ${errText(e)}`, "err"); return; }
+    await refreshStatus();
+  }
+  if (pick === "studio"){
+    try{ await api.invoke("voice_launch"); toast("Starting VoiceStudio. Spoken rounds work once it’s ready."); waitForVoice(); }
+    catch(e){ toast(errText(e), "err"); }
+    return;
+  }
+  SET_SEC = "voice";
+  nav("settings");
+  // Settings render async; bring the download buttons into view once they're there.
+  setTimeout(() => { const b = $("#biModels [data-get-model]"); if (b){ b.scrollIntoView({block: "center", behavior: "smooth"}); b.focus({preventScroll: true}); } }, 400);
+}
 
 /* ---------------- dashboard ---------------- */
 /* Everything here is computed from saved rounds and their feedback JSON. Dimension scores are 1–4. */
@@ -671,7 +743,7 @@ async function openRoom(index){
   const s = session = {roundId: null, index, key: k, name: loopRound(index).name, persona: name, minutes: loopRound(index).minutes, startedAt: Date.now(),
              shared: [], closed: false, busy: true, pendingEl: null, live: "", draftEl: null,
              who, engine: builtinVoice() ? "builtin" : "voicestudio", wanted: wantsVoice(), voiceWhy: "", warnOff: false,
-             voiceOn, muted: false, phase: "thinking", heldBase: null, fromHeld: false, transcribeT: null, abandoned: false};
+             voiceOn, muted: voiceOn && talkMode() === "listen", phase: "thinking", heldBase: null, fromHeld: false, transcribeT: null, abandoned: false};
   // The room fills in behind the loader, so the first question streams in while voice loads.
   openPrep(index, who);
   const comp = companyLabel(loop.setup);
@@ -717,7 +789,7 @@ async function openRoom(index){
   // Rust decides whether voice really started. If it was wanted and didn't, say so before the call.
   const lostVoice = !!(SETTINGS && SETTINGS.voice.enabled) && info.voice === false;
   if (typeof info.voice === "boolean" && info.voice !== s.voiceOn){
-    s.voiceOn = info.voice; applyVoiceUi();
+    s.voiceOn = info.voice; s.muted = s.voiceOn && talkMode() === "listen"; applyVoiceUi();
     if (s.phase !== "thinking" || !s.busy) setPhase("idle");
   }
   if (lostVoice && !await prepTyped(s)) return;
@@ -808,7 +880,7 @@ function applyVoiceUi(){
   mb.title = !s.voiceOn ? "Voice is off for this round" : s.muted ? "Unmute" : "Mute";
   $("#roomMic").disabled = !s.voiceOn;
   $("#view-room").classList.toggle("typed", !s.voiceOn);
-  $("#answer").placeholder = s.voiceOn ? "Type instead…" : "Type your answer…";
+  $("#answer").placeholder = s.voiceOn && !s.muted ? "Type instead…" : "Type your answer…";
   renderVoiceChip();
 }
 /* The chip and the warning show what this round really does, not just what Settings says. */
@@ -858,7 +930,7 @@ function setPhase(p){
     hearing: "Hearing you… tap when done",
     transcribing: "Got it. Writing it down…",
     idle: session.voiceOn ? "Mic off — tap to talk" : "Your turn — type below",
-    muted: "Muted — tap to unmute",
+    muted: "Mic off — type below, or tap to talk",
     closed: "Round closed",
   }[p];
   orb.dataset.state = p === "hearing" || p === "cutting" ? "listening" : p === "transcribing" ? "thinking" : (p === "idle" && !session.voiceOn) || p === "closed" ? "off" : p;
@@ -2059,7 +2131,7 @@ async function renderSettings(){
   if (!s){ msg("#saveMsg", "Couldn’t load settings. Restart Onsite.", "err"); return; }
   $("#clPath").textContent = describe(s.claude);
   renderAi();
-  $("#vEnabled").checked = s.voice.enabled;
+  showTalk();
   $("#vSteps").value = String(s.voice.steps); $("#vSpeed").value = String(s.voice.speed); $("#vPause").value = String(s.voice.pause_ms);
   const bi = builtinVoice();
   $("#vEngine").value = bi ? "builtin" : "voicestudio";
@@ -2158,7 +2230,13 @@ $("#biVoices").onclick = async e => {
   finally{ b.disabled = false; b.classList.remove("is-busy"); b.innerHTML = label; }
 };
 $("#biFolder").onclick = () => api.invoke("open_folder", {which: "models"}).catch(e => toast(errText(e), "err"));
-$("#biReload").onclick = async () => { await api.invoke("voice_models_reload"); toast("Models will load again at the next round.", "ok"); };
+/* Drops the loaded models and looks at the disk again (a model folder may have been moved back by hand). */
+$("#biReload").onclick = async () => {
+  await api.invoke("voice_models_reload");
+  for (const id in modelState) if (modelState[id].state === "error") delete modelState[id];
+  await renderSettings();
+  toast(VS.up ? "Models found. They load again at the next round." : "Some models are still missing. Download them below.", VS.up ? "ok" : "");
+};
 /* ---- sections ---- */
 let SET_SEC = LS.get("onsite.setSec", "appearance");
 function setSection(sec){
@@ -2439,7 +2517,7 @@ $("#aiKeyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#a
 $("#aiKeyRemove").onclick = () => saveKey("");
 
 function formVoice(){
-  return {...SETTINGS.voice, enabled: $("#vEnabled").checked, engine: $("#vEngine").value, builtin_voice: $("#vBiVoice").value || SETTINGS.voice.builtin_voice || "ethan_brooks", voice: $("#vEngine").value === "builtin" ? SETTINGS.voice.voice : $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
+  return {...SETTINGS.voice, engine: $("#vEngine").value, builtin_voice: $("#vBiVoice").value || SETTINGS.voice.builtin_voice || "ethan_brooks", voice: $("#vEngine").value === "builtin" ? SETTINGS.voice.voice : $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
 }
 function msg(sel, text, kind = ""){ const el = $(sel); el.className = "form-msg " + kind; el.innerHTML = text; }
 
@@ -2458,7 +2536,7 @@ function saveSettings(){
   });
   return saveChain;
 }
-["#ivModel","#repModel","#vEnabled","#vVoice","#vBiVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
+["#ivModel","#repModel","#vVoice","#vBiVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
 /* Switching engine takes effect at the next round start; no restart. */
 $("#vEngine").addEventListener("change", async () => { await saveSettings(); await renderSettings(); });
 $("#vBiVoice").addEventListener("change", () => setTimeout(renderSettings, 300));
@@ -2633,21 +2711,21 @@ async function renderAudioCheck(){
   if (!SETTINGS || $("#view-ready").hidden) return;
   fillDevice($("#acMic"), DEVICES.inputs, SETTINGS.voice.input_device);
   fillDevice($("#acSpk"), DEVICES.outputs, SETTINGS.voice.output_device);
-  const on = SETTINGS.voice.enabled && VS.up;
-  $("#acBody").hidden = $("#acLang").hidden = !on;
-  $("#acTitle").textContent = on ? "Check your mic and speaker" : "Typed round";
-  $("#readySub").textContent = on ? "Pick your mic and speaker, then check they work. Takes ten seconds." : "You type your answers. Join when you’re ready.";
-  $("#acVoiceRow").hidden = on || !VS.up;
-  const p = $("#acPill");
-  p.className = "pill " + (!SETTINGS.voice.enabled ? "" : !on ? "bad" : VS.loaded ? "ok" : "warn");
-  p.textContent = !SETTINGS.voice.enabled ? "Voice off" : !VS.up ? (builtinVoice() ? "Models needed" : "VoiceStudio off") : VS.loaded ? "Ready" : "Loading";
-  const off = !SETTINGS.voice.enabled ? "Spoken interviews are off, so this round will be typed."
+  const mode = talkMode(), audio = mode !== "typed" && VS.up, on = audio && mode === "spoken";
+  showTalk();
+  $("#acBody").hidden = !audio; $("#acLang").hidden = !on;
+  // Listen & type: only the speaker matters.
+  [$("#acMic").closest(".field"), $(".ready-meter"), $("#acListen")].forEach(el => el.hidden = !on);
+  $("#acTitle").textContent = on ? "Check your mic and speaker" : audio ? "Check your speaker" : "Typed round";
+  $("#readySub").textContent = on ? "Pick your mic and speaker, then check they work. Takes ten seconds."
+    : audio ? "The interviewer talks, you type. Check you can hear them." : "You type your answers. Join when you’re ready.";
+  const off = mode === "typed" ? "Typed round: chat only, no mic or speaker needed."
     : !VS.up && builtinVoice() ? "The voice models aren’t downloaded, so this round will be typed. Download them in Settings > Voice to talk."
     : !VS.up ? "VoiceStudio isn’t running, so this round will be typed. Start it in Settings to talk." : "";
-  if (!testing && (off || / will be typed/.test($("#acResult").textContent))) msg("#acResult", off);
+  if (!testing && (off || / will be typed|^Typed round:/.test($("#acResult").textContent))) msg("#acResult", off);
   const who = interviewerFor(readyIndex, loop.setup.rounds[readyIndex], loop.setup.panel);
   $("#readyMode").textContent = modeLine(who);
-  const badPanel = panelBlocked(PANELS.find(p => p.id === loop.setup.panel));
+  const badPanel = audio && panelBlocked(PANELS.find(p => p.id === loop.setup.panel));
   $("#readyPanelWarn").hidden = !badPanel;
   if (badPanel) $("#readyPanelWarn").innerHTML = `The built-in voice can’t do Indian accents, so these interviewers will sound American or British. ${voiceSettingsLink}`;
   $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";
@@ -2655,13 +2733,6 @@ async function renderAudioCheck(){
   setTesting(testing);
   if (on) startMonitor(); else stopMonitor();
 }
-$("#acVoiceOn").onclick = async () => {
-  const b = $("#acVoiceOn"); b.disabled = true;
-  try{ SETTINGS.voice.enabled = true; await api.invoke("save_settings", {settings: SETTINGS}); }
-  catch(e){ SETTINGS.voice.enabled = false; toast(errText(e), "err"); }
-  b.disabled = false;
-  renderAudioCheck();
-};
 /* Live mic meter: moves as soon as the screen opens, no speech recognition involved. */
 let monitorUnlisten = null, monitorOn = false;
 async function startMonitor(){

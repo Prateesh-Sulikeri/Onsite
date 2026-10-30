@@ -35,9 +35,16 @@ Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`)
   rounds. Not installed -> loader step `voicestudio` ("Voice models") fails, rest "off", round typed, message points to Settings > Voice.
   Loader steps: `voicestudio` = models installed, `voice` = Pocket loaded + "Okay, let's begin." warm-up (~1 s), `stt` = Parakeet loaded,
   `whisper` unchanged. App start does no VoiceStudio warm-up/persona prebuild unless engine = voicestudio (still starts the Whisper sidecar).
-- Commands: `voice_status` (adds `engine`, `models`, `voices`; for builtin `up` = both models installed), `voice_model_download(id)`,
+- Commands: `voice_status` (adds `engine`, `models`, `voices`, `studio_up`; for builtin `up` = both models installed; `studio_up` =
+  VoiceStudio answers `/health`, probed under builtin only while a model is missing), `voice_model_download(id)`,
   `voice_model_delete(id)`, `voice_models_reload`, `voice_builtin_preview(voice)`; `voice_persona_preview`, `voice_test_speak`,
   `voice_test_listen` work for both engines. `open_folder("models")`.
+- First-run nudge (`voiceNudge`, app.js): opening Interviews with voice on, a model missing and `!studio_up` shows `#voiceDlg` once per
+  app run. Download -> engine `builtin`, Settings > Voice, focus first Download button. Start VoiceStudio (only if installed) -> engine
+  `voicestudio` + `voice_launch`. Use typed interviews -> `enabled=false`.
+- Answer mode (UI `talkMode()`: spoken | listen | typed) = `enabled` + `listen_only`; picker `.talk-seg` on Get ready and Settings > Voice.
+  E2E-checked 2026-10-30 over WebView2 CDP (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=…`): typed and listen rounds
+  ran 3 turns, mic never opened.
 - Check without the UI: `cargo run --release --example builtin_check -- [--download] [--models <root>] [--wav f.wav]`.
 - TODO: resume (HTTP Range) and cancel for downloads; unload models after ~15 min idle (they stay loaded until app exit or Reload models);
   GPU providers (DirectML/CoreML/CUDA); preload at app start; checksum-failure retry hint is text only; macOS/Linux untested; the sherpa-onnx
@@ -55,7 +62,8 @@ Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`)
 
 ## Settings (`VoiceSettings`, inside settings `app`)
 
-`enabled=true, base_url=http://127.0.0.1:3900, voice=""(first profile; never "default"), steps=8 (8/16/32), speed=1.0,
+`enabled=true (false = typed, chat only), listen_only=false (true = interviewer speaks, candidate types: round starts muted, loader marks
+whisper/mic "off" and doesn't wait for them; unmute still opens the mic), base_url=http://127.0.0.1:3900, voice=""(first profile; never "default"), steps=8 (8/16/32), speed=1.0,
 pause_ms=3000 (1800/3000/5000/0=tap), input_device="", output_device=""`; `persona` set per round, never saved.
 
 ## Listening (`stt::run`)

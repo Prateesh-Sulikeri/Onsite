@@ -268,7 +268,12 @@ async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, 
             None => prep(app, "stt", "warn", "VoiceStudio's default model. Captions may be rough."),
         }
     };
+    // Listen & type: the mic stays shut, so don't wait for Whisper or block on a broken mic.
+    let typing = settings.listen_only;
     let accuracy = async {
+        if typing {
+            return prep(app, "whisper", "off", "You type your answers");
+        }
         prep(app, "whisper", "run", "Loading Whisper large-v3 on the GPU");
         let until = Instant::now() + Duration::from_secs(60);
         loop {
@@ -281,6 +286,10 @@ async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, 
         }
     };
     let mic = async {
+        if typing {
+            prep(app, "mic", "off", "You type your answers");
+            return true;
+        }
         prep(app, "mic", "run", "Opening the microphone");
         let (tx, mut rx) = mpsc::unbounded_channel::<Vec<i16>>();
         let heard = match audio::Mic::open(tx) {

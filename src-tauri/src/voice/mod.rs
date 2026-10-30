@@ -25,7 +25,12 @@ use engine::{Engine, Tts, VoiceEngine};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct VoiceSettings {
+    /// Off = typed rounds (chat only).
     pub enabled: bool,
+    /// The interviewer speaks but the candidate types: the round starts muted and the mic isn't checked.
+    /// Unmuting still opens the mic.
+    #[serde(default)]
+    pub listen_only: bool,
     /// Built-in (default for new installs) or VoiceStudio (kept by installs that had no choice yet).
     #[serde(default = "engine::legacy_engine")]
     pub engine: VoiceEngine,
@@ -52,6 +57,7 @@ impl Default for VoiceSettings {
     fn default() -> Self {
         Self {
             enabled: true,
+            listen_only: false,
             engine: VoiceEngine::Builtin,
             builtin_voice: builtin::DEFAULT_VOICE.into(),
             base_url: "http://127.0.0.1:3900".into(),
@@ -205,7 +211,7 @@ impl Voice {
         let (ready_tx, ready) = oneshot::channel();
         let (go, go_rx) = oneshot::channel::<()>();
         let ctl: Arc<Mutex<Arc<ListenCtl>>> = Default::default();
-        let muted: Arc<AtomicBool> = Default::default();
+        let muted = Arc::new(AtomicBool::new(settings.listen_only));
         let hold: Arc<AtomicBool> = Default::default();
         // When the candidate stopped talking; taken at the first interviewer audio.
         let answered_at: Arc<Mutex<Option<Instant>>> = Default::default();

@@ -285,6 +285,9 @@ pub struct VoiceStatus {
     pub engine: VoiceEngine,
     /// Built-in engine models and whether each is installed.
     pub models: Vec<crate::voice::models::ModelInfo>,
+    /// VoiceStudio answers `/health`, whichever engine is picked. With the built-in engine it is only
+    /// checked while a model is missing (the UI offers it as the other way to speak).
+    pub studio_up: bool,
     /// The shipped interviewer voices.
     pub voices: Vec<BuiltinVoice>,
 }
@@ -308,6 +311,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
     let voices = crate::voice::builtin::VOICES.iter().map(|v| BuiltinVoice { id: v.0, name: v.1, accent: v.2 }).collect();
     if settings.engine == VoiceEngine::Builtin {
         let ready = models.iter().all(|m| m.installed);
+        let studio_up = !ready && VoiceStudio::new(&settings.base_url).health().await.is_ok();
         return Ok(VoiceStatus {
             up: ready,
             loaded: ready,
@@ -320,13 +324,14 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
             engine: settings.engine,
             models,
             voices,
+            studio_up,
         });
     }
     let vs = VoiceStudio::new(&settings.base_url);
     let installed = voicestudio_exe().is_some();
     let engine = settings.engine;
     let Ok(health) = vs.health().await else {
-        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None, whisper: crate::voice::whisper::status(), version: crate::updates::installed_voicestudio(), engine, models, voices });
+        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None, whisper: crate::voice::whisper::status(), version: crate::updates::installed_voicestudio(), engine, models, voices, studio_up: false });
     };
     Ok(VoiceStatus {
         up: true,
@@ -340,6 +345,7 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
         engine,
         models,
         voices,
+        studio_up: true,
     })
 }
 

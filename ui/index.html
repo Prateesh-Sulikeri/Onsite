@@ -304,7 +304,6 @@
           </div>
           </div>
           <p class="form-msg" id="acResult" role="status"></p>
-          <div class="btn-row" id="acVoiceRow" hidden><button class="btn" id="acVoiceOn"><svg><use href="#i-mic"/></svg>Turn on spoken interviews</button></div>
           <p class="muted ac-lang" id="acLang"></p>
         </div>
         <div class="panel" id="readyResume" hidden></div>
@@ -312,6 +311,9 @@
           <span class="room-ic" id="readyIc">D</span>
           <h2 id="readyRound"></h2>
           <p class="muted" id="readyWho"></p>
+          <div class="seg talk-seg" role="radiogroup" aria-label="How you answer" id="readyTalk">
+                  <button type="button" role="radio" data-talk="spoken" title="You both talk">Spoken</button><button type="button" role="radio" data-talk="listen" title="The interviewer talks, you type">Listen &amp; type</button><button type="button" role="radio" data-talk="typed" title="Chat only, no audio">Typed</button>
+                </div>
           <p class="ready-mode" id="readyMode"></p>
           <p class="form-msg err" id="readyPanelWarn" hidden></p>
           <button class="btn primary lg" id="readyJoin">Join interview<svg><use href="#i-arrow"/></svg></button>
@@ -513,7 +515,11 @@
             </div>
             <div class="panel">
               <div class="panel-head"><h2>Speaking and listening</h2></div>
-              <label class="switch"><input type="checkbox" id="vEnabled"><span class="track"></span><span>Spoken interviews</span></label>
+              <div class="field"><span>How you answer</span>
+                <div class="seg talk-seg" role="radiogroup" aria-label="How you answer" id="vTalk">
+                  <button type="button" role="radio" data-talk="spoken" title="You both talk">Spoken</button><button type="button" role="radio" data-talk="listen" title="The interviewer talks, you type">Listen &amp; type</button><button type="button" role="radio" data-talk="typed" title="Chat only, no audio">Typed</button>
+                </div>
+                <small class="hint" id="vTalkHint"></small></div>
               <div class="form-grid">
                 <label class="field"><span>Microphone</span><select id="vMic"></select></label>
                 <label class="field"><span>Speaker</span><select id="vSpk"></select></label>
@@ -656,6 +662,18 @@
         <label class="field"><span>Type <b>terminate</b> to confirm</span>
           <input type="text" id="termInput" autocomplete="off" spellcheck="false"></label>
         <div class="btn-row">
+    <dialog class="dlg" id="voiceDlg" aria-labelledby="voiceDlgTitle">
+      <form method="dialog">
+        <h2 id="voiceDlgTitle">Set up a voice first</h2>
+        <p class="muted" id="voiceDlgBody">Spoken rounds need a voice. Download the built-in voice models once (about 580 MB) and they work offline. Or use typed interviews: chat only, no voice needed.</p>
+        <div class="btn-row">
+          <button class="btn primary" value="models"><svg><use href="#i-download"/></svg>Download voice models</button>
+          <button class="btn" value="studio" id="voiceDlgStudio">Start VoiceStudio</button>
+          <button class="btn ghost" value="typed">Use typed interviews</button>
+        </div>
+      </form>
+    </dialog>
+
           <button class="btn primary danger-fill" id="termGo" value="go" disabled>Terminate</button>
           <button class="btn ghost" value="cancel" formnovalidate>Keep going</button>
         </div>
