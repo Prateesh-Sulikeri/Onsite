@@ -1,6 +1,6 @@
 # RELEASE — CI, installers, updater, signing
 
-Code: `.github/workflows/release.yml`, `src/updates.rs`, `src-tauri/tauri.conf.json`, `src-tauri/build.rs`, `src-tauri/Info.plist`.
+Code: `.github/workflows/release.yml` (tags), `build.yml` (shared build matrix + publish), `experimental.yml` (push to m1), `.github/scripts/release-notes.sh`, `src/updates.rs`, `src-tauri/tauri.conf.json`, `src-tauri/build.rs`, `src-tauri/Info.plist`.
 
 ## Channels
 
@@ -17,7 +17,7 @@ Code: `.github/workflows/release.yml`, `src/updates.rs`, `src-tauri/tauri.conf.j
 - Cut stable: merge to `main`, set version `X.Y.Z` in both files → commit on main → push → `git tag vX.Y.Z && git push origin vX.Y.Z`.
 - Dry run: Actions → Release → Run workflow, any branch (builds only; no branch/tag checks, no release).
 
-## Release workflow (tag `v*`)
+## Release workflow (tag `v*`; steps 2–3 are build.yml)
 
 1. `draft` (ubuntu): branch rule above; tag must equal version in `tauri.conf.json` **and** `Cargo.toml` → create draft release + notes
    (download table per OS, security-warnings table).
@@ -27,6 +27,20 @@ Code: `.github/workflows/release.yml`, `src/updates.rs`, `src-tauri/tauri.conf.j
 3. `publish` (needs all builds): add `SHA256SUMS.txt`, un-draft.
 `workflow_dispatch` = dry run (artifacts uploaded, nothing published). Bundled resources: `prompts/ dossiers/ sidecar/`.
 
+
+## Automatic experimental releases (`experimental.yml`)
+
+- Trigger: push to `m1` (paths-ignore `docs/**`, `**/*.md`, `graphify-out/**`) or manual run; skipped if the head commit message has `[skip exp]`.
+  `concurrency: experimental`, cancel-in-progress.
+- Version: core of `src-tauri/Cargo.toml` (pre-release part stripped); while tag/release `v<core>` exists, patch+1; then `-exp.<github.run_number>`
+  (monotonic, so `version_key` orders them). Written to tauri.conf.json + Cargo.toml in CI only (build.yml `version` input, perl); never committed. Cargo.lock is
+  rewritten by the build (no `--locked`).
+- Flow: `prepare` (delete stale `-exp.` drafts, make draft pre-release `v<version>`, `--target $GITHUB_SHA`, `--latest=false`, notes = sha + commit subjects since the
+  previous exp release (else last 10) + shared tables) → `build` (build.yml: 3 builds, SHA256SUMS, un-draft; the tag appears on publish) → `prune`
+  (keep newest 3 published `vX.Y.Z-exp.N` pre-releases, `gh release delete --cleanup-tag`; stable never matches). `cleanup` deletes this run's draft on failure/cancel.
+- Tags/releases made with `GITHUB_TOKEN` do not trigger workflows, so release.yml does not fire on them (it would fail the version check anyway).
+- The manual path still works: commit `X.Y.Z-exp.N` in both files on m1, push the `vX.Y.Z-exp.N` tag → release.yml. Prefer the automatic flow; do not mix
+  both for the same core version (the auto run number could be lower than a hand-picked N and sort below it).
 
 ## Updater (`updates.rs`) — pull only (user presses Check)
 

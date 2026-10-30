@@ -5,6 +5,8 @@
 # tag must match the version in tauri.conf.json and Cargo.toml. Stable tags (vX.Y.Z) must be on
 # main; experimental tags (vX.Y.Z-exp.N) must be on m1 and become pre-releases.
 #
+# The builds are in build.yml. Pushes to m1 are released by experimental.yml (no tag needed).
+#
 # Run it by hand (Actions → Release → Run workflow) for a dry run: same builds, files kept as
 # workflow artifacts, no release.
 name: Release
@@ -56,117 +58,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
-          # File names are the ones Tauri gives each bundle; the links work once the builds upload.
-          # {V} and {DL} are filled in below (a quoted heredoc keeps the backticks literal).
-          cat > notes.md <<'EOF'
-          ## Download
-
-          | Your system | Download |
-          | --- | --- |
-          | **Windows 10/11** (x64) | [Installer (.exe)]({DL}/Onsite_{V}_x64-setup.exe) |
-          | **macOS 11+** (Apple Silicon and Intel) | [Disk image (.dmg)]({DL}/Onsite_{V}_universal.dmg) |
-          | **Linux** (x86-64, any distro) | [AppImage]({DL}/Onsite_{V}_amd64.AppImage) |
-          | **Linux** (Debian, Ubuntu) | [.deb package]({DL}/Onsite_{V}_amd64.deb) |
-
-          Already installed? Settings → Updates → Check for updates.
-
-          ## First run
-
-          - Install [VoiceStudio](https://github.com/debpalash/VoiceStudio/releases) for spoken rounds. Without it, rounds are typed.
-          - Pick an AI in Settings: Claude Code (Pro/Max), or paste a Claude, OpenAI, Gemini or Groq API key (Gemini and Groq have free tiers).
-
-          ## Security warnings
-
-          Onsite is free and not code-signed yet, so your system warns about it the first time.
-
-          | System | What you see | What to do |
-          | --- | --- | --- |
-          | Windows | "Windows protected your PC" (SmartScreen) | Click **More info**, then **Run anyway** |
-          | macOS | "Onsite is damaged" or "can't be opened" | Run `xattr -dr com.apple.quarantine /Applications/Onsite.app` once, then open it |
-          | Linux | Nothing; AppImage won't start | `chmod +x Onsite_*.AppImage` |
-
-          Check a download against `SHA256SUMS.txt`: `sha256sum -c SHA256SUMS.txt --ignore-missing` (Windows: `Get-FileHash <file>`).
-
-          [Code signing policy](https://github.com/{REPO}/blob/main/CODE_SIGNING.md) · [Privacy policy](https://github.com/{REPO}/blob/main/PRIVACY.md)
-          EOF
-          sed -i -e "s|{V}|${GITHUB_REF_NAME#v}|g" -e "s|{REPO}|$GITHUB_REPOSITORY|g" \
-            -e "s|{DL}|https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME|g" notes.md
+          bash .github/scripts/release-notes.sh "$GITHUB_REF_NAME" > notes.md
           gh release create "$GITHUB_REF_NAME" --draft $pre --title "Onsite $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
           echo "id=$(gh release view "$GITHUB_REF_NAME" --json databaseId --jq .databaseId)" >> "$GITHUB_OUTPUT"
 
+  # The build matrix and the publish step live in build.yml (shared with experimental.yml).
   build:
     needs: draft
     # Runs after the draft on a tag, and on its own for a manual dry run.
     if: always() && (needs.draft.result == 'success' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            args: --bundles nsis
-          - os: macos-latest
-            args: --target universal-apple-darwin --bundles dmg
-          - os: ubuntu-22.04
-            args: --bundles appimage,deb
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - name: Linux build packages
-        if: matrix.os == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libssl-dev
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          key: ${{ matrix.os }}
-      # The npm package ships a prebuilt CLI: seconds, where `cargo install tauri-cli` compiled for ~5 min.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install the Tauri CLI
-        run: npm install -g @tauri-apps/cli@^2
-      - name: Test
-        working-directory: src-tauri
-        run: cargo test
-      - uses: tauri-apps/tauri-action@v0
-        id: tauri
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tauriScript: tauri
-          args: ${{ matrix.args }}
-          releaseId: ${{ needs.draft.outputs.id }}
-      - name: Keep the files (dry run)
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
-        with:
-          name: onsite-${{ matrix.os }}
-          path: |
-            src-tauri/target/**/bundle/nsis/*-setup.exe
-            src-tauri/target/**/bundle/dmg/*.dmg
-            src-tauri/target/**/bundle/appimage/*.AppImage
-            src-tauri/target/**/bundle/deb/*.deb
-
-  publish:
-    needs: [draft, build]
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Publish the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
-          mkdir files && cd files
-          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" -p 'Onsite_*'
-          sha256sum Onsite_* > SHA256SUMS.txt && cat SHA256SUMS.txt
-          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" SHA256SUMS.txt --clobber
-          gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false
+    uses: ./.github/workflows/build.yml
+    with:
+      release_id: ${{ needs.draft.outputs.id }}
+      tag: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' }}

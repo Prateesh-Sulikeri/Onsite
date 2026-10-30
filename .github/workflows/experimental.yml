@@ -1,0 +1,140 @@
+# Every push to m1 builds Windows, macOS and Linux and publishes a GitHub pre-release, with no tag or
+# version bump by hand. Stable releases are unchanged: vX.Y.Z tags on main, through release.yml.
+#
+# Version: core from src-tauri/Cargo.toml; if v<core> is already released, the next free patch;
+# then "-exp.<run number>". Written into tauri.conf.json and Cargo.toml in CI only (never committed).
+# Tag v<version> is created by publishing the release (a draft has no tag yet). Releases and tags made
+# with GITHUB_TOKEN do not start other workflows, so release.yml does not fire on the new -exp tag.
+# Flow: prepare (version, delete stale drafts, draft release) -> build.yml (3 builds, publish) -> prune.
+# Put [skip exp] in the head commit message to skip a push.
+name: Experimental release
+
+on:
+  push:
+    branches: [m1]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "graphify-out/**"
+      - ".graphifyignore"
+      - "LICENSE*"
+  workflow_dispatch:
+
+concurrency:
+  group: experimental
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    if: ${{ !contains(github.event.head_commit.message, '[skip exp]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.draft.outputs.id }}
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Only from m1
+        run: |
+          [ "$GITHUB_REF" = "refs/heads/m1" ] || { echo "::error::Experimental builds come from m1, not $GITHUB_REF"; exit 1; }
+      - name: Delete stale experimental drafts
+        run: |
+          # A cancelled or failed run can leave a draft behind. Only one run is active at a time (concurrency).
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '.[] | select(.draft and (.tag_name | test("-exp\\."))) | .id' |
+          while read -r id; do
+            echo "deleting stale draft $id"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+          done
+      - name: Work out the version
+        id: version
+        run: |
+          core=$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/version *= *"([^"]+)".*/\1/' | sed -E 's/-.*//')
+          IFS=. read -r maj min pat <<< "$core"
+          # v<core> already released (or tagged): move to the next free patch.
+          while gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$maj.$min.$pat" >/dev/null 2>&1 \
+             || gh release view "v$maj.$min.$pat" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; do
+            pat=$((pat + 1))
+          done
+          version="$maj.$min.$pat-exp.${{ github.run_number }}"
+          echo "version $version (Cargo.toml core $core)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+      - name: Create the draft release
+        id: draft
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          short=$(git rev-parse --short=7 "$GITHUB_SHA")
+          # Commits since the previous experimental release, else the last 10.
+          prev=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName,isDraft,createdAt \
+            --jq '[.[] | select((.tagName | test("-exp\\.")) and (.isDraft | not))] | sort_by(.createdAt) | last | .tagName // empty')
+          if [ -n "$prev" ] && git rev-parse -q --verify "refs/tags/$prev" >/dev/null && git merge-base --is-ancestor "$prev" "$GITHUB_SHA"; then
+            range="$prev..$GITHUB_SHA"; limit=30
+          else
+            range="$GITHUB_SHA"; limit=10
+          fi
+          {
+            echo "Experimental build from m1 ($short). New features first; may break."
+            echo
+            echo "## Changes"
+            echo
+            git log --no-merges --format='- %s' -n "$limit" "$range"
+            echo
+            bash .github/scripts/release-notes.sh "$TAG"
+          } > notes.md
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "Onsite $TAG (experimental)" --notes-file notes.md
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" | head -n1)
+          [ -n "$id" ] || { echo "::error::Could not find the draft release for $TAG"; exit 1; }
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build.yml
+    with:
+      release_id: ${{ needs.prepare.outputs.id }}
+      tag: ${{ needs.prepare.outputs.tag }}
+      version: ${{ needs.prepare.outputs.version }}
+
+  # A failed or cancelled run must not leave a half-built draft (the next run also deletes stale drafts).
+  cleanup:
+    needs: [prepare, build]
+    if: ${{ always() && needs.prepare.outputs.id != '' && needs.build.result != 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete this run's draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ID: ${{ needs.prepare.outputs.id }}
+        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$ID" || true
+
+  prune:
+    needs: [prepare, build]
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Keep the newest 3 experimental pre-releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Only published pre-releases whose tag has -exp.; stable releases never match.
+          gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName,isDraft,isPrerelease,createdAt \
+            --jq '[.[] | select(.isPrerelease and (.isDraft | not) and (.tagName | test("^v[0-9]+\\.[0-9]+\\.[0-9]+-exp\\.[0-9]+$")))]
+                  | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' |
+          while read -r tag; do
+            echo "deleting $tag"
+            gh release delete "$tag" -R "$GITHUB_REPOSITORY" --cleanup-tag -y
+          done

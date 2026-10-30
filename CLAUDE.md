@@ -344,7 +344,7 @@ hard-coded in JS.
 
 ### M4 — Polish
 - MCP server, Windows installer via GitHub Actions (`tauri-action`) on tag push, README screenshots.
-- Release workflow `.github/workflows/release.yml` (tag `v*`): tag must equal the version in tauri.conf.json and
+- Release workflow `.github/workflows/release.yml` (tag `v*`; calls `build.yml`): tag must equal the version in tauri.conf.json and
   Cargo.toml → draft release → tests + build on windows-latest (nsis), macos-latest (universal dmg, ad-hoc signed,
   not notarized), ubuntu-22.04 (AppImage + deb) → publish when all three uploaded (`updates.rs` skips drafts). Release notes: a download table with direct
   links per system and a security-warnings table; publish adds `SHA256SUMS.txt` (the updater ignores it).
@@ -354,6 +354,8 @@ hard-coded in JS.
   swaps itself ($APPIMAGE) and restarts, a .deb goes to Downloads. On macOS/Linux the app takes PATH from the login
   shell at startup (Dock/desktop launches get a bare PATH). macOS mic permission text: `src-tauri/Info.plist`.
   macOS and Linux builds have not been run by a person yet (2026-10-29).
+- Experimental releases are automatic: every push to `m1` (not docs-only, no `[skip exp]` in the commit) runs `.github/workflows/experimental.yml`
+  → version `<next free core>-exp.<run number>` stamped in CI only, pre-release `v<version>`, newest 3 kept. Builds are shared in `.github/workflows/build.yml`; notes tables in `.github/scripts/release-notes.sh`.
 - Code signing: the SignPath Foundation application is pending (2026-10-30). Until it is approved, releases are
   unsigned. `SECURITY.md` ("aren't code-signed yet") is the true state; `CODE_SIGNING.md` is the policy page
   SignPath asks for. When signing goes live, wire it into `release.yml` and update `SECURITY.md` and the

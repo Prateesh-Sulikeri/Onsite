@@ -76,6 +76,8 @@ Downloads and imported on another machine.
    the release only when all three have succeeded. Stable tags (`v0.2.0`) must be on `main`. Experimental tags (`v0.2.0-exp.1`, pre-releases) must be on `m1`.
    **Actions → Release → Run workflow** does a dry run: the same builds, kept as workflow artifacts, no release.
 
+Every push to `m1` also publishes an experimental pre-release by itself (`.github/workflows/experimental.yml`, newest 3 kept).
+
 The in-app Updates screen reads the same releases: it skips drafts, needs a `vX.Y.Z` tag, and picks the file for
 its system (`*-setup.exe`, `*universal.dmg`, `*amd64.AppImage` when running as an AppImage, else `*amd64.deb`).
 It offers the newest stable release that is newer than the running app. Switch the channel to Experimental in
