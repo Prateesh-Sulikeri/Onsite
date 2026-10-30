@@ -36,19 +36,39 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease";; esac
+          # File names are the ones Tauri gives each bundle; the links work once the builds upload.
+          # {V} and {DL} are filled in below (a quoted heredoc keeps the backticks literal).
           cat > notes.md <<'EOF'
-          **Download for your system:**
-          - **Windows 10/11:** `Onsite_*_x64-setup.exe`
-          - **macOS 11+ (Apple Silicon and Intel):** `Onsite_*_universal.dmg`
-          - **Linux (x86-64):** `Onsite_*_amd64.AppImage` (any distro), or `Onsite_*_amd64.deb` (Debian, Ubuntu)
+          ## Download
 
-          Install VoiceStudio (Windows, macOS or Linux) for spoken rounds; without it rounds are typed. On first launch, pick an AI in Settings:
-          Claude Code (Pro/Max), or paste a Claude, OpenAI, Gemini or Groq API key (Gemini and Groq have free tiers).
+          | Your system | Download |
+          | --- | --- |
+          | **Windows 10/11** (x64) | [Installer (.exe)]({DL}/Onsite_{V}_x64-setup.exe) |
+          | **macOS 11+** (Apple Silicon and Intel) | [Disk image (.dmg)]({DL}/Onsite_{V}_universal.dmg) |
+          | **Linux** (x86-64, any distro) | [AppImage]({DL}/Onsite_{V}_amd64.AppImage) |
+          | **Linux** (Debian, Ubuntu) | [.deb package]({DL}/Onsite_{V}_amd64.deb) |
 
           Already installed? Settings → Updates → Check for updates.
-          macOS: the app isn't notarized. If macOS says it's damaged or can't be opened, run
-          `xattr -dr com.apple.quarantine /Applications/Onsite.app` once.
+
+          ## First run
+
+          - Install [VoiceStudio](https://github.com/debpalash/VoiceStudio/releases) for spoken rounds. Without it, rounds are typed.
+          - Pick an AI in Settings: Claude Code (Pro/Max), or paste a Claude, OpenAI, Gemini or Groq API key (Gemini and Groq have free tiers).
+
+          ## Security warnings
+
+          Onsite is free and not code-signed yet, so your system warns about it the first time.
+
+          | System | What you see | What to do |
+          | --- | --- | --- |
+          | Windows | "Windows protected your PC" (SmartScreen) | Click **More info**, then **Run anyway** |
+          | macOS | "Onsite is damaged" or "can't be opened" | Run `xattr -dr com.apple.quarantine /Applications/Onsite.app` once, then open it |
+          | Linux | Nothing; AppImage won't start | `chmod +x Onsite_*.AppImage` |
+
+          Check a download against `SHA256SUMS.txt`: `sha256sum -c SHA256SUMS.txt --ignore-missing` (Windows: `Get-FileHash <file>`).
           EOF
+          sed -i -e "s|{V}|${GITHUB_REF_NAME#v}|g" \
+            -e "s|{DL}|https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME|g" notes.md
           gh release create "$GITHUB_REF_NAME" --draft $pre --title "Onsite $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
           echo "id=$(gh release view "$GITHUB_REF_NAME" --json databaseId --jq .databaseId)" >> "$GITHUB_OUTPUT"
 
@@ -123,4 +143,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+          mkdir files && cd files
+          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" -p 'Onsite_*'
+          sha256sum Onsite_* > SHA256SUMS.txt && cat SHA256SUMS.txt
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" SHA256SUMS.txt --clobber
           gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false
