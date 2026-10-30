@@ -2,6 +2,8 @@
 name = "onsite"
 version = "0.1.2"
 description = "Local AI mock-interview loops"
+license = "MIT"
+repository = "https://github.com/Prateesh-Sulikeri/Onsite"
 edition = "2021"
 publish = false
 

@@ -80,5 +80,13 @@ The in-app Updates screen reads the same releases: it skips drafts, needs a `vX.
 its system (`*-setup.exe`, `*universal.dmg`, `*amd64.AppImage` when running as an AppImage, else `*amd64.deb`).
 It offers the newest non-pre-release that is newer than the running app.
 
+## Contributing
+Bug reports, fixes and new questions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Report security
+problems privately: [SECURITY.md](SECURITY.md). `CLAUDE.md` has the spec and how the app is put together.
+
+## License
+[MIT](LICENSE). Parts of the resume check are ported from Resume-Matcher (Apache-2.0) and ats-screener (MIT);
+see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Status
 Under construction. See `CLAUDE.md` for the spec and milestones.

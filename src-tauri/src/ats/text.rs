@@ -1,6 +1,7 @@
 //! Text rules shared by the checks and the scorer: normalising, whole-term matching,
 //! section headings, contact details and dates. Ported from Resume-Matcher
-//! (`services/text_match.py`, `services/ats_parse/{normalize,headings,checks}.py`, Apache-2.0).
+//! (`services/text_match.py`, `services/ats_parse/{normalize,headings,checks}.py`), changed for Onsite.
+//! This file is under the Apache License 2.0 (`LICENSES/Apache-2.0.txt`), not MIT.
 
 use regex::Regex;
 use std::sync::LazyLock;

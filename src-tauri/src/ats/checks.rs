@@ -1,5 +1,6 @@
 //! Can an ATS read this file? Deterministic checks on the extracted text and layout.
-//! Ported from Resume-Matcher `services/ats_parse/checks.py` (Apache-2.0).
+//! Ported from Resume-Matcher `services/ats_parse/checks.py` and changed for Onsite.
+//! This file is under the Apache License 2.0 (`LICENSES/Apache-2.0.txt`), not MIT.
 
 use super::extract::{Document, Kind, PageLayout, TextBox};
 use super::text;

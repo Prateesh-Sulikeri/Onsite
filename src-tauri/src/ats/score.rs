@@ -5,6 +5,8 @@
 //! unscorable parts spread over the rest. The six ATS profiles follow ats-screener
 //! (`src/lib/engine/scorer/profiles`, MIT): each product reads and matches differently.
 //! They are approximations from public docs, not the vendors' own code.
+//! The Resume-Matcher parts are changed for Onsite and under the Apache License 2.0
+//! (`LICENSES/Apache-2.0.txt`); see `THIRD_PARTY_NOTICES.md`.
 
 use super::checks::{Category, Check, Status};
 use super::extract::{Document, Kind};
