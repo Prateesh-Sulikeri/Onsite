@@ -80,6 +80,15 @@ The in-app Updates screen reads the same releases: it skips drafts, needs a `vX.
 its system (`*-setup.exe`, `*universal.dmg`, `*amd64.AppImage` when running as an AppImage, else `*amd64.deb`).
 It offers the newest non-pre-release that is newer than the running app.
 
+## Privacy
+Onsite sends data only to the AI you connect, and to GitHub when you check for updates. No accounts, analytics or
+tracking. Details: [PRIVACY.md](PRIVACY.md).
+
+## Code signing policy
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/) (applied for; until it's approved, installers are unsigned). Who can commit
+and approve, and what gets signed: [CODE_SIGNING.md](CODE_SIGNING.md).
+
 ## Contributing
 Bug reports, fixes and new questions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Report security
 problems privately: [SECURITY.md](SECURITY.md). `CLAUDE.md` has the spec and how the app is put together.
