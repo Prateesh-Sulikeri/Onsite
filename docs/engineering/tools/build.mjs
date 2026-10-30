@@ -1,18 +1,28 @@
-// Builds every docs/engineering/*.md into a styled PDF in docs/engineering/pdf/.
+// Builds human-readable Markdown docs into styled PDFs in docs/engineering/pdf/.
+// The .md files next to this folder are agent docs, so the human sources come from --src: a folder of
+// Markdown with its img/ beside it, e.g. the tagged snapshot:
+//   git worktree add ../onsite-docs-human docs-human-2026-10-30
+//   npm run build -- --src ../onsite-docs-human/docs/engineering [FILE.md …]
 // Mermaid blocks are rendered to SVG in headless Chromium, so diagrams look the same as on GitHub.
 // Chromium: $CHROME, else Playwright's cache (~/.cache/ms-playwright), else an installed Chrome/Edge.
-// Usage: npm run build            (all docs)
-//        npm run build -- ARCHITECTURE.md UI-DESIGN.md
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from "node:fs";
-import { join, dirname, basename } from "node:path";
+import { join, dirname, basename, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { marked } from "marked";
 import { chromium } from "playwright-core";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const docs = join(here, "..");
-const out = join(docs, "pdf");
+const args = process.argv.slice(2);
+const srcAt = args.indexOf("--src");
+if (srcAt < 0 || !args[srcAt + 1]) {
+  console.error("Pass --src <folder of human-readable .md>. The .md files in docs/engineering are agent docs.");
+  process.exit(2);
+}
+const docs = resolve(args[srcAt + 1]);
+args.splice(srcAt, 2);
+process.argv = [...process.argv.slice(0, 2), ...args];
+const out = join(here, "..", "pdf");
 const mermaidJs = join(here, "node_modules/mermaid/dist/mermaid.min.js");
 
 function findChrome() {

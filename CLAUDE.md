@@ -46,7 +46,8 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
 - **Verified flags (Claude Code 2.1.310, tested live 2026-10-26):**
   - Interviewer: `claude -p --input-format stream-json --output-format stream-json --verbose
     --include-partial-messages --tools "" --setting-sources "" --strict-mcp-config --disable-slash-commands
-    --system-prompt <rendered interviewer.md> --model <setting>`
+    --system-prompt-file <tmp>/.system-prompt.md --model <setting>` (the code passes the rendered prompt as a file,
+    which avoids Windows/WSL command-line length limits; same full-replace behaviour as `--system-prompt`)
   - `--tools ""` removes every built-in tool (init event reports `"tools": []`). `--strict-mcp-config`
     with no `--mcp-config` gives `"mcp_servers": []`. `--disable-slash-commands` empties `slash_commands`
     and `skills` (otherwise a candidate saying "/doctor" could reach an installed skill). `--allowedTools`/`--disallowedTools` are permission
@@ -201,6 +202,9 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
     sample (ours ~10.5 s; the default line gave ~3.8 s and voices drifted, e.g. Neha going male). If the
     engine isn't loaded, the profile is saved with *no* sample and speech falls back to instruct-only:
     a new speaker per call. Onsite rebuilds persona profiles lacking a sample or our current line.
+    Current code (`vs.rs::render_persona_sample`): Onsite renders the sample line itself via `/v1/audio/speech` with the
+    persona's `instruct` over a few seeds/step counts, scores each take (voiced share, hiss, median pitch vs the
+    instruction, noise floor), keeps the first passing or closest take, and creates a clone profile from it.
   - VoiceStudio permanently *demotes* a sherpa dictation model after one session where it decoded
     nothing (`prefs.json` `dictation.silent_models`), then serves whisper-tiny even when `&model=` asks
     for Parakeet. Not exposed in the API; choosing the model via `POST /dictation/prefs` clears it.
@@ -357,10 +361,10 @@ hard-coded in JS.
 - When a fact about an external tool (Claude Code flags, VoiceStudio endpoints) is uncertain, check it
   live (`claude --help`, `curl 127.0.0.1:3900/openapi.json`) and update this file.
 - Keep user-facing text short and plain.
-- Engineering docs (architecture, PRD-01..07, DD-01..08, UI design) live in `docs/engineering/`. The `.md` files are the
-  docs for AI agents: update the doc in the same commit as the code that makes it wrong. `pdf/` holds the human-readable
-  versions, a snapshot rebuilt only on purpose (`cd docs/engineering/tools && npm run build`; `npm run shots` retakes UI
-  screenshots with a mock backend). Rebuilding renders the current `.md`, so check the PDFs still read well for people.
+- Agent docs live in `docs/engineering/*.md` (index: `docs/engineering/README.md`; one file per subsystem). Read the
+  one for the area you touch; update it in the same commit as the code that makes it wrong; keep it terse.
+  `docs/engineering/pdf/` is the frozen human version (sources at tag `docs-human-2026-10-30`); don't rebuild it
+  routinely.
 
 ## graphify (code knowledge graph)
 - A knowledge graph of the repo lives in `graphify-out/` (gitignored, local only; installed as the uv tool
