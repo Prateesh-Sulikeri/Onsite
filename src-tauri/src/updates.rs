@@ -231,16 +231,21 @@ struct Progress {
     total: u64,
 }
 
-/// Downloads `tag`'s package for this system and installs it the way the system expects.
-/// The release is looked up again here; the UI only names the tag. Returns what happens next.
-pub async fn install(app: &AppHandle, tag: &str) -> Result<String> {
-    let state = app.state::<AppState>();
+/// Installing or uninstalling waits until no round or research job is running.
+pub(crate) async fn ensure_idle(state: &AppState) -> Result<()> {
     if !state.rounds.lock().await.is_empty() {
         return Err(AppError::Invalid("Finish or leave the interview first.".into()));
     }
     if !state.research.lock().unwrap().is_empty() {
         return Err(AppError::Invalid("A research job is running. Wait for it or cancel it first.".into()));
     }
+    Ok(())
+}
+
+/// Downloads `tag`'s package for this system and installs it the way the system expects.
+/// The release is looked up again here; the UI only names the tag. Returns what happens next.
+pub async fn install(app: &AppHandle, tag: &str) -> Result<String> {
+    ensure_idle(&app.state::<AppState>()).await?;
     let pkg = Package::current();
     let r = get_json(&format!("{ONSITE_TAG}{tag}")).await?;
     let asset = installer_asset(&r, pkg).ok_or_else(|| AppError::NotFound(format!("That version has no {}.", pkg.label())))?;
@@ -271,7 +276,9 @@ pub async fn install(app: &AppHandle, tag: &str) -> Result<String> {
     };
     match pkg {
         Package::Nsis => {
-            std::process::Command::new(&path).spawn().map_err(|e| AppError::Invalid(format!("Couldn't start the installer: {e}")))?;
+            // /UPDATE installs over the old copy without running its uninstaller, which would
+            // delete the voice models (windows/hooks.nsh).
+            std::process::Command::new(&path).arg("/UPDATE").spawn().map_err(|e| AppError::Invalid(format!("Couldn't start the installer: {e}")))?;
             quit(app);
             Ok("Starting the installer. Onsite will close.".into())
         }

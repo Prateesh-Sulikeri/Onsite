@@ -371,6 +371,16 @@ impl VoiceStudio {
         Ok(made)
     }
 
+    /// Deletes every interviewer voice Onsite made ("Onsite · <name>"). Returns how many.
+    pub async fn delete_persona_profiles(&self) -> Result<usize> {
+        let prefix = persona_profile_name("");
+        let ours: Vec<_> = self.profiles().await?.into_iter().filter(|p| p.name.starts_with(&prefix)).collect();
+        for p in &ours {
+            self.delete_profile(&p.id).await?;
+        }
+        Ok(ours.len())
+    }
+
     async fn delete_profile(&self, id: &str) -> Result<()> {
         self.req(reqwest::Method::DELETE, &format!("/profiles/{id}"))
             .timeout(Duration::from_secs(10))

@@ -35,8 +35,11 @@ Onsite talks to VoiceStudio only on this computer (`127.0.0.1`). VoiceStudio is 
 
 ## Deleting your data
 - Delete single rounds from Feedback, dossiers from Dossiers, and old rounds automatically with the limits in Storage.
-- Uninstalling Onsite leaves your data folder in place. Delete it from Settings → Storage → Open data folder to remove
-  everything.
+- Settings → Storage → Uninstall Onsite removes the app and all its files in one step: interviews, feedback, settings,
+  API keys, voice models, the log, temporary files, and the interviewer voices Onsite made in VoiceStudio. A box there
+  keeps your interviews and settings for a later install.
+- Uninstalling another way always removes voice models, the log and temporary files. On Windows, tick "Delete the
+  application data" to remove your interviews and settings too. On Mac and Linux, use Storage → Uninstall Onsite for that.
 
 ## Changes
 Changes to this policy are made in this file, so its git history shows every change.

@@ -296,11 +296,14 @@ Settings is one view with sections (Appearance, AI model, VoiceStudio, Updates, 
 `data-nav="settings"` link opens a section. Persona cards come from `get_panels` (traits, strictness, backstory,
 voice, rounds); "Play voice" = `voice_persona_preview` (builds the profile once, then speaks one line).
 Updates (`updates.rs`): GitHub releases of Prateesh-Sulikeri/Onsite, only when the user presses Check. Install =
-download that tag's `*-setup.exe` (github.com URLs only) to %TEMP%\onsite-update, run it, quit. Works for older tags
+download that tag's `*-setup.exe` (github.com URLs only) to %TEMP%\onsite-update, run it with `/UPDATE` (never runs the old
+uninstaller, which would delete the models), quit. Works for older tags
 (NSIS allows downgrades). Refused while a round or research job runs. VoiceStudio: installed version from `/health`
 `version`, else `resources/pyproject.toml` in its install folder; latest from its GitHub; never updated by Onsite.
 Storage (`storage.rs`): sizes + counts, limits in settings `storage_limits` {keep_rounds, keep_days, log_max_mb},
 enforced at startup and on save (finished rounds only); clear log, delete temp, VACUUM, open data/log folder.
+Uninstall (`uninstall.rs`, NSIS hooks `src-tauri/windows/hooks.nsh`): every real uninstall removes models, log and temp;
+user data goes with the Windows "Delete the application data" box or Storage → Uninstall Onsite (all OSes). Details: STORAGE.md.
 Privacy text lives in index.html; keep it true when data flows change.
 Third-party UI code lives in `ui/vendor/`, built by `ui-vendor/` (`npm install && npm run build`, esbuild; the app has no
 build step). `editor.js` = CodeMirror 6 (Java/Python/C++/JS/TS/Go, bracket closing, auto-indent, word + keyword

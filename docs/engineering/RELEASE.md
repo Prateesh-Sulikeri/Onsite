@@ -26,6 +26,7 @@ Code: `.github/workflows/release.yml` (tags), `build.yml` (shared build matrix +
    `libasound2`). Each: install deps → `cargo test` → `tauri-apps/tauri-action`.
 3. `publish` (needs all builds): add `SHA256SUMS.txt`, un-draft.
 `workflow_dispatch` = dry run (artifacts uploaded, nothing published). Bundled resources: `prompts/ dossiers/ sidecar/`.
+NSIS hooks: `src-tauri/windows/hooks.nsh` (uninstall clean-up, `/PURGE`; see STORAGE.md). Only the Windows CI build compiles them.
 
 
 ## Automatic experimental releases (`experimental.yml`)

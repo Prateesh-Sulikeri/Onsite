@@ -605,6 +605,12 @@ pub fn set_storage_limits(state: State<AppState>, limits: crate::storage::Limits
     crate::storage::set_limits(&state, limits)
 }
 
+/// Removes Onsite and its files, then quits. `keep_data` keeps interviews and settings.
+#[tauri::command]
+pub async fn uninstall_app(app: AppHandle, keep_data: bool) -> Result<String> {
+    crate::uninstall::run(&app, keep_data).await
+}
+
 #[tauri::command]
 pub fn clear_log() -> Result<()> {
     crate::storage::clear_log()

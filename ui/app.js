@@ -2440,6 +2440,16 @@ async function cleanUp(cmd, done){
 $("#stClearLog").onclick = () => cleanUp("clear_log", () => "Log cleared.");
 $("#stClearTemp").onclick = () => cleanUp("clear_temp", n => `Freed ${fmtBytes(n)}.`);
 $("#stVacuum").onclick = () => cleanUp("vacuum_db", () => "Database compacted.");
+$("#unGo").onclick = async () => {
+  const keep = $("#unKeep").checked;
+  if (!await ask("Uninstall Onsite?", keep
+    ? "Onsite closes and removes itself, its voice models and temporary files. Your interviews, feedback and settings stay for a later install."
+    : "Onsite closes and removes itself and everything it saved: interviews, feedback, settings, API keys and voice models. This can’t be undone.",
+    "Uninstall", true)) return;
+  $("#unGo").disabled = true;
+  try{ msg("#unMsg", esc(await api.invoke("uninstall_app", {keepData: keep})), "ok"); }
+  catch(e){ msg("#unMsg", esc(errText(e)), "err"); $("#unGo").disabled = false; }
+};
 $("#view-settings").addEventListener("click", async e => {
   const b = e.target.closest("[data-open]"); if (!b) return;
   try{ await api.invoke("open_folder", {which: b.dataset.open}); }catch(err){ toast(errText(err), "err"); }

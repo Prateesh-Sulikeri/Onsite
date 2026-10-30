@@ -11,6 +11,7 @@ pub mod research;
 pub mod runner;
 pub mod storage;
 pub mod store;
+pub mod uninstall;
 pub mod updates;
 pub mod voice;
 
@@ -270,6 +271,7 @@ pub fn run() {
             commands::voicestudio_version,
             commands::storage_info,
             commands::set_storage_limits,
+            commands::uninstall_app,
             commands::clear_log,
             commands::clear_temp,
             commands::vacuum_db,

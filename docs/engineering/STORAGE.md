@@ -60,6 +60,24 @@ in-use files skipped), `vacuum_db`, `open_folder`.
 Backdrop: UI shrinks to ≤ 2560×1600 JPEG → base64 → `set_backdrop` checks type from bytes (`image_ext`: jpg/png/webp),
 writes `backdrop.<ext>`, removes others.
 
+## Uninstall (`uninstall.rs`, `src-tauri/windows/hooks.nsh`)
+
+Two tiers. **Residue** (voice models `<data>/models`, log dir, temp `onsite-update`, `onsite-stt`, `onsite-round-*`,
+`onsite-job-*`) goes on every real uninstall. **User data** (app data dir with `onsite.db`, dossiers, backdrop; app
+local data = WebView storage incl. the localStorage resume copy; macOS `~/Library/{WebKit,HTTPStorages}/<id>`, saved
+state, prefs plist) goes unless the user keeps it.
+- Windows: NSIS hooks. `POSTUNINSTALL` deletes residue unless `$UpdateMode` (`/UPDATE`); Tauri's own "Delete the
+  application data" box deletes `$APPDATA`/`$LOCALAPPDATA\<id>`. `PREUNINSTALL` ticks that box when `/PURGE` is passed.
+  In-app updates run the setup with `/UPDATE`, so the old uninstaller (and the hook) never runs on update. A manual
+  setup where the user picks "uninstall first" does run it: models re-download (~580 MB).
+- Settings → Storage → Uninstall (`uninstall_app {keepData}`), refused while a round/research runs
+  (`updates::ensure_idle`): deletes `Onsite · *` profiles in VoiceStudio (best effort, 20 s), then Windows runs
+  `uninstall.exe /P [/PURGE]`; macOS/AppImage spawn a detached `sh` that waits for the pid, then `rm -rf` the files
+  and the .app / AppImage; .deb first runs `pkexec apt-get remove -y <dpkg -S pkg>`, then the same `sh` for files.
+  Keep the two residue lists (Rust `residue()`, hooks.nsh) in step.
+- Not removed: anything VoiceStudio owns; the Windows uninstaller path doesn't touch VoiceStudio voices.
+- macOS and Linux paths not yet run by a person (2026-10-30). The NSIS hook is checked only by the CI build.
+
 ## Concurrency
 
 One `rusqlite::Connection` in `Arc<std::sync::Mutex<Store>>`. Never hold across `.await`: read → drop lock → model call →
@@ -70,7 +88,7 @@ lock → save.
 Local: resume/JD, transcripts, code, whiteboards, feedback, dossiers, settings, voice audio, API keys (unencrypted), log
 (errors/timings only). Outbound: chosen AI provider (prompt, resume, JD, answers, shared workspace; also feedback,
 resume check, research) · research web search by that provider · GitHub release lists on Check for updates. Never:
-accounts, analytics, telemetry, data to the developer. Uninstall leaves the data folder.
+accounts, analytics, telemetry, data to the developer.
 **Rule:** a new outbound flow ships only with updated Privacy text + `PRIVACY.md`.
 
 ## Gaps
