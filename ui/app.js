@@ -2267,6 +2267,7 @@ const fmtBytes = n => n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : n >= 1e6 ? `${(n
 let UPDATES = null;
 async function renderUpdates(){
   try{ $("#upCurrent").textContent = `v${await api.invoke("app_version")}`; }catch(e){}
+  try{ $("#upChannel").value = await api.invoke("get_update_channel"); }catch(e){}
   if (UPDATES) drawReleases();
 }
 function drawReleases(){
@@ -2277,13 +2278,17 @@ function drawReleases(){
   const ib = $("#upInstall");
   ib.hidden = !u.latest; ib.dataset.tag = u.latest || ""; ib.innerHTML = `${icon("download")}Update to ${esc(u.latest || "")}`;
   $("#upList").innerHTML = u.releases.length ? u.releases.map(r => {
-    const tagLine = [r.compared === 0 ? `<span class="pill ok">This version</span>` : "", r.prerelease ? `<span class="pill">Pre-release</span>` : ""].join(" ");
+    const tagLine = [r.compared === 0 ? `<span class="pill ok">This version</span>` : "", r.prerelease ? `<span class="pill">Experimental</span>` : ""].join(" ");
     const action = r.compared === 0 ? "" : !r.installer ? `<span class="muted small">No ${esc(u.package)}</span>`
       : `<button class="btn ${r.compared > 0 ? "" : "ghost"} sm" data-install="${esc(r.tag)}">${r.compared > 0 ? "Install" : "Downgrade"}</button>`;
     return `<div class="ver-row"><div><b>${esc(r.name)}</b> ${tagLine}<br><small>${esc([r.tag !== r.name ? r.tag : "", r.published_at.slice(0, 10), r.size ? fmtBytes(r.size) : ""].filter(Boolean).join(" · "))}</small></div>${action}
       ${r.notes.trim() ? `<details><summary>Release notes</summary><pre>${esc(r.notes.trim())}</pre></details>` : ""}</div>`;
   }).join("") : `<p class="muted small">No versions have been published yet.</p>`;
 }
+$("#upChannel").onchange = async () => {
+  try{ await api.invoke("set_update_channel", {channel: $("#upChannel").value}); }catch(e){ msg("#upMsg", esc(errText(e)), "err"); return; }
+  if (UPDATES) $("#upCheck").onclick();
+};
 $("#upCheck").onclick = async () => {
   const b = $("#upCheck"); b.disabled = true; b.classList.add("is-busy");
   msg("#upMsg", "Asking GitHub…");

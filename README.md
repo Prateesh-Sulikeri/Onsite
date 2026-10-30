@@ -73,12 +73,13 @@ Downloads and imported on another machine.
 2. `git tag v0.2.0 && git push origin v0.2.0`.
 3. GitHub Actions (`.github/workflows/release.yml`) checks the tag against the app version, creates a draft
    release, runs the tests and builds on Windows, macOS and Linux in parallel, uploads every file, and publishes
-   the release only when all three have succeeded. Tags with a hyphen (`v0.3.0-rc1`) become pre-releases.
+   the release only when all three have succeeded. Stable tags (`v0.2.0`) must be on `main`. Experimental tags (`v0.2.0-exp.1`, pre-releases) must be on `m1`.
    **Actions → Release → Run workflow** does a dry run: the same builds, kept as workflow artifacts, no release.
 
 The in-app Updates screen reads the same releases: it skips drafts, needs a `vX.Y.Z` tag, and picks the file for
 its system (`*-setup.exe`, `*universal.dmg`, `*amd64.AppImage` when running as an AppImage, else `*amd64.deb`).
-It offers the newest non-pre-release that is newer than the running app.
+It offers the newest stable release that is newer than the running app. Switch the channel to Experimental in
+Settings → Updates to get experimental builds first; they may break.
 
 ## Privacy
 Onsite sends data only to the AI you connect, and to GitHub when you check for updates. No accounts, analytics or

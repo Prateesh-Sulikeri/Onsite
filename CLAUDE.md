@@ -348,6 +348,8 @@ hard-coded in JS.
   Cargo.toml → draft release → tests + build on windows-latest (nsis), macos-latest (universal dmg, ad-hoc signed,
   not notarized), ubuntu-22.04 (AppImage + deb) → publish when all three uploaded (`updates.rs` skips drafts). Release notes: a download table with direct
   links per system and a security-warnings table; publish adds `SHA256SUMS.txt` (the updater ignores it).
+  Two channels: stable `vX.Y.Z` tags must be on `main`; experimental `vX.Y.Z-exp.N` tags (pre-releases) must be on `m1`;
+  the workflow fails otherwise. Settings > Updates has a Stable/Experimental picker (`update_channel`). See `docs/engineering/RELEASE.md`.
   Manual run = dry run with artifacts. `updates::Package` picks the asset per OS; macOS opens the dmg, an AppImage
   swaps itself ($APPIMAGE) and restarts, a .deb goes to Downloads. On macOS/Linux the app takes PATH from the login
   shell at startup (Dock/desktop launches get a bare PATH). macOS mic permission text: `src-tauri/Info.plist`.

@@ -555,6 +555,16 @@ pub fn ats_last(state: State<AppState>) -> Result<Option<Value>> {
 }
 
 #[tauri::command]
+pub fn get_update_channel(app: AppHandle, state: State<AppState>) -> String {
+    crate::updates::channel(&state, &app.package_info().version.to_string()).as_str().into()
+}
+
+#[tauri::command]
+pub fn set_update_channel(state: State<AppState>, channel: String) -> Result<()> {
+    crate::updates::set_channel(&state, crate::updates::Channel::parse(&channel))
+}
+
+#[tauri::command]
 pub fn app_version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }

@@ -19,15 +19,57 @@ const ONSITE_RELEASES: &str = "https://api.github.com/repos/Prateesh-Sulikeri/On
 const ONSITE_TAG: &str = "https://api.github.com/repos/Prateesh-Sulikeri/Onsite/releases/tags/";
 const VOICESTUDIO_LATEST: &str = "https://api.github.com/repos/debpalash/VoiceStudio/releases/latest";
 
-/// (major, minor, patch, is_release). A pre-release sorts below its release.
-pub fn version_key(v: &str) -> Option<(u64, u64, u64, bool)> {
+/// (major, minor, patch, is_release, pre-release number). A pre-release sorts below its release and
+/// pre-releases of one version sort by their last number: `0.1.3-exp.2` > `0.1.3-exp.1`, `0.1.3` > `0.1.3-exp.9`.
+pub fn version_key(v: &str) -> Option<(u64, u64, u64, bool, u64)> {
     let v = v.trim().trim_start_matches(['v', 'V']);
     let (core, pre) = match v.split_once('-') {
-        Some((c, _)) => (c, true),
-        None => (v, false),
+        Some((c, p)) => (c, Some(p)),
+        None => (v, None),
     };
     let mut n = core.split('.').map(|x| x.parse::<u64>().ok());
-    Some((n.next()??, n.next().flatten().unwrap_or(0), n.next().flatten().unwrap_or(0), !pre))
+    let num = pre.map_or(0, |p| {
+        let tail = p.trim_end_matches(|c: char| !c.is_ascii_digit());
+        let digits: String = tail.chars().rev().take_while(char::is_ascii_digit).collect::<Vec<_>>().into_iter().rev().collect();
+        digits.parse().unwrap_or(0)
+    });
+    Some((n.next()??, n.next().flatten().unwrap_or(0), n.next().flatten().unwrap_or(0), pre.is_none(), num))
+}
+
+/// Which releases `latest` may name. Stable skips pre-releases; Experimental takes the newest of all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Channel {
+    Stable,
+    Experimental,
+}
+
+impl Channel {
+    pub fn parse(s: &str) -> Self {
+        if s == "experimental" { Self::Experimental } else { Self::Stable }
+    }
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Experimental => "experimental",
+        }
+    }
+    /// An `-exp` build starts on Experimental; every other install on Stable.
+    pub fn default_for(version: &str) -> Self {
+        if version.contains("-exp") { Self::Experimental } else { Self::Stable }
+    }
+}
+
+const CHANNEL_KEY: &str = "update_channel";
+
+pub fn channel(state: &AppState, current: &str) -> Channel {
+    match state.store.lock().unwrap().get_setting::<String>(CHANNEL_KEY) {
+        Ok(Some(s)) => Channel::parse(&s),
+        _ => Channel::default_for(current),
+    }
+}
+
+pub fn set_channel(state: &AppState, c: Channel) -> Result<()> {
+    state.store.lock().unwrap().set_setting(CHANNEL_KEY, &c.as_str())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -49,8 +91,10 @@ pub struct UpdateInfo {
     pub current: String,
     /// Newest first; drafts are skipped.
     pub releases: Vec<Release>,
-    /// The newest stable release above `current`, if any.
+    /// The newest release above `current` on this channel, if any.
     pub latest: Option<String>,
+    /// "stable" or "experimental".
+    pub channel: String,
     /// What this system downloads, e.g. "Windows installer".
     pub package: String,
     /// What installing does here, for the confirm dialog.
@@ -142,7 +186,7 @@ fn installer_asset(r: &Value, pkg: Package) -> Option<&Value> {
     r["assets"].as_array()?.iter().find(|a| a["name"].as_str().is_some_and(|n| pkg.matches(n, arch)))
 }
 
-pub fn parse_releases(v: &Value, current: &str, pkg: Package) -> UpdateInfo {
+pub fn parse_releases(v: &Value, current: &str, pkg: Package, channel: Channel) -> UpdateInfo {
     let cur = version_key(current);
     let mut releases: Vec<Release> = v
         .as_array()
@@ -166,17 +210,18 @@ pub fn parse_releases(v: &Value, current: &str, pkg: Package) -> UpdateInfo {
         })
         .collect();
     releases.sort_by_key(|r| std::cmp::Reverse(version_key(&r.tag)));
-    let latest = releases.iter().find(|r| r.compared > 0 && !r.prerelease && r.installer.is_some()).map(|r| r.tag.clone());
-    UpdateInfo { current: current.to_string(), releases, latest, package: pkg.label().into(), how: pkg.how().into() }
+    let latest = releases.iter().find(|r| r.compared > 0 && (channel == Channel::Experimental || !r.prerelease) && r.installer.is_some()).map(|r| r.tag.clone());
+    UpdateInfo { current: current.to_string(), releases, latest, channel: channel.as_str().into(), package: pkg.label().into(), how: pkg.how().into() }
 }
 
 pub async fn check(app: &AppHandle) -> Result<UpdateInfo> {
     let current = app.package_info().version.to_string();
+    let channel = channel(&app.state::<AppState>(), &current);
     let v = match get_json(ONSITE_RELEASES).await {
         Err(AppError::NotFound(_)) => Value::Array(vec![]),
         other => other?,
     };
-    Ok(parse_releases(&v, &current, Package::current()))
+    Ok(parse_releases(&v, &current, Package::current(), channel))
 }
 
 #[derive(Clone, Serialize)]
@@ -322,7 +367,12 @@ mod tests {
     fn versions_compare() {
         assert!(version_key("v0.2.0") > version_key("0.1.9"));
         assert!(version_key("v1.0.0-beta.1") < version_key("1.0.0"));
-        assert_eq!(version_key("v2"), Some((2, 0, 0, true)));
+        assert_eq!(version_key("v2"), Some((2, 0, 0, true, 0)));
+        assert!(version_key("0.1.3-exp.2") > version_key("0.1.3-exp.1"));
+        assert!(version_key("0.1.3-exp.10") > version_key("0.1.3-exp.9"));
+        assert!(version_key("0.1.3") > version_key("0.1.3-exp.9"));
+        assert!(version_key("0.1.4-exp.1") > version_key("0.1.3"));
+        assert!(version_key("0.1.3-exp.1") > version_key("0.1.2"));
         assert_eq!(version_key("latest"), None);
     }
 
@@ -336,14 +386,24 @@ mod tests {
             {"tag_name": "v0.2.5", "assets": []},
             {"tag_name": "v9.0.0", "draft": true, "assets": asset("x-setup.exe")}
         ]);
-        let info = parse_releases(&v, "0.1.0", Package::Nsis);
+        let info = parse_releases(&v, "0.1.0", Package::Nsis, Channel::Stable);
         let tags: Vec<_> = info.releases.iter().map(|r| (r.tag.as_str(), r.compared)).collect();
         assert_eq!(tags, [("v0.3.0-rc1", 1), ("v0.2.5", 1), ("v0.2.0", 1), ("v0.1.0", 0)]);
         // Pre-releases and releases without an installer are not offered as "the update".
         assert_eq!(info.latest.as_deref(), Some("v0.2.0"));
-        assert_eq!(parse_releases(&v, "0.2.0", Package::Nsis).releases.last().unwrap().compared, -1);
+        // Experimental takes the newest of all.
+        assert_eq!(parse_releases(&v, "0.1.0", Package::Nsis, Channel::Experimental).latest.as_deref(), Some("v0.3.0-rc1"));
+        assert_eq!(parse_releases(&v, "0.2.0", Package::Nsis, Channel::Stable).releases.last().unwrap().compared, -1);
         // A Mac sees no installer in Windows-only releases.
-        assert!(parse_releases(&v, "0.1.0", Package::Dmg).latest.is_none());
+        assert!(parse_releases(&v, "0.1.0", Package::Dmg, Channel::Stable).latest.is_none());
+    }
+
+    #[test]
+    fn channel_defaults() {
+        assert_eq!(Channel::default_for("0.1.3-exp.1"), Channel::Experimental);
+        assert_eq!(Channel::default_for("0.1.3"), Channel::Stable);
+        assert_eq!(Channel::parse("experimental"), Channel::Experimental);
+        assert_eq!(Channel::parse("anything"), Channel::Stable);
     }
 
     #[test]

@@ -2,7 +2,8 @@
 # GitHub release with all of them. Settings → Updates in the app reads these releases: it skips
 # drafts, needs a vX.Y.Z tag, and picks the file for its system (`*-setup.exe`, `*.dmg`,
 # `*.AppImage` or `*.deb`). So the release stays a draft until every build has uploaded, and the
-# tag must match the version in tauri.conf.json and Cargo.toml.
+# tag must match the version in tauri.conf.json and Cargo.toml. Stable tags (vX.Y.Z) must be on
+# main; experimental tags (vX.Y.Z-exp.N) must be on m1 and become pre-releases.
 #
 # Run it by hand (Actions → Release → Run workflow) for a dry run: same builds, files kept as
 # workflow artifacts, no release.
@@ -23,6 +24,25 @@ jobs:
       id: ${{ steps.create.outputs.id }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag is on the right branch
+        run: |
+          # Stable vX.Y.Z must be on main. Experimental vX.Y.Z-exp.N must be on m1.
+          sha=$(git rev-parse "$GITHUB_SHA")
+          case "$GITHUB_REF_NAME" in
+            *-*)
+              echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-exp\.[0-9]+$' \
+                || { echo "::error::Tag $GITHUB_REF_NAME is not an experimental tag. Use vX.Y.Z-exp.N (N a number)."; exit 1; }
+              git merge-base --is-ancestor "$sha" origin/m1 \
+                || { echo "::error::Experimental tag $GITHUB_REF_NAME must point at a commit on the m1 branch."; exit 1; } ;;
+            *)
+              echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+                || { echo "::error::Tag $GITHUB_REF_NAME is not a stable tag. Use vX.Y.Z."; exit 1; }
+              git merge-base --is-ancestor "$sha" origin/main \
+                || { echo "::error::Stable tag $GITHUB_REF_NAME must point at a commit on the main branch."; exit 1; } ;;
+          esac
+          echo "$GITHUB_REF_NAME is on the right branch"
       - name: Tag matches the app version
         run: |
           tag="${GITHUB_REF_NAME#v}"

@@ -546,6 +546,9 @@
             <div class="panel">
               <div class="panel-head"><h2>Onsite</h2><span class="pill" id="upPill">Not checked</span></div>
               <dl class="kv"><dt>This version</dt><dd id="upCurrent">—</dd><dt>Newest</dt><dd id="upLatest">—</dd></dl>
+              <label class="field"><span>Channel</span>
+                <span class="sel"><svg><use href="#i-refresh"/></svg><select id="upChannel"><option value="stable">Stable</option><option value="experimental">Experimental</option></select></span></label>
+              <p class="hint">Experimental builds come from the m1 branch. They get new features first and may break.</p>
               <div class="btn-row">
                 <button class="btn" id="upCheck"><svg><use href="#i-refresh"/></svg>Check for updates</button>
                 <button class="btn primary" id="upInstall" hidden></button>

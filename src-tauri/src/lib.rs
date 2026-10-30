@@ -263,6 +263,8 @@ pub fn run() {
             commands::research_dismiss,
             commands::research_jobs,
             commands::app_version,
+            commands::get_update_channel,
+            commands::set_update_channel,
             commands::check_updates,
             commands::install_update,
             commands::voicestudio_version,
