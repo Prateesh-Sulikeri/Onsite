@@ -5,3 +5,4 @@ node_modules
 *.db-journal
 .env
 src-tauri/gen/schemas
+graphify-out/

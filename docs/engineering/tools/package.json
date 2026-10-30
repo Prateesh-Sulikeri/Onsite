@@ -1,0 +1,16 @@
+{
+  "name": "onsite-engineering-docs",
+  "private": true,
+  "license": "MIT",
+  "description": "Builds docs/engineering/*.md into PDFs (npm run build) and retakes the UI screenshots in docs/engineering/img/ (npm run shots).",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "shots": "node shots.mjs"
+  },
+  "dependencies": {
+    "marked": "14.1.4",
+    "mermaid": "11.4.1",
+    "playwright-core": "1.49.1"
+  }
+}

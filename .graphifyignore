@@ -1,0 +1,11 @@
+# Third-party bundles built by ui-vendor/ (not our code)
+ui/vendor/
+# Test fixtures, icons, images, license texts
+src-tauri/tests/fixtures/
+src-tauri/icons/
+public/
+ui/assets/
+LICENSES/
+# The 150 KB artifact the UI was ported from
+ui/onsite-artifact-reference.html
+graphify-out/

@@ -343,6 +343,10 @@ hard-coded in JS.
   swaps itself ($APPIMAGE) and restarts, a .deb goes to Downloads. On macOS/Linux the app takes PATH from the login
   shell at startup (Dock/desktop launches get a bare PATH). macOS mic permission text: `src-tauri/Info.plist`.
   macOS and Linux builds have not been run by a person yet (2026-10-29).
+- Code signing: the SignPath Foundation application is pending (2026-10-30). Until it is approved, releases are
+  unsigned. `SECURITY.md` ("aren't code-signed yet") is the true state; `CODE_SIGNING.md` is the policy page
+  SignPath asks for. When signing goes live, wire it into `release.yml` and update `SECURITY.md` and the
+  release-notes warnings table.
 - Friends' machines: Python for Run/Submit falls back to VoiceStudio's bundled Python (`runner::python()`,
   skips the `WindowsApps` Store stub). Java, g++ and Node must be installed to Run in those languages.
 
@@ -353,3 +357,20 @@ hard-coded in JS.
 - When a fact about an external tool (Claude Code flags, VoiceStudio endpoints) is uncertain, check it
   live (`claude --help`, `curl 127.0.0.1:3900/openapi.json`) and update this file.
 - Keep user-facing text short and plain.
+- Engineering docs (architecture, PRD-01..07, DD-01..08, UI design) live in `docs/engineering/`. The `.md` files are the
+  docs for AI agents: update the doc in the same commit as the code that makes it wrong. `pdf/` holds the human-readable
+  versions, a snapshot rebuilt only on purpose (`cd docs/engineering/tools && npm run build`; `npm run shots` retakes UI
+  screenshots with a mock backend). Rebuilding renders the current `.md`, so check the PDFs still read well for people.
+
+## graphify (code knowledge graph)
+- A knowledge graph of the repo lives in `graphify-out/` (gitignored, local only; installed as the uv tool
+  `graphifyy`, built 2026-10-30). Only on the owner's machine: if `graphify-out/graph.json` is missing, skip this.
+- For codebase questions, try the graph first: `graphify query "<question>"`, `graphify path "<A>" "<B>"`,
+  `graphify explain "<node>"`. They return a small subgraph with file:line sources. Read
+  `graphify-out/GRAPH_REPORT.md` only for broad architecture questions. Confirm in the source before editing.
+- After code changes, run `graphify update .` (AST only, no LLM, seconds). Doc or prompt changes need
+  `/graphify . --update`, which re-reads the changed docs with the LLM.
+- `.graphifyignore` leaves out `ui/vendor/`, test fixtures, icons, images, license texts and the artifact
+  reference. Keep vendored or generated files out of it, or they swamp the graph.
+- Hubs to know: `AppState` (bridges 11 groups), `ClaudeSession`, `Store`, `Question`, `ApiClient`, `VoiceStudio`.
+  Weakest groups (cohesion ~0.05): `commands.rs` and ATS job keywords/scoring.
