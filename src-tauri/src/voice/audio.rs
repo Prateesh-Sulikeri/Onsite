@@ -71,15 +71,7 @@ impl LowPass {
         Self { buf: vec![0.0; n - 1], taps }
     }
 
-    pub fn len(&self) -> usize {
-        self.taps.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.taps.is_empty()
-    }
-
-    /// Filters `io` in place (delay of `len() / 2` samples).
+    /// Filters `io` in place (delay of half the tap count).
     pub fn process(&mut self, io: &mut [f32]) {
         let keep = self.taps.len() - 1;
         self.buf.extend_from_slice(io);
@@ -576,7 +568,7 @@ mod tests {
         b.process(&mut p2);
         p1.extend(p2);
         assert!(whole.iter().zip(&p1).all(|(u, v)| (u - v).abs() < 1e-6));
-        assert!(a.len() % 2 == 1 && a.len() < 200, "taps {}", a.len());
+        assert!(a.taps.len() % 2 == 1 && a.taps.len() < 200, "taps {}", a.taps.len());
     }
 
     #[test]

@@ -71,7 +71,7 @@ Commands (registered in `lib.rs::run`, `generate_handler!`):
 |---|---|
 | catalog/settings | `get_catalog get_panels get_settings save_settings set_provider ai_keys set_api_key list_models detect_claude health_check ui_log` |
 | rounds | `create_loop start_round cancel_start send_answer end_round run_code set_round_lang get_round delete_round history` |
-| feedback | `generate_report get_report loop_verdict loop_feedback get_loop_feedback get_goal set_goal` |
+| feedback | `generate_report get_report loop_feedback get_loop_feedback get_goal set_goal` |
 | voice | `voice_status voice_launch voice_test_speak voice_test_listen voice_finish voice_mute voice_cancel_listen voice_interrupt voice_set_devices audio_devices mic_monitor_start mic_monitor_stop voice_persona_preview voice_model_download voice_model_delete voice_models_reload voice_builtin_preview` |
 | research | `research_start research_cancel research_retry research_dismiss research_jobs list_dossiers delete_dossier import_dossier export_dossier` |
 | resume | `read_document ats_check ats_screen ats_last` |

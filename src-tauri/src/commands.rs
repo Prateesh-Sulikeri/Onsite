@@ -212,11 +212,6 @@ pub fn get_round(state: State<AppState>, round_id: i64) -> Result<RoundRow> {
     state.store.lock().unwrap().round(round_id)
 }
 
-#[tauri::command]
-pub async fn loop_verdict(app: AppHandle, loop_id: i64) -> Result<Value> {
-    live::loop_verdict(&app, loop_id).await
-}
-
 /// Feedback for the whole interview: reviews every round still missing feedback, then the verdict.
 #[tauri::command]
 pub async fn loop_feedback(app: AppHandle, loop_id: i64) -> Result<live::LoopFeedback> {

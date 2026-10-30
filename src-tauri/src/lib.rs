@@ -288,7 +288,6 @@ pub fn run() {
             commands::generate_report,
             commands::get_report,
             commands::get_round,
-            commands::loop_verdict,
             commands::loop_feedback,
             commands::get_loop_feedback,
             commands::history,

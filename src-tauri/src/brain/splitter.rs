@@ -21,10 +21,6 @@ pub struct SentenceSplitter {
 }
 
 impl SentenceSplitter {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn push(&mut self, delta: &str) -> Vec<Piece> {
         self.buf.push_str(delta);
         self.drain(false)
@@ -186,7 +182,7 @@ mod tests {
     use super::*;
 
     fn feed(chunks: &[&str]) -> (Vec<Piece>, bool) {
-        let mut sp = SentenceSplitter::new();
+        let mut sp = SentenceSplitter::default();
         let mut out: Vec<Piece> = chunks.iter().flat_map(|c| sp.push(c)).collect();
         let (rest, ended) = sp.finish();
         out.extend(rest);
@@ -199,7 +195,7 @@ mod tests {
 
     #[test]
     fn emits_sentences_as_they_complete() {
-        let mut sp = SentenceSplitter::new();
+        let mut sp = SentenceSplitter::default();
         assert_eq!(sp.push("Hi there. How"), vec![sentence("Hi there.")]);
         assert_eq!(sp.push(" are you"), vec![]);
         assert_eq!(sp.push("? Good"), vec![sentence("How are you?")]);

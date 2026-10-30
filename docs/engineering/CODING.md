@@ -61,8 +61,8 @@ theme follows app (**planned**).
 
 - **Add a problem:** new CSV row (copy similar; header untouched) → examples flagged `"example": true` + hidden tests →
   Python `reference` (+ `stress` for Submit) → `cargo test -- --ignored` (needs javac, g++, node, python) until all pass.
-- **Add a runnable language:** `Lang` variant (`from_name`, `label`, `limit_ms`, `ALL`) → `plan` → driver in `gen.rs` →
-  starter generation → `toolchains` → tests in `runner/tests.rs`.
+- **Add a runnable language:** `Lang` variant (`from_name`, `label`, `limit_ms`, test-only `ALL`) → `plan` → driver in `gen.rs` →
+  starter generation → `toolchains` (test-only) → tests in `runner/tests.rs`.
 - **Editor change:** edit `ui-vendor/src/editor.js` → `cd ui-vendor && npm install && npm run build` → commit `ui/vendor/`.
 
 ## Gaps

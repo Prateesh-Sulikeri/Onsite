@@ -27,6 +27,7 @@ pub enum Lang {
 }
 
 impl Lang {
+    #[cfg(test)]
     pub const ALL: [Lang; 4] = [Lang::Java, Lang::Python, Lang::Cpp, Lang::Js];
 
     /// From the setup screen's language name. TypeScript and Go have no runner.
@@ -204,7 +205,8 @@ async fn read_capped(s: Option<impl tokio::io::AsyncRead + Unpin>) -> String {
     String::from_utf8_lossy(&buf).into_owned()
 }
 
-/// Installed toolchain for a language, e.g. "javac 21.0.2".
+/// Installed toolchain for a language, e.g. "javac 21.0.2". Tests use it to skip missing languages.
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize)]
 pub struct Toolchain {
     pub lang: Lang,
@@ -212,6 +214,7 @@ pub struct Toolchain {
     pub version: Option<String>,
 }
 
+#[cfg(test)]
 pub async fn toolchains() -> Vec<Toolchain> {
     let mut out = Vec::new();
     for lang in Lang::ALL {
