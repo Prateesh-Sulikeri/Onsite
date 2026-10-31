@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Onsite: practise interview loops out loud</title>
+<meta name="description" content="Onsite runs realistic software-engineering interviews on your own computer. Talk, code and draw, then get honest feedback. Free and open source.">
+<meta property="og:title" content="Onsite">
+<meta property="og:description" content="Practise software-engineering interview loops out loud, on your own machine. Free and open source.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0c0d21">
+<link rel="icon" type="image/png" href="assets/logo.png">
+<link rel="stylesheet" href="style.css">
+<script src="site.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <nav class="wrap nav">
+    <a class="brand" href="./"><img src="assets/logo.png" alt="" width="28" height="28">Onsite</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#new">What's new</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="{{gh}}">GitHub</a>
+      <a class="btn small primary" href="#download">Download</a>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+<section class="hero">
+  <div class="wrap hero-text">
+    <p class="eyebrow">Free and open source · Windows, macOS, Linux</p>
+    <h1>Practise the interview loop. <span class="accent">Out loud.</span></h1>
+    <p class="lead">Onsite runs realistic software-engineering interviews on your own computer. You talk, write code and draw the design. The interviewer pushes back, and you get honest written feedback.</p>
+    <div class="cta">
+      <a class="btn primary big" id="get" href="{{dl_win}}" data-win="{{dl_win}}" data-mac="{{dl_mac}}" data-linux="{{dl_appimage}}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
+        <span id="get-label">Download for Windows</span>
+      </a>
+      <a class="btn ghost big" href="#download">Other systems</a>
+    </div>
+    <p class="meta">Version {{version}} · <time datetime="{{datetime}}">{{date}}</time> · <a href="changelog.html">What changed</a></p>
+  </div>
+  <div class="wrap">
+    <figure class="window shot-hero">
+      <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <img src="assets/room.jpg" width="1440" height="900" alt="An Onsite call: the Two Sum problem on the left, the candidate and interviewer talking below it, and a Java editor on the right.">
+    </figure>
+  </div>
+</section>
+
+<section class="wrap section" id="features">
+  <p class="eyebrow">What you get</p>
+  <h2>A full onsite, as often as you want</h2>
+  <div class="grid three">
+    <article class="card feature">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 13h4M8 16h7"/></svg>
+      <h3>Whole loops</h3>
+      <p>Pick any rounds: resume screen, project deep dive, fundamentals, DSA, code comprehension, low-level design, system design, behavioral and hiring manager.</p>
+    </article>
+    <article class="card feature">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/></svg>
+      <h3>Company loops</h3>
+      <p>Onsite researches recent candidate reports for a company and role. Then it runs that company's loop, with its reported questions and interviewer style.</p>
+    </article>
+    <article class="card feature">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      <h3>Spoken calls</h3>
+      <p>Speech runs on your machine with the built-in voice engine. No GPU needed. Prefer typing? Every round works typed too.</p>
+    </article>
+    <article class="card feature">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></svg>
+      <h3>A real workspace</h3>
+      <p>A code editor with Run and Submit in Java, Python, C++ and JavaScript. A whiteboard for designs, and notes. The interviewer sees what you share.</p>
+    </article>
+    <article class="card feature">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <h3>Honest feedback</h3>
+      <p>Rubric scores with evidence, what to fix first and stronger answers for the key moments. A full loop ends with a hiring-committee verdict.</p>
+    </article>
+    <article class="card feature">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 14l2.5 2.5L16 11"/></svg>
+      <h3>Resume check</h3>
+      <p>See your resume the way six common ATS products read it. Add a job posting and get a match score and an AI screen of your fit.</p>
+    </article>
+  </div>
+</section>
+
+<section class="wrap section shots">
+  <figure class="window">
+    <img src="assets/dashboard.jpg" width="1440" height="900" loading="lazy" alt="The dashboard: weekly goal, skill scores across rounds, score trend and a practice calendar.">
+    <figcaption><strong>Track your skills.</strong> Scores come from your own rounds, so you see what to practise next.</figcaption>
+  </figure>
+  <figure class="window">
+    <img src="assets/dossiers.jpg" width="1440" height="900" loading="lazy" alt="The dossiers screen: company research saved for later loops.">
+    <figcaption><strong>Research a company.</strong> Dossiers keep the rounds and questions candidates reported.</figcaption>
+  </figure>
+  <figure class="window">
+    <img src="assets/feedback.jpg" width="1440" height="900" loading="lazy" alt="The feedback list: every finished round with its score.">
+    <figcaption><strong>Read the feedback.</strong> Every round gets a score and a written report.</figcaption>
+  </figure>
+  <figure class="window">
+    <img src="assets/resume.jpg" width="1440" height="900" loading="lazy" alt="The resume check: parse checks and simulated ATS results.">
+    <figcaption><strong>Check your resume.</strong> Parse problems are listed before a recruiter ever sees them.</figcaption>
+  </figure>
+</section>
+
+<section class="wrap section split">
+  <div>
+    <p class="eyebrow">Bring your own AI</p>
+    <h2>No account. No server.</h2>
+    <p class="lead small">Onsite uses the AI you connect. Your keys are stored only in Onsite's local database on your machine.</p>
+  </div>
+  <ul class="providers card">
+    <li><strong>Claude Code</strong><span>Your Claude Pro or Max login. No key.</span></li>
+    <li><strong>Claude API</strong><span>Your key from console.anthropic.com.</span></li>
+    <li><strong>OpenAI</strong><span>Your key from platform.openai.com.</span></li>
+    <li><strong>Gemini</strong><span>A free key from aistudio.google.com.</span></li>
+    <li><strong>Groq</strong><span>A free key from console.groq.com. Very fast.</span></li>
+  </ul>
+</section>
+
+<section class="wrap section">
+  <div class="card privacy">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+    <div>
+      <h2>Your interviews stay with you</h2>
+      <p>No accounts, analytics or tracking. Interviews, reports and keys stay on your machine. Onsite talks to the AI you pick, and to GitHub only when you check for updates. This site has no trackers either. <a href="{{gh}}/blob/main/PRIVACY.md">Privacy policy</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap section" id="new">
+  <p class="eyebrow">What's new</p>
+  <h2>Latest releases</h2>
+  <div class="grid {{news_cols}}">
+    <article class="card news">
+      <header><span class="badge">Stable</span><h3>{{tag}}</h3><time datetime="{{datetime}}">{{date}}</time></header>
+      {{stable_changes}}
+      <a class="link" href="changelog.html">Full changelog →</a>
+    </article>
+    {{exp_card}}
+  </div>
+</section>
+
+<section class="wrap section" id="download">
+  <p class="eyebrow">Download</p>
+  <h2>Onsite {{version}}</h2>
+  <div class="grid four downloads">
+{{download_cards}}
+  </div>
+  <p class="muted note">Already installed? Settings → Updates → Check for updates. Your interviews and settings stay.</p>
+
+  <h3 class="sub">Opening it the first time</h3>
+  <p class="muted">Onsite isn't code-signed yet, so your system warns about it once.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>System</th><th>What you see</th><th>What to do</th></tr></thead>
+      <tbody>
+        <tr><td>Windows</td><td>"Windows protected your PC"</td><td>Click <strong>More info</strong>, then <strong>Run anyway</strong>.</td></tr>
+        <tr><td>macOS</td><td>"Onsite is damaged" or "can't be opened"</td><td>Run <code>xattr -dr com.apple.quarantine /Applications/Onsite.app</code> once in Terminal. Allow the microphone when asked.</td></tr>
+        <tr><td>Linux</td><td>The AppImage won't start</td><td>Run <code>chmod +x Onsite_*.AppImage</code>.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted note">Check a download against <a href="{{sums_url}}">SHA256SUMS.txt</a>. <a href="{{gh}}/blob/main/CODE_SIGNING.md">Code signing policy</a></p>
+
+  <h3 class="sub">System requirements</h3>
+  <p class="muted">Typed rounds run on any 64-bit computer with 4 GB RAM. Spoken rounds run the voice on your CPU, so the CPU matters most.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>System</th><th>Minimum for spoken rounds</th><th>Recommended</th></tr></thead>
+      <tbody>
+        <tr><td>Windows</td><td>Windows 10 64-bit · 4-core CPU from 2019 or newer · 8 GB RAM</td><td>Windows 11 · 6+ core CPU from 2021 or newer · 16 GB RAM</td></tr>
+        <tr><td>macOS</td><td>macOS 11 · Apple M1, or a quad-core Intel Mac from 2018 or newer · 8 GB RAM</td><td>Any Apple Silicon Mac · 16 GB RAM</td></tr>
+        <tr><td>Linux</td><td>x86-64 · glibc 2.35+ (Ubuntu 22.04+) · 4-core CPU from 2019 or newer · 8 GB RAM</td><td>6+ core CPU from 2021 or newer · 16 GB RAM</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted note">The voice models download once from Settings → Voice. Keep about 1.6 GB free for that. A headset works best.</p>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <a class="brand" href="./"><img src="assets/logo.png" alt="" width="24" height="24">Onsite</a>
+    <nav>
+      <a href="{{gh}}">GitHub</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="{{gh}}/issues">Report a bug</a>
+      <a href="{{gh}}/blob/main/PRIVACY.md">Privacy</a>
+      <a href="{{gh}}/blob/main/SECURITY.md">Security</a>
+      <a href="{{gh}}/blob/main/LICENSE">MIT licence</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

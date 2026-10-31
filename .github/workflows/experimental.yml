@@ -18,6 +18,8 @@ on:
       - "graphify-out/**"
       - ".graphifyignore"
       - "LICENSE*"
+      - "site/**"
+      - ".github/workflows/site.yml"
   workflow_dispatch:
 
 concurrency:
@@ -125,6 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Keep the newest 3 experimental pre-releases
         env:
@@ -138,3 +141,8 @@ jobs:
             echo "deleting $tag"
             gh release delete "$tag" -R "$GITHUB_REPOSITORY" --cleanup-tag -y
           done
+      # After pruning, so the site never links to a deleted pre-release. See site.yml.
+      - name: Rebuild the website
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run site.yml -R "$GITHUB_REPOSITORY" --ref main || echo "::warning::Could not start the website build"

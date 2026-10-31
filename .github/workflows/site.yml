@@ -1,0 +1,56 @@
+# Builds the website (site/) and deploys it to GitHub Pages. The build bakes in the published releases (downloads,
+# sizes, what changed), so it must re-run after every release: release.yml and experimental.yml start it with
+# `gh workflow run site.yml --ref main` (releases made with GITHUB_TOKEN don't fire `release` events, but
+# workflow_dispatch does). The daily run is a safety net. Needs Settings → Pages → Source: GitHub Actions.
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "ui/assets/**"
+      - "docs/engineering/img/**"
+      - ".github/workflows/site.yml"
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Every branch and tag: "what changed" is the git log between release tags (experimental ones are on m1).
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node site/build.mjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

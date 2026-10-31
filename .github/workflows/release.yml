@@ -74,3 +74,16 @@ jobs:
       release_id: ${{ needs.draft.outputs.id }}
       tag: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' }}
+
+  # The website bakes in the releases, so rebuild it once this one is published. See site.yml.
+  website:
+    needs: build
+    if: ${{ needs.build.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Rebuild the website
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run site.yml -R "$GITHUB_REPOSITORY" --ref main || echo "::warning::Could not start the website build"

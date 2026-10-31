@@ -6,3 +6,4 @@ node_modules
 .env
 src-tauri/gen/schemas
 graphify-out/
+site/dist
