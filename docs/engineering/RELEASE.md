@@ -85,3 +85,13 @@ Windows used daily. Linux AppImage launched under WSLg 2026-10-31 (UI, DB, dossi
 macOS never run by a person — treat reports as first contact.
 Known for later: a hand-run newer setup.exe over an install with these hooks offers "uninstall first"; that runs the old
 uninstaller without `/UPDATE`, so the voice models are deleted and download again (user data stays).
+
+## Website (`site/`, `site.yml`)
+
+- GitHub Pages (Settings → Pages → Source: GitHub Actions), `https://prateesh-sulikeri.github.io/Onsite/`. Deploys from `main` only.
+- `node site/build.mjs` bakes releases into `site/dist`: latest stable downloads (asset by suffix, like `updates.rs`), newest
+  experimental if newer than stable, changelog = `git log` subjects from the previous tag (stable: older stable ancestor; exp:
+  any older ancestor tag) minus `Release`/`Version`/`Merge`/`Docs:`/`CI:` lines. Release bodies are not used.
+- Rebuild triggers: push to main (`site/**`, `ui/assets/**`, `docs/engineering/img/**`), `release.yml` job `website` and the end of
+  `experimental.yml` `prune` (`gh workflow run site.yml --ref main`; needs `actions: write`), daily cron. `experimental.yml` ignores `site/**`.
+- No third-party requests, no analytics (CSP meta: self only). Feature copy must stay true to the app, like the README.
