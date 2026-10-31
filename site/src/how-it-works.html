@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>How Onsite works</title>
+<meta name="description" content="Onsite under the hood: the Tauri and Rust core, the AI layer, the local voice pipeline, the code runner, research jobs and storage.">
+<meta name="theme-color" content="#0c0d21">
+<link rel="icon" type="image/png" href="assets/logo.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="page">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <nav class="wrap nav">
+    <a class="brand" href="./"><img src="assets/logo.png" alt="" width="28" height="28">Onsite</a>
+    <div class="nav-links">
+      <a href="./#features">Features</a>
+      <a href="./#engines">Engines</a>
+      <a href="how-it-works.html" aria-current="page">How it works</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="{{gh}}">GitHub</a>
+      <a class="btn small primary" href="./#download">Download</a>
+    </div>
+  </nav>
+</header>
+
+<main id="main" class="wrap docs">
+  <aside class="toc" aria-label="On this page">
+    <p class="eyebrow">On this page</p>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#turn">One spoken turn</a></li>
+      <li><a href="#ai">The AI layer</a></li>
+      <li><a href="#interviewer">The interviewer</a></li>
+      <li><a href="#voice">Voice</a></li>
+      <li><a href="#coding">Coding rounds</a></li>
+      <li><a href="#research">Research and dossiers</a></li>
+      <li><a href="#feedback">Feedback</a></li>
+      <li><a href="#resume">Resume check</a></li>
+      <li><a href="#storage">Storage and privacy</a></li>
+      <li><a href="#rules">Rules we keep</a></li>
+      <li><a href="#contribute">Build and contribute</a></li>
+    </ol>
+  </aside>
+
+  <article class="prose">
+    <p class="eyebrow">For developers</p>
+    <h1>How Onsite works</h1>
+    <p class="lead small">Onsite is a <strong>Tauri 2</strong> desktop app. The core is Rust; the UI is plain HTML, CSS and JavaScript in the system WebView, with no framework. Everything runs on your machine except the calls to the AI you connect.</p>
+
+    <section id="overview">
+      <h2>Overview</h2>
+      <div class="arch" role="img" aria-label="Architecture: the WebView UI talks to the Rust core over Tauri IPC. The core runs the AI layer, voice, interview, runner, research, resume check and storage. It reaches local processes and files on your machine, and the AI provider and GitHub over the network.">
+        <div class="arch-col">
+          <p class="arch-head">Your screen</p>
+          <div class="node"><strong>WebView UI</strong><span><code>ui/</code> plain JS, CodeMirror 6 editor, Excalidraw whiteboard</span></div>
+          <p class="arch-note">CSP allows only the app itself. The UI can't reach the network.</p>
+        </div>
+        <div class="arch-link"><span>Tauri IPC<br>commands, events</span></div>
+        <div class="arch-col core">
+          <p class="arch-head">Rust core <code>src-tauri/src</code></p>
+          <div class="chips">
+            <span><code>interview</code> loops, rounds, reports</span>
+            <span><code>brain</code> AI providers</span>
+            <span><code>voice</code> mic, VAD, STT, TTS</span>
+            <span><code>runner</code> + <code>bank</code> code runs</span>
+            <span><code>research</code> dossiers</span>
+            <span><code>ats</code> resume check</span>
+            <span><code>store</code> SQLite</span>
+            <span><code>updates</code> releases</span>
+          </div>
+        </div>
+        <div class="arch-link"><span>processes,<br>localhost, HTTPS</span></div>
+        <div class="arch-col">
+          <p class="arch-head">On your machine</p>
+          <div class="node small"><strong>Claude Code CLI</strong><span>one <code>claude -p</code> per round</span></div>
+          <div class="node small"><strong>Voice models</strong><span>in-process (sherpa-onnx), or VoiceStudio on 127.0.0.1</span></div>
+          <div class="node small"><strong>Whisper sidecar</strong><span>Python, kept loaded on the GPU</span></div>
+          <div class="node small"><strong>Code runners</strong><span>python, node, javac, g++</span></div>
+          <div class="node small"><strong>SQLite</strong><span><code>onsite.db</code> in app data</span></div>
+          <p class="arch-head net">Over the network</p>
+          <div class="node small warm"><strong>Your AI provider</strong><span>Claude, OpenAI, Gemini or Groq</span></div>
+          <div class="node small warm"><strong>GitHub</strong><span>only when you check for updates or download voice models</span></div>
+        </div>
+      </div>
+      <p>The UI never holds secrets or logic that matters. It calls about 65 thin Tauri commands and listens to a few event streams: <code>round</code> (interviewer text, sentences, code blocks, turn end), <code>voice</code> (speaking, listening, captions, latency), <code>prep</code> (the "Getting the room ready" checklist) and <code>research</code> (job progress).</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Process</th><th>Started by</th><th>Lives for</th><th>Talks over</th></tr></thead>
+          <tbody>
+            <tr><td>Onsite (UI + core)</td><td>you</td><td>the app</td><td>Tauri IPC</td></tr>
+            <tr><td><code>claude -p</code> interviewer</td><td><code>brain::session</code></td><td>one round, in an empty temp dir</td><td>stream-json on stdin/stdout</td></tr>
+            <tr><td><code>claude -p</code> job</td><td><code>brain::oneshot</code></td><td>one report, verdict or research job</td><td>prompt on stdin, stream-json out</td></tr>
+            <tr><td><code>whisper_server.py</code></td><td><code>voice::whisper</code></td><td>the app</td><td>JSON lines</td></tr>
+            <tr><td>python / node / java / g++ output</td><td><code>runner</code></td><td>one Run or Submit</td><td>JSON lines</td></tr>
+            <tr><td>VoiceStudio (optional)</td><td>you</td><td>its own app</td><td>HTTP + WebSocket on 127.0.0.1:3900</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="turn">
+      <h2>One spoken turn</h2>
+      <p>This is the hot path. Everything is tuned so the interviewer starts talking soon after you stop.</p>
+      <ol class="flow">
+        <li><strong>Mic</strong><span>cpal at the device rate, low-pass filtered, down to 16 kHz mono</span></li>
+        <li><strong>VAD</strong><span>energy detector learns the noise floor; your answer ends after your pause setting</span></li>
+        <li><strong>Segments</strong><span>long answers are cut at short pauses and decoded while you're still talking</span></li>
+        <li><strong>Speech to text</strong><span>Parakeet gives the live caption; Whisper's text wins when it's there</span></li>
+        <li><strong>Clean-up</strong><span>repeats collapsed, tech terms fixed against a vocabulary</span></li>
+        <li><strong>Interviewer</strong><span>answer + changed workspace + last code run + elapsed time, streamed back</span></li>
+        <li><strong>Splitter</strong><span>cuts sentences as text streams in; code blocks go to the workspace, never to speech</span></li>
+        <li><strong>Text to speech</strong><span>short sentences batched; the next batch is generated while the current one plays</span></li>
+        <li><strong>Speaker</strong><span>when playback ends, the mic opens for your next answer</span></li>
+      </ol>
+      <p>Each answer goes to the interviewer as one message:</p>
+<pre><code>Okay, I'd keep a hash map from value to index as I scan.
+
+[Workspace]
+Editor (Java):
+```
+class Solution { ... }
+```
+[Code run] Run in Java: 2/3 tests passed. First failure: ...
+[Elapsed: 14 of 45 min]</code></pre>
+      <p>The workspace is sent only when it changed since the last turn. The whiteboard is turned into text (shapes, what's inside what, labelled arrows) so the model can read your design.</p>
+    </section>
+
+    <section id="ai">
+      <h2>The AI layer</h2>
+      <p><code>brain/</code> hides which AI is in use. It has two entry points: a live <code>Session</code> per round, and <code>run_once</code> for one-shot jobs. Both work on the Claude Code CLI and on four HTTP APIs. There are no provider SDKs, only <code>reqwest</code>.</p>
+      <h3>Claude Code</h3>
+      <p>Each round starts a fresh <code>claude -p</code> process in an empty temp directory, with every way to reach tools or your config turned off:</p>
+<pre><code>claude -p --input-format stream-json --output-format stream-json --verbose
+  --include-partial-messages --tools "" --setting-sources ""
+  --strict-mcp-config --disable-slash-commands
+  --system-prompt-file &lt;tmp&gt;/.system-prompt.md --model &lt;model&gt;</code></pre>
+      <ul>
+        <li><code>--tools ""</code> removes every built-in tool. <code>--allowedTools</code> only sets permissions, so it isn't enough.</li>
+        <li><code>--setting-sources ""</code> keeps your CLAUDE.md and settings out. <code>--disable-slash-commands</code> stops a candidate from reaching an installed skill by saying "/something".</li>
+        <li>The system prompt is fully replaced, not appended. With the coding-agent prompt left in, the model quoted its environment rules back.</li>
+        <li>One process handles every turn of a round: one JSONL user line in, stream events out, ending with a <code>result</code>. If the process dies, the next answer resumes it with <code>--resume</code>.</li>
+        <li>If Claude Code is installed only in WSL, Onsite runs it through <code>wsl.exe -e bash -lc</code>.</li>
+      </ul>
+      <h3>APIs</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Provider</th><th>Endpoint</th><th>Research tools</th></tr></thead>
+          <tbody>
+            <tr><td>Claude API</td><td><code>/v1/messages</code>, SSE</td><td><code>web_search</code> + <code>web_fetch</code></td></tr>
+            <tr><td>OpenAI</td><td><code>/v1/responses</code>, <code>store: false</code></td><td><code>web_search</code></td></tr>
+            <tr><td>Gemini</td><td><code>streamGenerateContent</code>, SSE</td><td><code>google_search</code> grounding</td></tr>
+            <tr><td>Groq</td><td>OpenAI-compatible chat completions</td><td><code>browser_search</code> (gpt-oss)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>An API session keeps the history in memory and sends one streamed request per turn. Rate limits are waited out using <code>retry-after</code>. Both backends feed the same <code>TurnState</code>, so the UI and voice see the same events either way. One-shot jobs parse their JSON tolerantly: the whole text, else one fenced block, else the first <code>{</code> to the last <code>}</code>.</p>
+    </section>
+
+    <section id="interviewer">
+      <h2>The interviewer</h2>
+      <p>The interviewer is a prompt, not code. It lives in <code>prompts/interviewer.md</code> and is filled in for each round:</p>
+      <ul>
+        <li><strong>Who:</strong> a persona from a panel (traits, strictness, backstory, voice), or a name from the catalog.</li>
+        <li><strong>What:</strong> the round's guide and rubric, the company style, the level bar, and your resume, job description and notes.</li>
+        <li><strong>Company loops:</strong> the dossier's description of that round, with the questions candidates reported.</li>
+        <li><strong>Coding:</strong> a problem from the bank, with the optimal complexity, hints to give one at a time, and follow-ups.</li>
+        <li><strong>Variety:</strong> Claude Code has no temperature setting, so each round gets a different opener, plus the openings of recent rounds marked "don't reuse".</li>
+      </ul>
+      <p>The prompt asks for 1–4 spoken sentences and one question per turn, no feedback during the round, and pacing by the <code>[Elapsed]</code> tag. When the round is over, the interviewer writes <code>[[END]]</code>. The splitter removes it, and the UI offers "Get my feedback".</p>
+    </section>
+
+    <section id="voice">
+      <h2>Voice</h2>
+      <p>Two engines sit behind one interface (<code>voice/engine.rs</code>):</p>
+      <ul>
+        <li><strong>Built-in:</strong> Pocket TTS and Parakeet TDT v2 (int8) through the <code>sherpa-onnx</code> crate, on the CPU. The models are pinned GitHub release assets, checked by size and SHA-256, and downloaded only from github.com.</li>
+        <li><strong>VoiceStudio:</strong> an external app on 127.0.0.1:3900. Onsite renders a sample line for each panel persona, scores the takes (voiced share, hiss, pitch against the description) and clones the best one, so each persona keeps one stable voice.</li>
+      </ul>
+      <h3>Listening</h3>
+      <p>Segments under 3 s are never cut. Between 3 and 20 s they're cut at a 700 ms pause, and past 20 s at 300 ms. Each finished segment is decoded right away, so only the last one is left when you stop. Live captions come from re-decoding the open segment every 500 ms, using at most half the CPU so slow laptops don't drop mic audio.</p>
+      <p>When the Whisper large-v3 sidecar is ready, each segment also goes to it, with the round's tech vocabulary as the prompt. Its text wins; otherwise Parakeet's is used.</p>
+      <h3>Speaking</h3>
+      <p>Sentences under 4 words wait briefly for the next one and are merged, up to 220 characters. On the built-in engine, long sentences are split at a comma or dash near the middle. That brought first audio on a long reply from 2.5 s to 1.8 s.</p>
+      <h3>Turn-taking</h3>
+      <p>The mic stays closed while the interviewer speaks, since there's no echo cancellation yet. Tapping the orb interrupts: the rest of the reply is dropped from speech but kept in the transcript, and the mic opens. If voice fails at any point, the round carries on typed.</p>
+    </section>
+
+    <section id="coding">
+      <h2>Coding rounds</h2>
+      <p>The question bank is <code>prompts/questions.csv</code>: 81 problems (Blind 75 plus 20 originals), each with typed signatures, tests, hints, follow-ups, a Python reference solution and a stress-test generator. The model only picks the problem; the expected answers are data.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Language</th><th>Runs as</th><th>Time per test</th></tr></thead>
+          <tbody>
+            <tr><td>Python</td><td>a driver that reads the signature</td><td>6 s</td></tr>
+            <tr><td>JavaScript</td><td>Node, in a worker with a 256 MB stack</td><td>3 s</td></tr>
+            <tr><td>Java</td><td><code>javac</code> + a generated <code>Main</code></td><td>2 s</td></tr>
+            <tr><td>C++</td><td><code>g++ -std=c++17 -O2</code> + a generated <code>main</code></td><td>2 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><strong>Run</strong> uses the example tests. <strong>Submit</strong> adds the hidden tests and random stress cases checked against the reference. The result goes to the interviewer with your next answer, so it can react to a failing test like a real interviewer would. Lists, trees, graphs, design classes and encode/decode round-trips are all supported.</p>
+    </section>
+
+    <section id="research">
+      <h2>Research and dossiers</h2>
+      <p>A research job is the only call that gets tools: web search and web fetch. It runs <code>prompts/research.md</code> as a background task, reads recent candidate reports, and returns a dossier: the rounds, their style, the reported questions, values, pitfalls and sources.</p>
+      <ul>
+        <li>Progress is never faked. Search and page counts come from real tool calls in the stream, and stages from <code>PROGRESS</code> lines the model prints.</li>
+        <li>The result is checked against <code>docs/dossier.schema.json</code> and tidied: round names are mapped to round types, and minutes are clamped to 10–180.</li>
+        <li>Dossiers are saved to SQLite and as JSON files, and can be exported and imported.</li>
+      </ul>
+    </section>
+
+    <section id="feedback">
+      <h2>Feedback</h2>
+      <p>A report needs at least 2 answers and 40 words. The transcript, the metrics (answer lengths, time used, code shares) and the round's rubric go to the report model, with no tools. It returns JSON: an overall score, a decision, rubric scores from 1 to 4 with evidence, what went well, what held you back, "fix first", and better answers for the key moments.</p>
+      <p>After a full loop, the reports go to a hiring-committee prompt for one verdict and a practice plan. The dashboard is computed in the UI from these reports. It shows no placeholder numbers.</p>
+    </section>
+
+    <section id="resume">
+      <h2>Resume check</h2>
+      <p>The parser reads the file the way an ATS does. The type comes from the bytes, not the file name: PDF (with layout boxes), .docx, .rtf, text and HTML. The checks and the match score are ported from Resume-Matcher (Apache-2.0), and the six ATS profiles follow ats-screener (MIT). This part is deterministic, with no AI.</p>
+      <p>The AI only reads the job posting to pull out keywords. It then grades the <em>extracted</em> resume text from A to D, the way an AI screen would. The prompt forbids guessing gender or other traits from a name.</p>
+    </section>
+
+    <section id="storage">
+      <h2>Storage and privacy</h2>
+      <p>Everything is stored in one SQLite file (<code>settings</code>, <code>loops</code>, <code>rounds</code>, <code>reports</code>, <code>dossiers</code>, <code>research_jobs</code>) plus a few files in the app data folder. Each turn is saved as it happens, so a crash loses nothing.</p>
+      <ul>
+        <li>API keys live in the <code>settings</code> table. They're never sent back to the UI (it only learns whether a key is set) and never logged.</li>
+        <li>No accounts, analytics or telemetry. The network is used only for the AI you picked, research searches, voice model downloads and update checks, the last two only when you ask.</li>
+        <li>Storage limits (rounds to keep, days, log size) are enforced at startup. Uninstalling removes the models, log and temp files, and your data too if you choose.</li>
+      </ul>
+    </section>
+
+    <section id="rules">
+      <h2>Rules we keep</h2>
+      <ol class="rules">
+        <li><strong>The interviewer never gets tools.</strong> Interviewer, report, verdict and resume calls send none, on every provider. Only research gets web access.</li>
+        <li><strong>Model output is data.</strong> Text from the model and from dossiers is parsed and escaped, never executed.</li>
+        <li><strong>Bring your own AI.</strong> Every feature works on all five providers. Keys come only from Settings.</li>
+        <li><strong>Speech is local, and never a dead end.</strong> Any voice failure falls back to typing.</li>
+        <li><strong>One live round at a time, one pending reply per round.</strong></li>
+        <li><strong>Prompts are content.</strong> They live in <code>prompts/</code>, not in code. A dev build picks up edits on the next round.</li>
+      </ol>
+    </section>
+
+    <section id="contribute">
+      <h2>Build and contribute</h2>
+      <p>You need Rust (stable) and the Tauri prerequisites for your system. Then, in <code>src-tauri/</code>:</p>
+<pre><code>cargo install tauri-cli --version "^2" --locked
+cargo tauri dev                 # run it
+cargo clippy -- -D warnings     # before committing
+cargo test                      # add -- --ignored to run every reference solution</code></pre>
+      <p>Each subsystem has a short design doc. Read the one for the area you're changing:</p>
+      <div class="doc-links">
+        <a href="{{gh}}/blob/main/docs/engineering/ARCHITECTURE.md"><strong>Architecture</strong><span>processes, IPC, invariants</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/AI.md"><strong>AI</strong><span>providers, sessions, splitter</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/INTERVIEW.md"><strong>Interview</strong><span>loops, prompts, reports</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/VOICE.md"><strong>Voice</strong><span>engines, VAD, turn-taking</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/CODING.md"><strong>Coding</strong><span>question bank, runner</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/RESEARCH.md"><strong>Research</strong><span>jobs, dossiers</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/RESUME-CHECK.md"><strong>Resume check</strong><span>parsing, ATS profiles</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/STORAGE.md"><strong>Storage</strong><span>schema, locations, limits</span></a>
+        <a href="{{gh}}/blob/main/docs/engineering/RELEASE.md"><strong>Release</strong><span>CI, channels, updater</span></a>
+      </div>
+      <p>Bug reports, fixes and new questions are welcome. See <a href="{{gh}}/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>, and report security problems privately via <a href="{{gh}}/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+    </section>
+  </article>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <a class="brand" href="./"><img src="assets/logo.png" alt="" width="24" height="24">Onsite</a>
+    <nav>
+      <a href="{{gh}}">GitHub</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="{{gh}}/issues">Report a bug</a>
+      <a href="{{gh}}/blob/main/LICENSE">MIT licence</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
