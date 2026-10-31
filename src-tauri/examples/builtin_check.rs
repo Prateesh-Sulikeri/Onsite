@@ -83,6 +83,25 @@ async fn main() {
         }
     }
 
+    // A long reply spoken whole vs in the clause pieces a round uses: first audio and total time.
+    let long = "Okay, so imagine the payments service gets the same request twice because the client retried after a timeout, and the first attempt actually succeeded on our side. How would you make sure the customer is charged exactly once, and what would you store in Redis versus PostgreSQL?";
+    for (label, parts) in [("whole", vec![long.to_string()]), ("pieces", onsite_lib::voice::builtin::pieces(long))] {
+        let start = Instant::now();
+        let (mut first, mut samples) = (None, 0usize);
+        for part in &parts {
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
+            let (tts2, part2) = (tts.clone(), part.clone());
+            let job = tokio::task::spawn_blocking(move || tts2.speak(&part2, VOICES[0].0, 1.0, tx));
+            while let Some(c) = rx.recv().await {
+                first.get_or_insert(start.elapsed().as_millis());
+                samples += c.len();
+            }
+            job.await.unwrap().expect("speak");
+        }
+        let secs = samples as f32 / tts.rate as f32;
+        println!("long reply, {label} ({} calls): first audio {} ms, total {} ms, audio {secs:.1} s", parts.len(), first.unwrap_or(0), start.elapsed().as_millis());
+    }
+
     // Through the round's STT path: 16 kHz segment -> Parakeet -> clean_transcript. Also the caption re-decode.
     let mut inputs: Vec<(String, Vec<i16>)> = spoken
         .into_iter()

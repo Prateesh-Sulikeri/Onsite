@@ -631,7 +631,17 @@ function hookDrop(dropSel, inputSel, textSel, msgSel, label){
 function interviewerFor(i, key, panelId){
   const panel = PANELS.find(p => p.id === panelId);
   const iv = panel && panel.interviewers.find(x => x.id === (panel.round_owner || {})[key]);
-  return iv ? {name: iv.name.split(" ")[0], full: iv.name, role: iv.role, voice: iv.voice} : {name: CAT.NAMES[(i*5+3) % CAT.NAMES.length], full: null, role: null};
+  return iv ? {name: iv.name.split(" ")[0], full: iv.name, role: iv.role, voice: iv.voice} : {name: catalogName(i), full: null, role: null};
+}
+/* A round without a panel gets a name that matches its voice (built-in voices only; a VoiceStudio profile has no gender).
+   Same rule as Catalog::persona in Rust. */
+function catalogName(i){
+  const v = SETTINGS && SETTINGS.voice;
+  const female = v && v.enabled && v.engine === "builtin" ? (v.builtin_voice === "priya_shah") : null;
+  const women = CAT.FEMALE_NAMES || [];
+  let pool = female === null ? CAT.NAMES : CAT.NAMES.filter(n => women.includes(n) === female);
+  if (!pool.length) pool = CAT.NAMES;
+  return pool[(i*5+3) % pool.length];
 }
 function persona(i){ return interviewerFor(i, selectedRounds()[i], $("#panel").value).name; }
 /* With the built-in voice, a panel of Indian-accent people can't be spoken. Grey it out and say why. */

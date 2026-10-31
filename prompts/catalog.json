@@ -329,6 +329,7 @@
     "Sarah",
     "Marcus"
   ],
+  "FEMALE_NAMES": ["Aditi", "Meera", "Sneha", "Charlotte", "Neha", "Ananya", "Elena", "Sarah"],
   "TEMPER": {
     "supportive": "Warm and encouraging but still professional. Give a small hint when the candidate is stuck for a while.",
     "realistic": "Neutral and professional like a real panel interviewer. Brief acknowledgments ('okay', 'got it'), never effusive praise. Hints only after a real stall, and small ones phrased as questions.",

@@ -20,11 +20,83 @@ use tokio::sync::mpsc::UnboundedSender;
 // The id and clip file stay "priya_shah" so saved settings and paths keep working; the voice is shown and spoken as Charlotte.
 pub const VOICES: [(&str, &str, &str); 2] = [("ethan_brooks", "Ethan", "American, male"), ("priya_shah", "Charlotte", "British, female")];
 pub const DEFAULT_VOICE: &str = "ethan_brooks";
-const THREADS: i32 = 4;
+/// Long sentences are cut into parts of about this many words. Pocket returns audio only when a whole
+/// sentence is done, so on a slow CPU a 25-word sentence is a long silence before anything plays.
+const MAX_PIECE_WORDS: usize = 14;
+/// A cut never leaves a part shorter than this; very short parts sound clipped.
+const MIN_PIECE_WORDS: usize = 4;
 /// Pocket reads at most this much of the reference clip; the clips are ~21 s. Longer references held the voice steady.
 const MAX_REFERENCE_S: f64 = 25.0;
 /// Fixed seed: the same line sounds the same on every run.
 const SEED: i64 = 42;
+
+/// ONNX threads for each model: about one per physical core, at most 4 (more didn't help on an 8-core CPU).
+/// Using every core starved the speaker thread on 4-thread laptops, and the audio stuttered.
+fn threads() -> i32 {
+    let logical = std::thread::available_parallelism().map_or(4, |n| n.get());
+    (logical / 2).clamp(1, 4) as i32
+}
+
+/// Splits `text` into the parts Pocket speaks one call at a time: sentences over [`MAX_PIECE_WORDS`] are cut at a
+/// comma, semicolon, colon or dash near their middle; short sentences are packed together up to that size.
+pub fn pieces(text: &str) -> Vec<String> {
+    let mut units = Vec::new();
+    for s in sentences(text) {
+        split_long(&s.split_whitespace().collect::<Vec<_>>(), &mut units);
+    }
+    let mut out: Vec<String> = Vec::new();
+    for u in units {
+        match out.last_mut() {
+            Some(last) if words(last) + words(&u) <= MAX_PIECE_WORDS => {
+                last.push(' ');
+                last.push_str(&u);
+            }
+            _ => out.push(u),
+        }
+    }
+    out
+}
+
+fn words(s: &str) -> usize {
+    s.split_whitespace().count()
+}
+
+/// Sentences of `text`, each ending at `.`, `!` or `?` followed by a space (or at the end).
+fn sentences(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    let b = text.as_bytes();
+    for i in 0..b.len() {
+        if matches!(b[i], b'.' | b'!' | b'?') && b.get(i + 1).is_some_and(|c| c.is_ascii_whitespace()) {
+            out.push(text[start..=i].trim());
+            start = i + 1;
+        }
+    }
+    out.push(text[start..].trim());
+    out.retain(|s| !s.is_empty());
+    out
+}
+
+fn split_long(w: &[&str], out: &mut Vec<String>) {
+    if w.len() <= MAX_PIECE_WORDS {
+        if !w.is_empty() {
+            out.push(w.join(" "));
+        }
+        return;
+    }
+    // A cut after word i, where word i ends a clause and both sides keep MIN_PIECE_WORDS words.
+    let clause_end = |s: &str| s.ends_with([',', ';', ':']) || matches!(s, "-" | "–" | "—") || s.ends_with(['—', '–']);
+    let cut = (MIN_PIECE_WORDS - 1..w.len() - MIN_PIECE_WORDS)
+        .filter(|&i| clause_end(w[i]))
+        .min_by_key(|&i| (i + 1).abs_diff(w.len() / 2));
+    match cut {
+        Some(i) => {
+            split_long(&w[..=i], out);
+            split_long(&w[i + 1..], out);
+        }
+        None => out.push(w.join(" ")),
+    }
+}
 
 /// Panel interviewers share the two voices: women get Charlotte, everyone else Ethan.
 pub fn clip_for_gender(gender: &str) -> &'static str {
@@ -33,6 +105,11 @@ pub fn clip_for_gender(gender: &str) -> &'static str {
     } else {
         DEFAULT_VOICE
     }
+}
+
+/// Whether a built-in voice is a woman's.
+pub fn is_female(clip: &str) -> bool {
+    known_clip(clip) == "priya_shah"
 }
 
 /// A saved or unknown clip id falls back to the default voice.
@@ -63,7 +140,7 @@ impl PocketTts {
     /// `models_root` = `<app data>/models`; `voices_dir` = `prompts/voices`.
     pub fn load(models_root: &Path, voices_dir: &Path) -> Result<Self> {
         let dir = models_root.join(models::POCKET.id);
-        let mut model = OfflineTtsModelConfig { num_threads: THREADS, provider: Some("cpu".into()), ..Default::default() };
+        let mut model = OfflineTtsModelConfig { num_threads: threads(), provider: Some("cpu".into()), ..Default::default() };
         model.pocket = OfflineTtsPocketModelConfig {
             lm_flow: file(&dir, "lm_flow.int8.onnx"),
             lm_main: file(&dir, "lm_main.int8.onnx"),
@@ -145,7 +222,7 @@ impl ParakeetStt {
         };
         c.model_config.tokens = file(&dir, "tokens.txt");
         c.model_config.model_type = Some("nemo_transducer".into());
-        c.model_config.num_threads = THREADS;
+        c.model_config.num_threads = threads();
         c.model_config.provider = Some("cpu".into());
         let rec = OfflineRecognizer::create(&c).ok_or_else(|| voice_err("The speech model didn't load."))?;
         Ok(Self { rec: Mutex::new(rec) })
@@ -191,7 +268,8 @@ impl Cache {
         let (root, voices) = (models::root(data_dir), voices_dir.to_path_buf());
         let t0 = std::time::Instant::now();
         let t = Arc::new(tokio::task::spawn_blocking(move || PocketTts::load(&root, &voices)).await.map_err(|e| AppError::Voice(e.to_string()))??);
-        tracing::info!(ms = t0.elapsed().as_millis() as u64, "Pocket TTS loaded");
+        let cpus = std::thread::available_parallelism().map_or(0, |n| n.get());
+        tracing::info!(ms = t0.elapsed().as_millis() as u64, cpus, threads = threads(), "Pocket TTS loaded");
         *self.tts.lock().unwrap() = Some(t.clone());
         Ok(t)
     }
@@ -231,6 +309,25 @@ mod tests {
         assert_eq!(clip_for_gender(""), "ethan_brooks");
         assert_eq!(known_clip("nobody"), "ethan_brooks");
         assert_eq!(known_clip("priya_shah"), "priya_shah");
+    }
+
+    #[test]
+    fn long_sentences_are_cut_at_clauses() {
+        let long = "If two requests carry the same idempotency key, the second one should return the stored response, and never charge the card twice.";
+        let p = pieces(long);
+        assert_eq!(p, ["If two requests carry the same idempotency key,", "the second one should return the stored response, and never charge the card twice."]);
+        assert_eq!(p.join(" "), long);
+        // Short sentences are packed together; a long one without commas is left whole.
+        assert_eq!(pieces("Okay. Got it. Let's move on."), ["Okay. Got it. Let's move on."]);
+        let plain = "word ".repeat(20);
+        assert_eq!(pieces(&plain), [plain.trim()]);
+        assert!(pieces("  ").is_empty());
+        assert_eq!(pieces("It costs 1.5 ms. Fine."), ["It costs 1.5 ms. Fine."]);
+    }
+
+    #[test]
+    fn thread_count_is_sane() {
+        assert!((1..=4).contains(&threads()));
     }
 
     #[test]

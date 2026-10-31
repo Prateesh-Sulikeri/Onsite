@@ -45,6 +45,10 @@ pub struct LoopSetup {
     /// edits or deletes don't change it. `rounds[i]` is `process[i].kind`.
     #[serde(default)]
     pub dossier: Option<Dossier>,
+    /// Whether the round's voice is a woman's (None = unknown or typed). Set at round start from the
+    /// voice settings so a catalog name matches the voice that speaks it. Never saved.
+    #[serde(skip)]
+    pub voice_female: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -119,7 +123,7 @@ impl LoopSetup {
         PlannedRound {
             key: k.clone(),
             name: reported.map_or_else(|| r.name.clone(), |d| d.name.clone()),
-            persona: p.as_ref().map_or_else(|| cat.persona(idx).to_string(), |p| p.first_name.clone()),
+            persona: p.as_ref().map_or_else(|| cat.persona(idx, self.voice_female).to_string(), |p| p.first_name.clone()),
             persona_id: p.as_ref().map(|p| p.id.clone()),
             persona_role: p.map(|p| p.role),
             minutes: self.minutes.or(reported.map(|d| d.minutes)).unwrap_or(r.min),
@@ -323,6 +327,7 @@ mod tests {
             dossier_id: String::new(),
             dossier_rounds: Vec::new(),
             dossier: None,
+            voice_female: None,
         }
     }
 
@@ -370,6 +375,19 @@ mod tests {
         assert!(interviewer_prompt(&tpl, &cat, &panels, &s, 0).contains("a senior software engineer, conducting"));
         s.rounds.push("nope".into());
         assert!(s.validate(&cat, &panels).is_err());
+    }
+
+    #[test]
+    fn catalog_name_matches_the_voice() {
+        let (cat, _, panels) = fixtures();
+        let mut s = setup();
+        for female in [true, false] {
+            s.voice_female = Some(female);
+            for i in 0..2 {
+                let name = s.plan(&cat, &panels, i).persona;
+                assert_eq!(cat.female_names.contains(&name), female, "round {i}: {name}");
+            }
+        }
     }
 
     #[test]

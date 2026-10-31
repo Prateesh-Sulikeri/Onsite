@@ -92,6 +92,7 @@ async fn run(client: ApiClient, iv_model: &str, rep_model: &str, skip_research: 
         dossier_id: String::new(),
         dossier_rounds: vec![],
         dossier: None,
+        voice_female: None,
     };
     let templates = PromptTemplates {
         interviewer: prompts::load(&dir, "interviewer.md").unwrap(),

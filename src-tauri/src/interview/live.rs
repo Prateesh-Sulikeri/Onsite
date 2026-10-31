@@ -336,7 +336,9 @@ fn load_setup(state: &AppState, loop_id: i64) -> Result<LoopSetup> {
 
 pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<RoundInfo> {
     let state = app.state::<AppState>();
-    let setup = load_setup(&state, loop_id)?;
+    let mut setup = load_setup(&state, loop_id)?;
+    let mut settings = state.settings();
+    setup.voice_female = settings.voice.voice_female();
     if index >= setup.rounds.len() {
         return Err(AppError::Invalid("No such round in this loop.".into()));
     }
@@ -389,7 +391,6 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
     };
     tracing::info!(?opener, earlier = earlier.len(), "round variety");
     system_prompt.push_str(&session_block(opener.as_deref(), &earlier));
-    let mut settings = state.settings();
     // A panel interviewer always speaks in their own voice, at their own pace.
     if let Some(p) = state.panels.persona(&setup.panel, &plan.key) {
         settings.voice.speed *= p.speed_factor;
