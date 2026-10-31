@@ -21,7 +21,8 @@
     <a class="brand" href="./"><img src="assets/logo.png" alt="" width="28" height="28">Onsite</a>
     <div class="nav-links">
       <a href="#features">Features</a>
-      <a href="#new">What's new</a>
+      <a href="#engines">Engines</a>
+      <a href="how-it-works.html">How it works</a>
       <a href="changelog.html">Changelog</a>
       <a href="{{gh}}">GitHub</a>
       <a class="btn small primary" href="#download">Download</a>
@@ -108,19 +109,73 @@
   </figure>
 </section>
 
-<section class="wrap section split">
-  <div>
-    <p class="eyebrow">Bring your own AI</p>
-    <h2>No account. No server.</h2>
-    <p class="lead small">Onsite uses the AI you connect. Your keys are stored only in Onsite's local database on your machine.</p>
+<section class="wrap section" id="engines">
+  <p class="eyebrow">Engines</p>
+  <h2>Bring your own AI. Keep your voice local.</h2>
+  <p class="lead small">Onsite has no account and no server. The AI is the one you connect. Speech runs on your computer.</p>
+
+  <h3 class="sub">AI engines</h3>
+  <p class="muted">Pick one in Settings → AI model. You choose two models: one for the interviewer and one for reports and research. The model lists load live from each provider.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Engine</th><th>What you need</th><th>Cost</th><th>Good to know</th></tr></thead>
+      <tbody>
+        <tr><td>Claude Code</td><td>Claude Pro or Max, and Claude Code installed (Windows or WSL)</td><td>Part of your plan</td><td>What Onsite is built and tested on. No key. Each reply takes a few seconds, so spoken rounds feel a little slower.</td></tr>
+        <tr><td>Claude API</td><td>A key from console.anthropic.com</td><td>Pay per use</td><td>Works without Pro.</td></tr>
+        <tr><td>OpenAI</td><td>A key from platform.openai.com</td><td>Pay per use</td><td>Billed apart from ChatGPT Plus.</td></tr>
+        <tr><td>Gemini</td><td>A key from aistudio.google.com</td><td>Free tier</td><td>The free tier uses Flash models.</td></tr>
+        <tr><td>Groq</td><td>A key from console.groq.com</td><td>Free tier</td><td>The fastest: the first words arrive in about half a second. The free tier allows 8,000 tokens a minute, so coding rounds can pause for up to 30 seconds.</td></tr>
+      </tbody>
+    </table>
   </div>
-  <ul class="providers card">
-    <li><strong>Claude Code</strong><span>Your Claude Pro or Max login. No key.</span></li>
-    <li><strong>Claude API</strong><span>Your key from console.anthropic.com.</span></li>
-    <li><strong>OpenAI</strong><span>Your key from platform.openai.com.</span></li>
-    <li><strong>Gemini</strong><span>A free key from aistudio.google.com.</span></li>
-    <li><strong>Groq</strong><span>A free key from console.groq.com. Very fast.</span></li>
-  </ul>
+  <p class="muted note">Keys are stored only in Onsite's local database. Only company research gets web search; the interviewer gets no tools.</p>
+
+  <h3 class="sub">Voice engines</h3>
+  <div class="grid three">
+    <article class="card engine">
+      <span class="badge">Default</span>
+      <h3>Built-in</h3>
+      <p>Pocket TTS speaks and Parakeet TDT listens. Both run inside Onsite on your CPU, with no GPU and nothing to install. The models download once from Settings → Voice (about 580 MB). Two voices: Ethan (American) and Charlotte (British).</p>
+    </article>
+    <article class="card engine">
+      <span class="badge">Optional</span>
+      <h3>VoiceStudio</h3>
+      <p>A separate desktop app. Onsite talks to it on your own machine (localhost). Each interviewer on a panel gets their own voice. Best on Windows with an NVIDIA GPU.</p>
+    </article>
+    <article class="card engine">
+      <span class="badge">Accuracy pass</span>
+      <h3>Whisper large-v3</h3>
+      <p>On Windows with VoiceStudio and a CUDA GPU, Onsite runs every answer through Whisper as well. It gets terms like Redis and idempotency key right. Without it, Parakeet's text is used.</p>
+    </article>
+  </div>
+  <p class="muted note">Three ways to answer: <strong>Spoken</strong>, <strong>Listen</strong> (the interviewer speaks, you type) or <strong>Typed</strong>. If voice can't start, the round goes typed instead of failing. English only for now.</p>
+</section>
+
+<section class="wrap section" id="start">
+  <p class="eyebrow">Recommended setup</p>
+  <h2>How to get the most out of it</h2>
+  <div class="grid three picks">
+    <article class="card pick">
+      <h3>AI</h3>
+      <p><strong>Claude Code</strong> if you already pay for Claude Pro or Max. No subscription? Start with a free <strong>Groq</strong> or <strong>Gemini</strong> key.</p>
+    </article>
+    <article class="card pick">
+      <h3>Voice</h3>
+      <p>The <strong>built-in engine and a headset</strong>. Keep the answer pause at 3 seconds so a thinking pause doesn't end your answer. You can also tap to finish.</p>
+    </article>
+    <article class="card pick">
+      <h3>Slow laptop?</h3>
+      <p>If the interviewer pauses mid-sentence, your CPU is struggling with the voice. Pick <strong>Listen</strong> or <strong>Typed</strong> on the Get ready screen.</p>
+    </article>
+  </div>
+  <ol class="steps">
+    <li><strong>Connect an AI.</strong> Settings → AI model: pick one, paste the key, press Run health check.</li>
+    <li><strong>Get the voice.</strong> Settings → Voice: download the models. Skip this for typed rounds.</li>
+    <li><strong>Start small.</strong> One round first. Paste your resume and the job description so the questions fit you.</li>
+    <li><strong>Talk like it's real.</strong> Think out loud and share your code or drawing. The interviewer gives no feedback during the round, and it ends the round when time's up.</li>
+    <li><strong>Read the report.</strong> Start with "Fix this first", then the stronger answers for the key moments.</li>
+    <li><strong>Go for a real target.</strong> Research a company in Dossiers (a few minutes on an API key, 10–40 on Claude Code), then run its whole loop for a hiring-committee verdict.</li>
+  </ol>
 </section>
 
 <section class="wrap section">
@@ -189,6 +244,7 @@
     <a class="brand" href="./"><img src="assets/logo.png" alt="" width="24" height="24">Onsite</a>
     <nav>
       <a href="{{gh}}">GitHub</a>
+      <a href="how-it-works.html">How it works</a>
       <a href="changelog.html">Changelog</a>
       <a href="{{gh}}/issues">Report a bug</a>
       <a href="{{gh}}/blob/main/PRIVACY.md">Privacy</a>
