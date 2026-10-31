@@ -19,8 +19,8 @@ Already installed? Settings → Updates → Check for updates.
 
 ## First run
 
-- Install [VoiceStudio](https://github.com/debpalash/VoiceStudio/releases) for spoken rounds. Without it, rounds are typed.
 - Pick an AI in Settings: Claude Code (Pro/Max), or paste a Claude, OpenAI, Gemini or Groq API key (Gemini and Groq have free tiers).
+- For spoken rounds, download the voice models in Settings → Voice (about 580 MB, once). [VoiceStudio](https://github.com/debpalash/VoiceStudio/releases) also works. Typed rounds need neither.
 
 ## Security warnings
 
@@ -29,7 +29,7 @@ Onsite is free and not code-signed yet, so your system warns about it the first 
 | System | What you see | What to do |
 | --- | --- | --- |
 | Windows | "Windows protected your PC" (SmartScreen) | Click **More info**, then **Run anyway** |
-| macOS | "Onsite is damaged" or "can't be opened" | Run `xattr -dr com.apple.quarantine /Applications/Onsite.app` once, then open it |
+| macOS | "Onsite is damaged" or "can't be opened" | Run `xattr -dr com.apple.quarantine /Applications/Onsite.app` once, then open it. Allow the microphone when asked. |
 | Linux | Nothing; AppImage won't start | `chmod +x Onsite_*.AppImage` |
 
 Check a download against `SHA256SUMS.txt`: `sha256sum -c SHA256SUMS.txt --ignore-missing` (Windows: `Get-FileHash <file>`).

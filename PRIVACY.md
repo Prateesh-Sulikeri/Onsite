@@ -3,12 +3,12 @@
 Plain terms for what Onsite does with your data. The same text is in the app under Settings → Privacy.
 
 Onsite sends data only to services you choose: the AI provider you connect, and GitHub when you press
-Check for updates. It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to the developer.
+Download (voice models) or Check for updates. It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to the developer.
 
 ## What stays on this computer
 - Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite's
   database in your app data folder.
-- Your voice. VoiceStudio and Whisper run locally; audio is never uploaded by Onsite.
+- Your voice. The built-in voice engine, VoiceStudio and Whisper run locally; audio is never uploaded by Onsite.
 - API keys, stored in the same local database. They are not encrypted, so anyone with access to your account on
   this computer can read them. Remove a key in Settings → AI model when you stop using it.
 - The log file, which holds errors and timings, not transcripts or keys.
@@ -21,6 +21,8 @@ Check for updates. It has no accounts, analytics, telemetry, ads or tracking, an
   [Google Gemini API](https://ai.google.dev/gemini-api/terms), [Groq](https://groq.com/privacy-policy/).
 - **Research jobs** ask that provider to search the web. The company, role and job description you enter are part of
   the request.
+- **Voice models** (built-in engine) download once from github.com when you press Download in Settings → Voice.
+  GitHub sees your IP address. Speech itself never leaves this computer.
 - **Update checks** ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates.
   Installing an update downloads the file from GitHub. GitHub sees your IP address, as with any website:
   [GitHub privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).

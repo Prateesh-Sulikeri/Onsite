@@ -78,6 +78,16 @@ jobs:
           tauriScript: tauri
           args: ${{ matrix.args }}
           releaseId: ${{ inputs.release_id }}
+      # The hardened runtime blocks the mic unless the signature carries the audio-input entitlement
+      # (src-tauri/Entitlements.plist). Failing here keeps the release a draft.
+      - name: Check the macOS mic entitlement
+        if: matrix.os == 'macos-latest'
+        run: |
+          app=src-tauri/target/universal-apple-darwin/release/bundle/macos/Onsite.app
+          codesign -dv "$app" 2>&1 | grep -E 'flags|Signature'
+          codesign -d --entitlements - --xml "$app" > ent.xml
+          cat ent.xml; echo
+          grep -q 'com.apple.security.device.audio-input' ent.xml || { echo "::error::Onsite.app is signed without the microphone entitlement"; exit 1; }
       - name: Keep the files (dry run)
         if: inputs.dry_run
         uses: actions/upload-artifact@v4

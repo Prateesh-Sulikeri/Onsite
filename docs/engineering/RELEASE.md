@@ -70,8 +70,17 @@ to `release.yml`, update `SECURITY.md` + release-notes warnings table. macOS: ad
 - Windows children: `CREATE_NO_WINDOW` (no console flashes).
 - `build.rs` watches `icons/` (else new logos never reach the exe without a clean build).
 - Running app locks `onsite.exe` → test builds with `--target-dir target/<other>`.
-- macOS mic permission string: `Info.plist`.
+- macOS mic: `Info.plist` (prompt text) **and** `Entitlements.plist` (`com.apple.security.device.audio-input`). Tauri signs with the
+  hardened runtime by default (`--options runtime`, even ad-hoc); without the entitlement the mic is silently blocked. sherpa-onnx is
+  linked statically, so no library-validation entitlement is needed.
+  build.yml checks the signed app for the entitlement after the macOS build and fails (release stays a draft) without it.
+- Linux: `lib.rs::run` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` unless the user set it. Without it WebKitGTK draws a blank white
+  window on NVIDIA drivers, VMs and WSLg (seen 2026-10-31 on the exp.4 AppImage under WSLg).
+- The AppImage runs without libfuse2 (static runtime); the .deb's `libasound2` resolves to `libasound2t64` on Ubuntu 24.04.
 
 ## Status / gaps
 
-Windows used daily. macOS + Linux builds never run by a person (2026-10-29) — treat reports as first contact.
+Windows used daily. Linux AppImage launched under WSLg 2026-10-31 (UI, DB, dossier import OK; no mic or round tested).
+macOS never run by a person — treat reports as first contact.
+Known for later: a hand-run newer setup.exe over an install with these hooks offers "uninstall first"; that runs the old
+uninstaller without `/UPDATE`, so the voice models are deleted and download again (user data stays).

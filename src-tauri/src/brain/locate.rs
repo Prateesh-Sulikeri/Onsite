@@ -21,7 +21,9 @@ pub enum Tools {
 impl ClaudeLocation {
     pub fn describe(&self) -> String {
         match self {
-            Self::Windows { exe } => format!("Windows: {}", exe.display()),
+            // `Windows` is the native install on every OS; only the label says which.
+            Self::Windows { exe } if cfg!(windows) => format!("Windows: {}", exe.display()),
+            Self::Windows { exe } => exe.display().to_string(),
             Self::Wsl => "WSL: claude".to_string(),
         }
     }

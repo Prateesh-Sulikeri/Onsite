@@ -4,7 +4,7 @@ Practise real software-engineering interview loops, out loud, on your own machin
 
 - **General loops:** pick any rounds (resume screen, project deep dive, fundamentals, DSA, code comprehension, LLD, system design, behavioral, hiring manager) and a company style.
 - **Company-specific loops:** Onsite researches recent candidate reports for a company and role, then runs that company's real loop with its reported questions and interviewer style.
-- **Spoken calls:** local speech via VoiceStudio. Nothing leaves your machine except the model calls to the AI you connect.
+- **Spoken calls:** speech runs on your machine, with Onsite's built-in voice engine or VoiceStudio. Nothing leaves your machine except the model calls to the AI you connect.
 - **Honest feedback:** rubric scores with evidence, "fix this first", stronger answers for key moments, and a hiring-committee verdict after a full loop.
 - **Any of these AIs:** Claude Code (Claude Pro or Max login), or your own API key for Claude, OpenAI, Gemini or Groq (Gemini and Groq have free tiers).
 
@@ -18,31 +18,32 @@ Get the file for your system from the **[latest release](https://github.com/Prat
 | Linux x86-64, any distro | `Onsite_x.y.z_amd64.AppImage` |
 | Debian / Ubuntu | `Onsite_x.y.z_amd64.deb` |
 
-Windows is what Onsite is built and tested on. The macOS and Linux builds are new and less tested; spoken rounds
-there need VoiceStudio for that system, and typed rounds work without it.
+Windows is what Onsite is built and tested on. The macOS and Linux builds are new and less tested.
+If something breaks there, please [open an issue](https://github.com/Prateesh-Sulikeri/Onsite/issues).
 
-## Install (for friends)
-1. Install [VoiceStudio](https://github.com/debpalash/VoiceStudio) and open it once so it downloads its voice model.
-2. Download Onsite for your system from the [latest release](https://github.com/Prateesh-Sulikeri/Onsite/releases/latest) and install it:
+## Install
+1. Download Onsite for your system from the [latest release](https://github.com/Prateesh-Sulikeri/Onsite/releases/latest) and install it:
    - **Windows:** run the `-setup.exe`. SmartScreen may warn because it isn't signed: **More info → Run anyway**.
    - **macOS:** open the `.dmg` and drag Onsite into Applications. It isn't notarized, so the first time run
-     `xattr -dr com.apple.quarantine /Applications/Onsite.app` in Terminal (or right-click → Open). Allow the
-     microphone when asked.
+     `xattr -dr com.apple.quarantine /Applications/Onsite.app` in Terminal (or System Settings → Privacy &
+     Security → **Open Anyway**). Allow the microphone when asked.
    - **Linux:** `chmod +x Onsite_*.AppImage` and run it, or `sudo apt install ./Onsite_*_amd64.deb`.
-3. Open Onsite. It starts on **Settings → AI model**. Pick one:
+2. Open Onsite. It starts on **Settings → AI model**. Pick one:
    - **Claude Code** if you have Claude Pro or Max and Claude Code installed. No key.
    - **Claude API key** from console.anthropic.com (pay per use; works without Pro).
    - **OpenAI key** from platform.openai.com (billed apart from ChatGPT Plus).
    - **Gemini key**, free, from aistudio.google.com.
    - **Groq key**, free, from console.groq.com (API Keys; starts with `gsk_`). Very fast. The free tier allows
      8,000 tokens a minute, so in quick back-and-forth the interviewer may pause up to half a minute before replying.
-4. Paste the key, press **Save key**, then **Run health check**.
+3. Paste the key, press **Save key**, then **Run health check**.
+4. For spoken rounds, open **Settings → Voice** and download the voice models (about 580 MB, once).
+   [VoiceStudio](https://github.com/debpalash/VoiceStudio) also works if you already use it. Typed rounds need neither.
 
 Everything else comes with the installer or is set up on first run: prompts, the question bank, the Razorpay
-dossier, interviewer voices (built in VoiceStudio), and the English speech model (downloaded through VoiceStudio).
-To **Run** code you need that language installed (Java, g++, Node). Python falls back to VoiceStudio's own copy,
-which also builds the Submit tests. Whisper (the accurate transcript) is used when VoiceStudio has a
-large-v3 model and a CUDA GPU; otherwise captions come from Parakeet.
+dossier and the interviewer voices. The voice models download from GitHub when you ask for them.
+To **Run** code you need that language installed (Java, g++, Node, Python). On Windows, Python falls back to
+VoiceStudio's own copy if it's installed. Whisper (the more accurate transcript) is used on Windows when VoiceStudio
+has a large-v3 model and a CUDA GPU; otherwise the transcript comes from Parakeet.
 
 Keys are stored only on your machine, in Onsite's local database. Only research jobs get web search;
 the interviewer gets no tools.

@@ -181,6 +181,12 @@ pub fn run() {
     init_logging();
     #[cfg(unix)]
     path_from_login_shell();
+    // WebKitGTK's DMA-BUF renderer draws a blank white window on NVIDIA drivers, VMs and WSL.
+    // The fallback renderer works everywhere; a user who sets the variable keeps their choice.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
 
     tauri::Builder::default()
         .setup(|app| {
