@@ -53,7 +53,8 @@ NSIS hooks: `src-tauri/windows/hooks.nsh` (uninstall clean-up, `/PURGE`; see STO
 - `Package::current()`: Windows `Nsis` (`*-setup.exe`) · macOS `Dmg` (`*universal*.dmg` or arch) · `$APPIMAGE` set →
   `AppImage` (`*amd64|arm64*.AppImage`) · else `Deb`.
 - `install(tag)`: refused while a round or research job runs → download (github.com URLs only) to `%TEMP%/onsite-update`
-  with `update_progress` events → Nsis: run installer + quit · Dmg: open · AppImage: replace `$APPIMAGE` + restart · Deb:
+  with `update_progress` events → Nsis: run installer with `/P /R /UPDATE` (passive progress bar, no wizard pages,
+  no old uninstaller, relaunch when done; same flags as Tauri's updater) + quit · Dmg: open · AppImage: replace `$APPIMAGE` + restart · Deb:
   copy to Downloads. Any version installable (downgrade allowed; UI warns older may not read newer data).
 - VoiceStudio: installed version from `/health.version` else `resources/pyproject.toml` in its install dir; latest from
   `debpalash/VoiceStudio` releases. Never updated by Onsite.

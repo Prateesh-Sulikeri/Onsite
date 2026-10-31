@@ -277,10 +277,12 @@ pub async fn install(app: &AppHandle, tag: &str) -> Result<String> {
     match pkg {
         Package::Nsis => {
             // /UPDATE installs over the old copy without running its uninstaller, which would
-            // delete the voice models (windows/hooks.nsh).
-            std::process::Command::new(&path).arg("/UPDATE").spawn().map_err(|e| AppError::Invalid(format!("Couldn't start the installer: {e}")))?;
+            // delete the voice models (windows/hooks.nsh). /P = passive: a progress bar only, no
+            // wizard pages (without it the "Uninstall before installing" page shows). /R starts
+            // Onsite again when the install finishes.
+            std::process::Command::new(&path).args(["/P", "/R", "/UPDATE"]).spawn().map_err(|e| AppError::Invalid(format!("Couldn't start the installer: {e}")))?;
             quit(app);
-            Ok("Starting the installer. Onsite will close.".into())
+            Ok("Updating. Onsite will close and open again in a moment.".into())
         }
         Package::Dmg => {
             std::process::Command::new("open").arg(&path).spawn().map_err(|e| AppError::Invalid(format!("Couldn't open the disk image: {e}")))?;
