@@ -82,10 +82,14 @@ jobs:
       # (src-tauri/Entitlements.plist). Failing here keeps the release a draft.
       - name: Check the macOS mic entitlement
         if: matrix.os == 'macos-latest'
+        # The bundler deletes the loose Onsite.app after making the dmg, so check the copy users get.
         run: |
-          app=src-tauri/target/universal-apple-darwin/release/bundle/macos/Onsite.app
-          codesign -dv "$app" 2>&1 | grep -E 'flags|Signature'
-          codesign -d --entitlements - --xml "$app" > ent.xml
+          dmg=$(ls src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          hdiutil attach -nobrowse -readonly -mountpoint /tmp/onsite-dmg "$dmg"
+          app=/tmp/onsite-dmg/Onsite.app
+          codesign -dv "$app" 2>&1 || true
+          codesign -d --entitlements - --xml "$app" > ent.xml || true
+          hdiutil detach /tmp/onsite-dmg
           cat ent.xml; echo
           grep -q 'com.apple.security.device.audio-input' ent.xml || { echo "::error::Onsite.app is signed without the microphone entitlement"; exit 1; }
       - name: Keep the files (dry run)

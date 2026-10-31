@@ -73,7 +73,7 @@ to `release.yml`, update `SECURITY.md` + release-notes warnings table. macOS: ad
 - macOS mic: `Info.plist` (prompt text) **and** `Entitlements.plist` (`com.apple.security.device.audio-input`). Tauri signs with the
   hardened runtime by default (`--options runtime`, even ad-hoc); without the entitlement the mic is silently blocked. sherpa-onnx is
   linked statically, so no library-validation entitlement is needed.
-  build.yml checks the signed app for the entitlement after the macOS build and fails (release stays a draft) without it.
+  build.yml mounts the dmg after the macOS build, checks the signed app for the entitlement and fails (release stays a draft) without it.
 - Linux: `lib.rs::run` sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` unless the user set it. Without it WebKitGTK draws a blank white
   window on NVIDIA drivers, VMs and WSLg (seen 2026-10-31 on the exp.4 AppImage under WSLg).
 - The AppImage runs without libfuse2 (static runtime); the .deb's `libasound2` resolves to `libasound2t64` on Ubuntu 24.04.
