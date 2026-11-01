@@ -24,7 +24,7 @@ const E_WOULD_USE: &str = "entry.1845437555";
 const E_EMAIL: &str = "entry.1938927202";
 
 pub const OS: &[&str] = &["Windows", "macOS", "Linux"];
-pub const MODES: &[&str] = &["Spoken — built-in voice", "Spoken — VoiceStudio", "Typed", "I didn't finish a round"];
+pub const MODES: &[&str] = &["Spoken \u{2014} built-in voice", "Spoken \u{2014} VoiceStudio", "Typed", "I didn't finish a round"];
 pub const FEATURES: &[&str] = &[
     "Mock interview rounds",
     "Coding editor / Run code",
@@ -161,7 +161,7 @@ mod tests {
         assert_eq!(f[0], (E_OVERALL, "4".into()));
         assert_eq!(f.iter().filter(|(k, _)| *k == E_TRIED).count(), 2);
         assert!(f.contains(&(E_EXPERIENCE, "Felt like a real call.".into())));
-        assert!(f.contains(&(E_MODE, "Spoken — built-in voice".into())));
+        assert!(f.contains(&(E_MODE, "Spoken \u{2014} built-in voice".into())));
     }
 
     #[test]

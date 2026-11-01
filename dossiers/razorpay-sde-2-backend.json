@@ -108,7 +108,7 @@
       "url": "https://leetcode.com/discuss/post/7544598/"
     },
     {
-      "title": "GeeksforGeeks: Razorpay SDE-2 (2–3 yrs)",
+      "title": "GeeksforGeeks: Razorpay SDE-2 (2-3 yrs)",
       "url": "https://www.geeksforgeeks.org/interview-experiences/razorpay-interview-experience-for-sde2-2-3-years-experienced/"
     },
     {
@@ -137,7 +137,7 @@
     }
   ],
   "style": "Interviewers explain the problem well, then mostly stay quiet and let you drive. Machine coding is judged on working code first, then readability, modularity, and extensibility; they add a new requirement late to test the design. HLD interviewers push on depth, not breadth: failure scenarios ('what if Redis goes down?'), database choice justification, stale data, ordering, fan-out, and testing. Payments thinking is valued: idempotency, retries, reconciliation, and money never moving twice. Tone is respectful and professional, not hostile.",
-  "summary": "Razorpay's SDE-2 backend loop (2024–2026 reports) is design-heavy and practical. Typical order: an online assessment or a short DSA round in some loops, then a machine coding / LLD round where you must produce working, compilable, extensible code in 60–90 minutes, then a high-level system design round, then a hiring manager round on past work and values. Some 2026 loops also add an 'agentic coding' round. Reported pass rate is low; the most common rejection point for SDE-2 is the HLD round.",
+  "summary": "Razorpay's SDE-2 backend loop (2024-2026 reports) is design-heavy and practical. Typical order: an online assessment or a short DSA round in some loops, then a machine coding / LLD round where you must produce working, compilable, extensible code in 60-90 minutes, then a high-level system design round, then a hiring manager round on past work and values. Some 2026 loops also add an 'agentic coding' round. Reported pass rate is low; the most common rejection point for SDE-2 is the HLD round.",
   "values": "Customer First, Autonomy & Ownership, Agility with Integrity, Transparency, Challenging the status quo, Razorpay grows with Razors. Razorpay says its interview process is deliberately tied to these values.",
   "id": "razorpay-sde-2-backend"
 }

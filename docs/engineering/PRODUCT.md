@@ -34,7 +34,7 @@ non-English (deliberate; STT tuned for English).
 | loops | 9 round types, 14 company styles, 5 levels, 3 temperaments | shipped | INTERVIEW |
 | loops | 2 panels × 5 personas, fixed voices | shipped | INTERVIEW, VOICE |
 | loops | round report, loop verdict, dashboard | shipped | INTERVIEW |
-| loops | comprehension round redesign | planned (`docs/comprehension-round-research.md`) | INTERVIEW |
+| loops | comprehension round: multi-file projects, file tree, diff review | partial (AI writes the project from JD/dossier/resume, 8 bundled fallbacks; not run live yet; `docs/plans/comprehension-workspace.md`) | CODING |
 | voice | spoken rounds, Whisper pass, mute, barge-in by tap | shipped | VOICE |
 | voice | first audio < 2.5 s after candidate stops | partial (API providers close; CLI ~6 s round trip) | VOICE |
 | research | research jobs → dossiers; company loops; import/export | shipped | RESEARCH |
@@ -44,7 +44,7 @@ non-English (deliberate; STT tuned for English).
 | app | 4 theme families × light/dark, custom backdrop | shipped | UI |
 | app | in-app updates; storage limits | shipped | RELEASE, STORAGE |
 | app | signed Windows installer (SignPath Foundation) | pending application (2026-10-30) | RELEASE |
-| app | MCP server (read-only dossiers/reports) | planned (phase 3) | — |
+| app | MCP server (read-only dossiers/reports) | planned (phase 3) | - |
 
 ## Milestones (all four met; M3 latency still tuned)
 

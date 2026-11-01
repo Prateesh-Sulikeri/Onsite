@@ -112,7 +112,7 @@
       <h3>Claude Code only in WSL (Windows)</h3>
       <p>If you installed Claude Code inside WSL and not on Windows, that works too. Onsite looks on Windows first, then asks WSL. The path shows as <em>WSL: claude</em>. Make sure <code>claude</code> runs in a fresh WSL terminal (it must be on the login shell's PATH).</p>
       <figure class="shot"><img src="img/guides/ai-claude-code-wsl.jpg" width="1215" height="1003" loading="lazy" alt="Settings, AI model with Claude Code found as WSL: claude, and the health check working."><figcaption>Claude Code found in WSL.</figcaption></figure>
-      <p class="muted">Each reply takes a few seconds on Claude Code, so spoken rounds feel a little slower than on an API key. Company research takes 10–40 minutes.</p>
+      <p class="muted">Each reply takes a few seconds on Claude Code, so spoken rounds feel a little slower than on an API key. Company research takes 10-40 minutes.</p>
     </section>
 
     <section id="groq">
@@ -169,10 +169,10 @@
       <p><a href="https://github.com/debpalash/VoiceStudio">VoiceStudio</a> is a separate open-source desktop app. Onsite talks to it on your own machine (<code>127.0.0.1:3900</code>). Every interviewer on a panel gets their own voice. On Windows with an NVIDIA GPU, Onsite also runs each answer through <strong>Whisper large-v3</strong>, which gets terms like Redis and idempotency key right.</p>
       <ol class="how">
         <li><strong>Install VoiceStudio</strong> from its <a href="https://github.com/debpalash/VoiceStudio/releases">releases page</a> and open it once. Let it download its models.</li>
-        <li><strong>In Onsite</strong>, open Settings → Voice and set Engine to <strong>VoiceStudio — separate app</strong>.</li>
+        <li><strong>In Onsite</strong>, open Settings → Voice and set Engine to <strong>VoiceStudio (separate app)</strong>.</li>
         <li><strong>Start VoiceStudio</strong> if it isn't running. Onsite shows a <strong>Start VoiceStudio</strong> button when it's installed but closed. Its backend takes about a minute to load; the pill turns <em>Ready</em>.</li>
         <li><strong>Test voice and Test mic</strong>, as for the built-in engine.</li>
-        <li><strong>Hear the interviewers:</strong> Settings → Appearance → Interviewers → Play voice. Each voice is built the first time you play it (5–15 seconds), then stays the same.</li>
+        <li><strong>Hear the interviewers:</strong> Settings → Appearance → Interviewers → Play voice. Each voice is built the first time you play it (5-15 seconds), then stays the same.</li>
       </ol>
       <figure class="shot"><img src="img/guides/voice-studio-ready.jpg" width="935" height="329" loading="lazy" alt="Settings, Voice. Engine VoiceStudio, Ready, version 0.5.6, running on cuda."><figcaption>VoiceStudio running on the GPU.</figcaption></figure>
       <p class="muted">The first spoken line after starting VoiceStudio can take up to a minute while it loads its weights. Onsite warms it up while the room gets ready. VoiceStudio unloads after about 15 idle minutes; the next round warms it again.</p>
@@ -211,7 +211,7 @@ docker run -d --name omnivoice --restart unless-stopped --gpus all \
       <h3>3. Connect Onsite</h3>
       <ol class="how">
         <li><strong>Restart Onsite</strong> after setting the environment variable (on Linux, log out and in again, or start Onsite from that terminal).</li>
-        <li>Settings → Voice → Engine: <strong>VoiceStudio — separate app</strong>. The pill turns <em>Ready</em> and the device shows <em>cuda</em> (or <em>cpu</em>).</li>
+        <li>Settings → Voice → Engine: <strong>VoiceStudio (separate app)</strong>. The pill turns <em>Ready</em> and the device shows <em>cuda</em> (or <em>cpu</em>).</li>
         <li>Press <strong>Test voice</strong> and <strong>Test mic</strong>.</li>
       </ol>
       <p class="muted">With Docker, Onsite can't start or stop VoiceStudio for you (no Start button), and the Whisper accuracy pass doesn't run: it needs the Windows VoiceStudio app's own Python. Transcripts come from Parakeet. Update the container with <code>docker pull ghcr.io/debpalash/voicestudio:stable</code>, then remove and run it again; the <code>omnivoice-data</code> volume keeps its models and voices.</p>
@@ -238,6 +238,7 @@ docker run -d --name omnivoice --restart unless-stopped --gpus all \
         <li><strong>Press Start interview.</strong></li>
       </ol>
       <figure class="shot"><img src="img/guides/use-setup.jpg" width="1600" height="1250" loading="lazy" alt="Interviews screen. General practice selected. Step 1, set your context: company style, interviewer style, interviewers, level, coding language. Step 2, choose your rounds. On the right, your interview loop."><figcaption>Set up the loop. The agenda on the right shows who you'll meet.</figcaption></figure>
+      <p class="muted">The <strong>code comprehension</strong> round shows a small project with hidden bugs. The AI writes it for your job description, or you can choose one of eight ready-made projects (Java, Python, JavaScript, Go). Onsite asks before the round starts. Generated code is never run, so a planted bug can occasionally be wrong.</p>
       <h3>Get ready</h3>
       <p>Check your mic and speaker, choose <strong>Spoken</strong>, <strong>Listen &amp; type</strong> or <strong>Typed</strong>, and press <strong>Join interview</strong>. Onsite then gets the room ready: the AI, the voice and the mic. That takes a few seconds.</p>
       <figure class="shot"><img src="img/guides/use-ready.jpg" width="1600" height="1075" loading="lazy" alt="Get ready screen. Check your mic and speaker with Test speaker and Test mic. On the right: round 1 of 3, DSA coding, 45 minutes. Spoken, built-in voice. Join interview button."><figcaption>Get ready: a ten-second audio check.</figcaption></figure>
@@ -245,6 +246,7 @@ docker run -d --name omnivoice --restart unless-stopped --gpus all \
       <p>Talk like it's real: think out loud. Write code in the editor and press <strong>Run</strong> or <strong>Submit</strong>. Draw designs on the whiteboard. Press <strong>Share now</strong> to show the interviewer your code, drawing or notes. The interviewer ends the round when time's up; <strong>End interview</strong> ends it early.</p>
       <figure class="shot"><img src="assets/room.jpg" width="1440" height="900" loading="lazy" alt="An Onsite call: the Two Sum problem on the left, the conversation below it, and a Java editor on the right."><figcaption>A coding round in progress.</figcaption></figure>
       <h3>The report</h3>
+      <p class="muted">Settings → About explains why Onsite exists, links to the MIT licence and the credits. Onsite is free and open source.</p>
       <p>After the round you get a score, a hire signal, a rubric with evidence, and stronger answers for the key moments. Start with <strong>Fix this first</strong>. Finish a whole loop for a hiring-committee verdict.</p>
       <figure class="shot"><img src="img/guides/use-report.jpg" width="1600" height="1375" loading="lazy" alt="Round report: score 70 of 100, Lean hire, near SDE-2 bar. Fix this first: list three edge cases out loud before writing code. Rubric with five dimensions scored out of 4."><figcaption>Every round gets written feedback.</figcaption></figure>
     </section>

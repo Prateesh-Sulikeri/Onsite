@@ -5,6 +5,7 @@ Practise real software-engineering interview loops, out loud, on your own machin
 - **General loops:** pick any rounds (resume screen, project deep dive, fundamentals, DSA, code comprehension, LLD, system design, behavioral, hiring manager) and a company style.
 - **Company-specific loops:** Onsite researches recent candidate reports for a company and role, then runs that company's real loop with its reported questions and interviewer style.
 - **Spoken calls:** speech runs on your machine, with Onsite's built-in voice engine or VoiceStudio. Nothing leaves your machine except the model calls to the AI you connect.
+- **Practice projects:** the code comprehension round gives you a small multi-file project with planted bugs (Kafka consumer, Postgres outbox, Redis rate limiter, wallet transfers, search API, webhook receiver, and more). The AI writes one for your job description, or you pick one of 8 ready-made projects in Java, Python, JavaScript and Go.
 - **Honest feedback:** rubric scores with evidence, "fix this first", stronger answers for key moments, and a hiring-committee verdict after a full loop.
 - **Any of these AIs:** Claude Code (Claude Pro or Max login), or your own API key for Claude, OpenAI, Gemini or Groq (Gemini and Groq have free tiers).
 
@@ -75,7 +76,7 @@ system from GitHub. Your interviews, dossiers and settings stay. Onsite only con
 
 ## Company-specific loops
 Open **Dossiers**, name a company, role and level, and start research. It takes a few minutes on an API key
-(10–40 on Claude Code). Then pick **Company-specific** on the interview screen. Dossiers can be exported to
+(10-40 on Claude Code). Then pick **Company-specific** on the interview screen. Dossiers can be exported to
 Downloads and imported on another machine.
 
 ## Building

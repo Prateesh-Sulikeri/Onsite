@@ -534,8 +534,8 @@ pub fn rtf_to_text(rtf: &str) -> String {
                     match word {
                         "par" | "line" | "row" | "sect" | "page" => out.push('\n'),
                         "tab" | "cell" => out.push('\t'),
-                        "emdash" => out.push('—'),
-                        "endash" => out.push('–'),
+                        "emdash" => out.push('\u{2014}'),
+                        "endash" => out.push('\u{2013}'),
                         "bullet" => out.push('•'),
                         "lquote" | "rquote" => out.push('\''),
                         "ldblquote" | "rdblquote" => out.push('"'),
@@ -588,8 +588,8 @@ fn cp1252(b: u8) -> char {
         0x91 | 0x92 => '\'',
         0x93 | 0x94 => '"',
         0x95 => '•',
-        0x96 => '–',
-        0x97 => '—',
+        0x96 => '\u{2013}',
+        0x97 => '\u{2014}',
         0x80 => '€',
         _ => b as char,
     }
@@ -618,10 +618,10 @@ mod tests {
     #[test]
     fn utf16_and_bom_text() {
         let mut b = vec![0xFF, 0xFE];
-        for u in "Résumé – Kafka".encode_utf16() {
+        for u in "Résumé \u{2013} Kafka".encode_utf16() {
             b.extend(u.to_le_bytes());
         }
-        assert_eq!(extract("a.txt", &b).unwrap().text, "Résumé – Kafka");
+        assert_eq!(extract("a.txt", &b).unwrap().text, "Résumé \u{2013} Kafka");
         assert_eq!(extract("a.txt", b"\xEF\xBB\xBFhi\r\n\r\n\r\nthere").unwrap().text, "hi\n\nthere");
     }
 
@@ -630,7 +630,7 @@ mod tests {
         let rtf = r"{\rtf1\ansi{\fonttbl{\f0 Arial;}}{\*\generator Word;}\f0 Jane Doe\par Skills: Java, Kafka\tab Redis\par caf\'e9 \u8212? done}";
         let t = rtf_to_text(rtf);
         assert!(t.contains("Jane Doe\nSkills: Java, Kafka\tRedis\n"), "{t:?}");
-        assert!(t.contains("café — done"), "{t:?}");
+        assert!(t.contains("café \u{2014} done"), "{t:?}");
         assert!(!t.contains("Arial") && !t.contains("Word"));
     }
 

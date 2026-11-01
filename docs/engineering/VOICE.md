@@ -1,4 +1,4 @@
-# VOICE — `src/voice/`, `sidecar/whisper_server.py`
+# VOICE: `src/voice/`, `sidecar/whisper_server.py`
 
 Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`), plus the Whisper large-v3 sidecar.
 - **builtin** (default for fresh installs): Pocket TTS + Parakeet TDT run inside Onsite via the `sherpa-onnx` crate. See *Built-in engine*.
@@ -27,7 +27,7 @@ Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`)
   (`VoiceSettings::voice_female` -> `LoopSetup.voice_female` -> `Catalog::persona` picks from `FEMALE_NAMES` or the rest; UI `catalogName`
   mirrors it). VoiceStudio profiles carry no gender, so names there still rotate over all of `NAMES`.
   Pocket calls back only per finished sentence, so `Tts::speak` sends `builtin::pieces(text)` one call each: sentences > 14 words cut at a
-  `, ; : —` near the middle (parts >= 4 words), short ones packed to 14. Measured 2026-10-31 (Ryzen 7 250): long reply first audio
+  `, ; :` and the em dash character (U+2014) near the middle (parts >= 4 words), short ones packed to 14. Measured 2026-10-31 (Ryzen 7 250): long reply first audio
   2.46 -> 1.84 s, no per-call overhead. A friend's no-GPU laptop ran RTF ~0.9-1.0 and whole sentences left 3-7 s gaps mid-reply. Indian accents are out of scope (owner's call, see voice-spike-results.md).
 - STT: Parakeet TDT v2 int8 (`nemo_transducer`, CPU, 4 threads), offline model. Same VAD/segment cuts as VoiceStudio. Finished segment
   -> `spawn_blocking` decode -> sent through the same channel as a VoiceStudio summary (`final_kind: summary`), so `Answer`,
@@ -74,9 +74,9 @@ pause_ms=3000 (1800/3000/5000/0=tap), input_device="", output_device=""`; `perso
 
 ## Listening (`stt::run`)
 
-- Mic at device rate → low-pass → 16 kHz mono i16; 20 ms frames → RMS → `Vad` (noise floor learned pre-speech, start >
+- Mic at device rate → (callback only copies samples; thread `onsite-mic-dsp` does the low-pass, never filter inside the cpal callback: overruns drop audio = missing words) → low-pass → 16 kHz mono i16; 20 ms frames → RMS → `Vad` (noise floor learned pre-speech, start >
   3× floor, hold > 2× floor, mins/caps; answer ends after `pause_ms` quiet). Pre-roll 400 ms sent with each segment.
-- Segment cut (decode while candidate talks): < 3 s never; 3–20 s at 700 ms pause; > 20 s at 300 ms.
+- Segment cut (decode while candidate talks): < 3 s never; 3-20 s at 700 ms pause; > 20 s at 300 ms.
 - Each segment: new WS `…/v1/audio/transcriptions/stream?pcm=1&sr=16000&model=…`, PCM frames, end with
   `{"type":"input_audio.end"}`; `final_kind:"summary"` marks done. On close, segment PCM → `whisper::transcribe`.
 - Segment text = Whisper ?? Parakeet summary ?? finals+partial. Answer = segments joined → `clean_transcript`.

@@ -85,7 +85,7 @@ fn split_long(w: &[&str], out: &mut Vec<String>) {
         return;
     }
     // A cut after word i, where word i ends a clause and both sides keep MIN_PIECE_WORDS words.
-    let clause_end = |s: &str| s.ends_with([',', ';', ':']) || matches!(s, "-" | "–" | "—") || s.ends_with(['—', '–']);
+    let clause_end = |s: &str| s.ends_with([',', ';', ':']) || matches!(s, "-" | "\u{2013}" | "\u{2014}") || s.ends_with(['\u{2014}', '\u{2013}']);
     let cut = (MIN_PIECE_WORDS - 1..w.len() - MIN_PIECE_WORDS)
         .filter(|&i| clause_end(w[i]))
         .min_by_key(|&i| (i + 1).abs_diff(w.len() / 2));

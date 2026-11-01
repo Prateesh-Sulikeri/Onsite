@@ -223,12 +223,12 @@ pub fn date_consistency(text: &str) -> Option<f64> {
     (total >= 2).then(|| (*counts.values().max().unwrap_or(&0) as f64 / total as f64 * 1000.0).round() / 10.0)
 }
 
-/// Months of experience from date ranges ("Jan 2020 - Present", "03/2019 – 2021"),
+/// Months of experience from date ranges ("Jan 2020 - Present", "03/2019 - 2021"),
 /// overlapping jobs counted once. `today` is (year, month).
 pub fn experience_months(text: &str, today: (i32, u32)) -> Option<u32> {
     static RANGE: LazyLock<Regex> = LazyLock::new(|| {
         let point = format!(r"(?:{MONTH}\.?,?\s+(?:19|20)\d{{2}}|\d{{1,2}}[/.-](?:19|20)\d{{2}}|(?:19|20)\d{{2}}[/-]\d{{1,2}}|(?:19|20)\d{{2}})");
-        Regex::new(&format!(r"(?i)(?P<a>{point})\s*(?:-|–|—|to|until|till)\s*(?P<b>{point}|present|current|now|today|date|ongoing)")).unwrap()
+        Regex::new(&format!(r"(?i)(?P<a>{point})\s*(?:-|\u2013|\u2014|to|until|till)\s*(?P<b>{point}|present|current|now|today|date|ongoing)")).unwrap()
     });
     let mut spans: Vec<(i32, i32)> = vec![];
     let now = today.0 * 12 + today.1 as i32 - 1;
@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn experience_months_merge_overlaps() {
-        let t = "Acme  Jan 2020 – Present\nBeta 06/2018 - 12/2020\nSchool 2014 - 2018";
+        let t = "Acme  Jan 2020 \u{2013} Present\nBeta 06/2018 - 12/2020\nSchool 2014 - 2018";
         // One unbroken stretch: Jan 2014 through Oct 2026.
         assert_eq!(experience_months(t, (2026, 10)), Some(12 * 12 + 10));
         assert_eq!(experience_months("Acme Jan 2020 - Dec 2020\nBeta Jan 2022 - Jun 2022", (2026, 10)), Some(18));

@@ -33,7 +33,7 @@
     list_dossiers: [D.dossier], research_jobs: [], app_version: "0.1.2", get_backdrop: null, ats_last: null,
     audio_devices: {inputs:[{id:"",name:"Default microphone"}], outputs:[{id:"",name:"Default speaker"}]},
     storage_info: {items:[], total:0},
-    start_round: {round_id:7, loop_id:1, index:0, count:3, company:"Razorpay", level:"SDE-2 (2–5 yrs)", lang:"Java", voice:true,
+    start_round: {round_id:7, loop_id:1, index:0, count:3, company:"Razorpay", level:"SDE-2 (2-5 yrs)", lang:"Java", voice:true,
       plan:{key:"coding", name:"Problem solving (DSA)", persona:"Karthik", minutes:45, tab:"editor"},
       problem:{id:"two-sum", title:"Two Sum", difficulty:"Easy", topics:["array","hash-map"],
         statement:"Given an integer array `nums` and an integer `target`, return the **indices** of the two numbers that add up to `target`.\n\nYou may assume each input has exactly one solution, and you may not use the same element twice.",

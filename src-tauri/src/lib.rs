@@ -8,6 +8,8 @@ pub mod error;
 pub mod feedback;
 pub mod interview;
 pub mod panels;
+pub mod projects;
+pub mod projgen;
 pub mod research;
 pub mod runner;
 pub mod storage;
@@ -64,6 +66,8 @@ pub struct AppState {
     pub research: Mutex<HashMap<i64, research::Running>>,
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
     pub bank: bank::Bank,
+    /// Multi-file projects for the comprehension round.
+    pub projects: projects::Projects,
     pub voice: voice::Voice,
     /// Built-in voice engine models, loaded on first use and kept.
     pub builtin: voice::builtin::Cache,
@@ -133,6 +137,15 @@ fn resource(app: &tauri::App, name: &str) -> PathBuf {
         return dev;
     }
     app.path().resource_dir().map(|d| d.join(name)).unwrap_or(dev)
+}
+
+fn load_projects(dir: &std::path::Path) -> projects::Projects {
+    let p = projects::Projects::load(dir);
+    tracing::info!(count = p.list.len(), "comprehension projects");
+    for e in &p.errors {
+        tracing::warn!("project skipped: {e}");
+    }
+    p
 }
 
 /// Logs go to %LOCALAPPDATA%\Onsite\onsite.log (the app has no console window).
@@ -212,6 +225,7 @@ pub fn run() {
                 catalog,
                 panels: panels::Panels::load(&prompts_dir),
                 bank: bank::Bank::load(&prompts_dir),
+                projects: load_projects(&resource(app, "projects")),
                 prompts_dir,
                 data_dir: data_dir.clone(),
                 research: Default::default(),
@@ -305,6 +319,7 @@ pub fn run() {
             commands::delete_round,
             commands::run_code,
             commands::set_round_lang,
+            commands::project_diff,
             commands::voice_status,
             commands::voice_launch,
             commands::voice_model_download,

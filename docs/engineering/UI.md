@@ -1,4 +1,4 @@
-# UI — `ui/`
+# UI: `ui/`
 
 Plain HTML/CSS/JS in the system WebView. No framework, no build step (except vendored bundles). Tauri serves only `ui/`.
 CSP: `default-src 'self'`, no inline script, no network except IPC.
@@ -48,7 +48,7 @@ Sampled from `assets/twilight.webp`. OKLCH. Navy neutrals hue 266, violet accent
 
 Themes: families `onsite nord rosepine gruvbox` × `light dark`, mode `system|light|dark`; default Onsite dark (= app.css
 `:root` unchanged). Other themes set ~25 base tokens; derived ones come from `themes.css` shared block. Backdrop
-`--backdrop`: theme image, user image (dim veil 0–85%, default 35%), or none (`plain`); never in the call room.
+`--backdrop`: theme image, user image (dim veil 0-85%, default 35%), or none (`plain`); never in the call room.
 Whiteboard is always dark.
 
 ## Rules for new UI
@@ -75,7 +75,7 @@ Whiteboard is always dark.
 | View id | Purpose / key parts |
 |---|---|
 | `dashboard` | start / review last round, weekly goal, this week ring, skill performance, score trend (bar 70), practise next, calendar + streak, highlights, recent |
-| `interviews` | mode cards (general/company) · steps 1–5: context (company style or dossier, temperament, panel, level, language) · round tiles · resume + JD drops · notes · round length → Start; right: loop timeline, what to expect |
+| `interviews` | mode cards (general/company) · steps 1-5: context (company style or dossier, temperament, panel, level, language) · round tiles · resume + JD drops · notes · round length → Start; right: loop timeline, what to expect |
 | `ready` | mic/speaker pickers, live meter, Test speaker/mic, resume-check result, Join; "Check before every round" (`onsite.readyEvery`; else next rounds skip to loader) |
 | `prep` | checklist from `prep` events (`PREP_STEPS`: AI model, First question, VoiceStudio, Interviewer's voice, Live captions, Accurate transcript, Speaker, Microphone; Waiting/Ready/Fallback/Failed/Off); Cancel; Start typed on voice failure |
 | `room` | header (company, round, level, minutes, round x/n, interviewer, mic picker, countdown timer, Context, Terminate) · left: problem panel + split + transcript + closed banner + composer · controls: Mute, orb (phases: thinking, speaking "tap to cut in", listening, hearing, transcribing, muted, closed, idle), End · right: Editor/Whiteboard/Notes/From interviewer · rail: context chips, round plan (`PLANS`), tips. Typed round hides orb/mic controls |
@@ -83,7 +83,7 @@ Whiteboard is always dark.
 | `feedback` | history grouped by loop, scores by band, delete round |
 | `resume` | file drop + posting → score rings, ATS rows, keywords, checks, extracted preview, tips, AI screen card |
 | `dossiers` | list + Import; research form; job cards (6 stages, %, log, searches/pages); dossier detail (use/export/delete) |
-| `settings` | sections: appearance · models (provider cards, path/key, health check, two model pickers) · voice (status, start, devices, voice, quality, speed, pause, tests, interviewer cards + Play voice) · updates · privacy · storage |
+| `settings` | sections: appearance · models (provider cards, path/key, health check, two model pickers) · voice (status, start, devices, voice, quality, speed, pause, tests, interviewer cards + Play voice) · updates · privacy · storage · share (Send feedback) · about (why, MIT licence, live version via `app_version`, author, credits, roadmap; links are `data-link` buttons that call `open_link`) |
 
 Flow: dashboard → interviews → (resume check) → ready → prep → room → report → next round (ready/prep) … → loop feedback.
 
@@ -108,7 +108,7 @@ Flow: dashboard → interviews → (resume check) → ready → prep → room �
 - `FB` labels, `feedback.rs` constants and the live form must match exactly (em dashes included). If the owner edits the
   form, re-read ids/labels from `FB_PUBLIC_LOAD_DATA_` in the viewform HTML. Google answers 400 to unknown labels.
 - "Add app details" appends `(Onsite x · OS · provider · voice)` to the "went wrong" answer. Nothing else is attached.
-- `open_link(which)` opens fixed https links (form, site, guides, repo, issues…) in the browser; the UI never passes a URL.
+- `open_link(which)` opens fixed https links (form, site, guides, repo, issues, releases, license, privacy, security, notices, author, resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw) in the browser; the UI never passes a URL.
 
 ## Gaps
 

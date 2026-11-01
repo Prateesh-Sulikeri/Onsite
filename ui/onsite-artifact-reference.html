@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Onsite — mock interview loop</title>
+<title>Onsite, mock interview loop</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -271,7 +271,7 @@ code{font-family:var(--mono); font-size:.88em; background:var(--code-bg); paddin
               <div class="field"><label for="rqJd">Job description (optional)</label><textarea id="rqJd" rows="4" placeholder="Paste the JD if you have one."></textarea></div>
               <div class="row"><button class="btn primary" id="rqSave">Save request</button><span id="rqMsg" class="hint"></span></div>
               <div id="rqNext" class="hidden stack">
-                <div class="hint">Now paste this line into your chat with Claude. Claude searches recent interview experiences, then writes the dossier here. It can take 10–40 minutes for a deep pass.</div>
+                <div class="hint">Now paste this line into your chat with Claude. Claude searches recent interview experiences, then writes the dossier here. It can take 10-40 minutes for a deep pass.</div>
                 <div class="copybox" id="rqLine"></div>
                 <div><button class="btn small" id="rqCopy">Copy line</button></div>
               </div>
@@ -300,9 +300,9 @@ code{font-family:var(--mono); font-size:.88em; background:var(--code-bg); paddin
             <div class="field">
               <label for="temper">Interviewer</label>
               <select id="temper">
-                <option value="supportive">Supportive — gives hints</option>
-                <option value="realistic" selected>Realistic — like a real panel</option>
-                <option value="barraiser">Bar-raiser — hard, rarely hints</option>
+                <option value="supportive">Supportive, gives hints</option>
+                <option value="realistic" selected>Realistic, like a real panel</option>
+                <option value="barraiser">Bar-raiser, hard, rarely hints</option>
               </select>
             </div>
           </div>
@@ -334,9 +334,9 @@ code{font-family:var(--mono); font-size:.88em; background:var(--code-bg); paddin
           <div class="field">
             <label for="speed">Interviewer replies</label>
             <select id="speed">
-              <option value="quick">Fast — snappy, lighter reasoning</option>
-              <option value="default" selected>Balanced — a few seconds per reply</option>
-              <option value="complex">Deep — slowest, sharpest follow-ups</option>
+              <option value="quick">Fast, snappy, lighter reasoning</option>
+              <option value="default" selected>Balanced, a few seconds per reply</option>
+              <option value="complex">Deep, slowest, sharpest follow-ups</option>
             </select>
           </div>
           <div class="field">
@@ -345,7 +345,7 @@ code{font-family:var(--mono); font-size:.88em; background:var(--code-bg); paddin
               <option value="1800">1.8 seconds</option>
               <option value="3000" selected>3 seconds</option>
               <option value="5000">5 seconds</option>
-              <option value="0">Never — I tap Send</option>
+              <option value="0">Never, I tap Send</option>
             </select>
           </div>
           <div class="field">
@@ -362,14 +362,14 @@ code{font-family:var(--mono); font-size:.88em; background:var(--code-bg); paddin
             <label for="voiceEngine">Interviewer voice engine</label>
             <select id="voiceEngine">
               <option value="browser">Browser voice (works anywhere)</option>
-              <option value="vs">VoiceStudio — local, natural (Claude desktop app)</option>
+              <option value="vs">VoiceStudio, local, natural (Claude desktop app)</option>
             </select>
           </div>
           <div class="field">
             <label for="micEngine">Speech-to-text</label>
             <select id="micEngine">
               <option value="browser">Browser speech recognition</option>
-              <option value="vs">VoiceStudio Whisper — local (Claude desktop app)</option>
+              <option value="vs">VoiceStudio Whisper, local (Claude desktop app)</option>
             </select>
           </div>
         </div>
@@ -501,7 +501,7 @@ code{font-family:var(--mono); font-size:.88em; background:var(--code-bg); paddin
 const F = "```";
 const ROUNDS = {
   resume:{name:"Resume screen", min:30, tab:"notes", blurb:"Recruiter/HM screen. Every line of your resume gets probed.",
-    guide:"Open with a short intro of yourself and ask the candidate to walk through their background. Then go line by line through the resume: for each claim ask what exactly they did, scope, numbers, and why. Check fit with the JD and motivation (why this company, why now, why leave). Probe gaps, short stints, and buzzwords. Ask 1–2 light technical sanity questions on their main stack. Leave time for their questions.",
+    guide:"Open with a short intro of yourself and ask the candidate to walk through their background. Then go line by line through the resume: for each claim ask what exactly they did, scope, numbers, and why. Check fit with the JD and motivation (why this company, why now, why leave). Probe gaps, short stints, and buzzwords. Ask 1-2 light technical sanity questions on their main stack. Leave time for their questions.",
     rubric:["Clarity of story","Depth behind claims","Role fit","Motivation","Communication"]},
   project:{name:"Project deep dive", min:45, tab:"notes", blurb:"One or two projects, drilled until you hit the edge of what you know.",
     guide:"Ask the candidate to pick their most significant project (or pick one from the resume yourself). Drill in layers: the problem and why it mattered; the architecture (ask them to sketch it on the whiteboard as text); THEIR role versus the team's; key design decisions and the alternatives rejected; data flow and failure handling; scale numbers (QPS, data size, latency); incidents and what broke; what they would change. Keep asking 'why' and 'what happens if' until you reach the limit of their knowledge. Separate 'I' from 'we'.",
@@ -513,16 +513,16 @@ const ROUNDS = {
     guide:"Give one problem at the difficulty this company uses for this level (two problems if the company style does that, e.g. Meta). State the problem clearly with one example; do not reveal the approach. Expect the candidate to clarify, propose an approach with complexity, then code in the shared editor in their language. While they code, stay mostly quiet; respond to questions. When they share code, read it carefully and mentally execute it; ask them to dry-run an example, find edge cases, and fix bugs. Then ask complexity and a follow-up variant if time allows. Never write the solution for them.",
     rubric:["Problem solving","Code quality","Testing and edge cases","Complexity analysis","Communication"]},
   comprehension:{name:"Code comprehension and review", min:45, tab:"shared", blurb:"Read unfamiliar code, trace it, find the bugs, fix and test it.",
-    guide:"Share a realistic piece of production-style code (60–120 lines) in the candidate's language, from the JD's domain where possible (e.g. payments, order processing, caching, a job scheduler). Put it in ONE code fence in your first technical message. Seed 3–5 real issues across categories (correctness, concurrency, resource leak, performance, security, idempotency/retry, error handling, design smell) without comments that give them away. Sequence: (1) ask what the code does at a high level, (2) ask them to trace a specific input or scenario, (3) ask what problems they see and which matter most, (4) ask how they would fix the top issues and how they would test it, (5) if time remains, ask how they would extend it for a new requirement. Do not reveal issues they miss until the end, and even then only name one or two.",
+    guide:"Share a realistic piece of production-style code (60-120 lines) in the candidate's language, from the JD's domain where possible (e.g. payments, order processing, caching, a job scheduler). Put it in ONE code fence in your first technical message. Seed 3-5 real issues across categories (correctness, concurrency, resource leak, performance, security, idempotency/retry, error handling, design smell) without comments that give them away. Sequence: (1) ask what the code does at a high level, (2) ask them to trace a specific input or scenario, (3) ask what problems they see and which matter most, (4) ask how they would fix the top issues and how they would test it, (5) if time remains, ask how they would extend it for a new requirement. Do not reveal issues they miss until the end, and even then only name one or two.",
     rubric:["Reading accuracy","Bug finding","Prioritisation and judgment","Fix quality","Testing mindset","Communication"]},
   lld:{name:"Low-level design", min:60, tab:"notes", blurb:"Object-oriented design or machine coding: classes, interfaces, patterns.",
     guide:"Give a low-level design / machine-coding problem fitting the company and domain (e.g. rate limiter, parking lot, splitwise, wallet/ledger, in-memory key-value store, job scheduler). Expect: requirement clarification, core entities, class/interface design (on the whiteboard), key methods, design patterns where they help, concurrency and thread safety, extensibility for a new requirement you add midway. Ask them to code the core classes in the editor and review it like a senior engineer would.",
     rubric:["Requirements","Object modelling","Code quality and SOLID","Extensibility","Concurrency"]},
   sysdesign:{name:"System design", min:60, tab:"notes", blurb:"High-level design: scope, estimates, architecture, deep dives, failures.",
-    guide:"Give an open-ended system design problem fitting the company (and JD domain if any). Stay vague at first; the candidate must drive. Expect: functional and non-functional requirements, rough capacity estimates, APIs, data model, high-level architecture (on the whiteboard as text), then deep dives into 1–2 components. Push with real interviewer moves: change the scale 10x, kill a node or a region, introduce a hot key, ask about consistency vs availability, idempotency, exactly-once claims, monitoring, cost. Calibrate depth to level: SDE-2 should drive most of it; senior must lead trade-offs unprompted.",
+    guide:"Give an open-ended system design problem fitting the company (and JD domain if any). Stay vague at first; the candidate must drive. Expect: functional and non-functional requirements, rough capacity estimates, APIs, data model, high-level architecture (on the whiteboard as text), then deep dives into 1-2 components. Push with real interviewer moves: change the scale 10x, kill a node or a region, introduce a hot key, ask about consistency vs availability, idempotency, exactly-once claims, monitoring, cost. Calibrate depth to level: SDE-2 should drive most of it; senior must lead trade-offs unprompted.",
     rubric:["Requirements and scoping","Architecture","Deep dive","Scale and reliability","Trade-offs","Driving the discussion"]},
-  behavioral:{name:"Behavioral", min:45, tab:"notes", blurb:"Values, conflict, failure, ownership — with hard follow-ups.",
-    guide:"Ask 3–5 behavioral questions mapped to this company's values (e.g. Amazon Leadership Principles, Google 'Googleyness and leadership', Meta's signals like conflict, growth, drive). Expect STAR. After each story, dig: what exactly did YOU do, what did you say to that person, what was the data, what would you do differently, what was the result in numbers. Push back on vague 'we' answers and rehearsed polish.",
+  behavioral:{name:"Behavioral", min:45, tab:"notes", blurb:"Values, conflict, failure, ownership, with hard follow-ups.",
+    guide:"Ask 3-5 behavioral questions mapped to this company's values (e.g. Amazon Leadership Principles, Google 'Googleyness and leadership', Meta's signals like conflict, growth, drive). Expect STAR. After each story, dig: what exactly did YOU do, what did you say to that person, what was the data, what would you do differently, what was the result in numbers. Push back on vague 'we' answers and rehearsed polish.",
     rubric:["Specificity","Ownership","Self-awareness","Collaboration and conflict","Values alignment"]},
   hm:{name:"Hiring manager", min:45, tab:"notes", blurb:"Career story, judgment calls, team fit, your questions.",
     guide:"Play the hiring manager for this team. Mix: career narrative and growth, how they work with product and peers, a prioritisation or incident judgment scenario, a technical judgment question about their past work, what they want next, and their questions for you. Assess level fit honestly.",
@@ -531,7 +531,7 @@ const ROUNDS = {
 const COMPANIES = {
   auto:{name:"Infer from the JD", style:"Infer the company and its interview style from the job description. If unclear, use a typical well-run product company style."},
   google:{name:"Google", style:"Google: structured, rubric-driven, calm interviewers. Coding is medium-hard in a plain doc-like editor with no autocomplete; expects clarification, optimal approach with complexity, clean code, and handling follow-ups. Googleyness and leadership behavioral. System design for L4 and above."},
-  amazon:{name:"Amazon", style:"Amazon: Leadership Principles in every round, typically 1–2 LP questions even in technical rounds, STAR stories dug into with data. A bar raiser in the loop. Coding medium, often practical. OOD/LLD common. System design for SDE-2 and above, with focus on scale, operational excellence and customer impact."},
+  amazon:{name:"Amazon", style:"Amazon: Leadership Principles in every round, typically 1-2 LP questions even in technical rounds, STAR stories dug into with data. A bar raiser in the loop. Coding medium, often practical. OOD/LLD common. System design for SDE-2 and above, with focus on scale, operational excellence and customer impact."},
   meta:{name:"Meta", style:"Meta: fast coding, often two problems in about 40 minutes, expects near bug-free code quickly with little hinting. Product or infra system design. Behavioral round on conflict, growth, ambiguity, drive and impact."},
   microsoft:{name:"Microsoft", style:"Microsoft: conversational, collaborative tone. Coding medium with discussion, design questions, a hiring manager or 'as appropriate' round. Growth mindset and collaboration matter."},
   apple:{name:"Apple", style:"Apple: team-specific and secretive. Heavy depth in fundamentals and the team's domain, long project deep dives, practical coding, attention to quality and detail."},
@@ -545,7 +545,7 @@ const COMPANIES = {
   startup:{name:"Funded startup", style:"Funded startup: practical, generalist, ownership-heavy. Deep discussion of your real projects, pragmatic system design, a practical coding exercise, speed of delivery and product sense."},
 };
 const LEVELS = {
-  ng:"New grad / intern", sde1:"SDE-1 (0–2 yrs)", sde2:"SDE-2 (2–5 yrs)", senior:"Senior (5–8 yrs)", staff:"Staff / principal"
+  ng:"New grad / intern", sde1:"SDE-1 (0-2 yrs)", sde2:"SDE-2 (2-5 yrs)", senior:"Senior (5-8 yrs)", staff:"Staff / principal"
 };
 const LEVEL_BAR = {
   ng:"Expect strong fundamentals and coding; design depth not required.",
@@ -738,7 +738,7 @@ let pendingReqs = [];
 function renderDossiers(){
   const el = $("#dossierList");
   const ready = dossiers.map(d => `<button class="dossier" data-id="${esc(d.id)}" aria-pressed="${d.id===selectedDossier}">
-      <span class="row"><span class="t">${esc(d.company)} — ${esc(d.role||"")}</span><span class="status-pill ready">${d.id===selectedDossier ? "Selected" : "Ready — tap to use"}</span></span>
+      <span class="row"><span class="t">${esc(d.company)}, ${esc(d.role||"")}</span><span class="status-pill ready">${d.id===selectedDossier ? "Selected" : "Ready, tap to use"}</span></span>
       <span class="m">${(d.process||[]).length} rounds · ${(d.sources||[]).length} sources · researched ${esc(String(d.preparedAt||"").slice(0,10))}</span>
       ${d.summary ? `<span class="m">${esc(String(d.summary).slice(0,220))}${String(d.summary).length>220?"…":""}</span>`:""}
     </button>`).join("");
@@ -763,16 +763,16 @@ function renderReq(r){
     return `<li class="${cls}"><span class="mk">${mk}</span>${esc(s)}</li>`;
   }).join("");
   const log = (Array.isArray(r.log) ? r.log : []).slice(-6).reverse().map(l => `<div>${esc(typeof l === "string" ? l : l.msg)}</div>`).join("");
-  if (failed) return `<div class="req"><div class="req-head"><span class="t">${esc(r.company)} — ${esc(r.role||"")}</span><span class="status-pill" style="background:var(--red-soft);color:var(--red)">Research stopped</span></div><div class="hint">${esc(r.note || "Something went wrong.")} Paste <code>Research Onsite request ${esc(r.id)}</code> in chat to try again.</div></div>`;
+  if (failed) return `<div class="req"><div class="req-head"><span class="t">${esc(r.company)}, ${esc(r.role||"")}</span><span class="status-pill" style="background:var(--red-soft);color:var(--red)">Research stopped</span></div><div class="hint">${esc(r.note || "Something went wrong.")} Paste <code>Research Onsite request ${esc(r.id)}</code> in chat to try again.</div></div>`;
   if (!researching) return `<div class="req">
-      <div class="req-head"><span class="t">${esc(r.company)} — ${esc(r.role||"")}</span><span class="status-pill">Waiting for you</span></div>
+      <div class="req-head"><span class="t">${esc(r.company)}, ${esc(r.role||"")}</span><span class="status-pill">Waiting for you</span></div>
       <div class="pbar wait"><i></i></div>
       <div class="hint">Research hasn’t started yet. Paste this line in your chat with Claude:</div>
       <div class="copybox">Research Onsite request ${esc(r.id)}</div>
       <div class="req-meta"><span>Requested ${esc(ago(r.createdAt))}</span></div>
     </div>`;
   return `<div class="req">
-      <div class="req-head"><span class="spinner" aria-hidden="true"></span><span class="t">Researching ${esc(r.company)} — ${esc(r.role||"")}</span><b>${pct}%</b></div>
+      <div class="req-head"><span class="spinner" aria-hidden="true"></span><span class="t">Researching ${esc(r.company)}, ${esc(r.role||"")}</span><b>${pct}%</b></div>
       <div class="pbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
       <ul class="steps">${steps}</ul>
       ${r.note ? `<div><b>Now:</b> ${esc(r.note)}</div>` : ""}
@@ -818,7 +818,7 @@ ${jd.slice(0, 15000)}`, {modelTier:"quick"});
     if (r.company_key && COMPANIES[r.company_key]) $("#company").value = r.company_key;
     if (r.level && LEVELS[r.level]) $("#level").value = r.level;
     if (Array.isArray(r.rounds) && r.rounds.length) $$("#roundList input").forEach(i => i.checked = r.rounds.includes(i.value));
-    $("#jdMsg").textContent = `${r.company_name||""} ${r.role ? "· "+r.role : ""}. Focus: ${r.focus||"—"}. Settings updated.`;
+    $("#jdMsg").textContent = `${r.company_name||""} ${r.role ? "· "+r.role : ""}. Focus: ${r.focus||"-"}. Settings updated.`;
     saveCfg(); renderAgenda();
   }catch(e){ $("#jdMsg").textContent = aiError(e.code); }
   finally{ $("#analyzeJd").disabled = false; }
@@ -1140,7 +1140,7 @@ $("#testVoice").onclick = async () => {
       const st = await navigator.mediaDevices.getUserMedia({audio:true});
       st.getTracks().forEach(t => t.stop());
       add("Mic access: allowed.");
-    }catch(e){ add("Mic access: " + e.name + " — " + (e.message || "")); }
+    }catch(e){ add("Mic access: " + e.name + ", " + (e.message || "")); }
   } else add("Mic access: getUserMedia isn’t available in this view.");
   // 3. speech-to-text
   if (!SR){ add("Speech-to-text: not supported in this browser."); return; }
@@ -1156,7 +1156,7 @@ $("#testVoice").onclick = async () => {
 function setStage(s){
   const st = $("#callState"), av = $("#avatar");
   av.classList.toggle("speaking", s === "speaking");
-  st.textContent = ({speaking:`${session?.persona||"Interviewer"} is speaking`, thinking:`${session?.persona||"Interviewer"} is thinking…`, listening:"Listening to you", idle:"Your turn — speak or type"})[s] || s;
+  st.textContent = ({speaking:`${session?.persona||"Interviewer"} is speaking`, thinking:`${session?.persona||"Interviewer"} is thinking…`, listening:"Listening to you", idle:"Your turn, speak or type"})[s] || s;
 }
 
 /* ---------------- prompt building ---------------- */
@@ -1192,15 +1192,15 @@ CANDIDATE'S CODING LANGUAGE: ${lang}
 ${dossierBlock}
 
 CANDIDATE RESUME:
-${resume ? resume.slice(0, 12000) : "(not provided — ask them to walk you through their background)"}
+${resume ? resume.slice(0, 12000) : "(not provided, ask them to walk you through their background)"}
 
 JOB DESCRIPTION:
-${jd ? jd.slice(0, 10000) : "(none — use a typical role at this level)"}
+${jd ? jd.slice(0, 10000) : "(none, use a typical role at this level)"}
 
 CANDIDATE'S NOTES TO THE PANEL: ${extra || "(none)"}
 
 CONVERSATION RULES:
-- This is a voice call. Your words are read aloud. Speak naturally in short turns: usually 1–4 sentences. Ask ONE question at a time. No bullet lists, headings, or markdown styling in speech.
+- This is a voice call. Your words are read aloud. Speak naturally in short turns: usually 1-4 sentences. Ask ONE question at a time. No bullet lists, headings, or markdown styling in speech.
 - When you must show code or a long problem statement, put code in a single ${F}${lang.toLowerCase()} fenced block; it appears in the candidate's workspace. Say one short sentence about it outside the block. Problem statements can be spoken; keep them tight with one example.
 - Candidate messages are speech-to-text, so expect filler words and transcription mistakes; infer intent. Messages may include a [Workspace] block: that is exactly what the candidate has typed in the shared editor or whiteboard. Read it closely, mentally run code, and react like a real interviewer watching their screen.
 - Each candidate message ends with [Elapsed: X of Y min]. Pace the round like a real one. Around 85% of the time, start wrapping up; leave the last few minutes for the candidate's questions to you, and answer them in character with plausible, honest-sounding detail.
@@ -1303,7 +1303,7 @@ $("#answer").addEventListener("input", () => {
   const typed = Date.now() - lastKeyAt < 400;
   const ms = Number($("#pause").value);
   if (typed || !ms || mic.active || vsMic.active) return;
-  $("#micState").textContent = "Dictation detected — sends when you pause";
+  $("#micState").textContent = "Dictation detected, sends when you pause";
   dictT = setTimeout(() => { if ($("#answer").value.trim() && !busy && Date.now() - lastKeyAt > ms) sendAnswer(); }, ms + 800);
 });
 
@@ -1537,7 +1537,7 @@ async function endRound(){
   const finalWork = `Final editor (${$("#lang").value}):\n${($("#code").value || session.code || "(empty)").slice(0, 12000)}\n\nFinal whiteboard:\n${($("#notes").value || session.notes || "(empty)").slice(0, 6000)}`;
   showView("report");
   $("#repCrumb").textContent = `${r.name} · ${loop.company}`;
-  $("#repBody").innerHTML = `<div class="panel"><h2>Writing your feedback…</h2><p class="hint">The panel is reviewing the transcript. This takes 20–60 seconds.</p></div>`;
+  $("#repBody").innerHTML = `<div class="panel"><h2>Writing your feedback…</h2><p class="hint">The panel is reviewing the transcript. This takes 20-60 seconds.</p></div>`;
   const prompt = `You are a calibrated, senior interviewer writing the written feedback for a mock interview, exactly as you would for a hiring committee. Be honest and specific, not flattering. Ground every point in what actually happened in the transcript. If the round was too short to judge something, say so and score it low-confidence (2).
 
 Round: ${r.name} (${r.min} min planned, ${met.minutes} min actual)
@@ -1593,7 +1593,7 @@ function renderReport(res, live){
     <div class="report-head">
       <div class="big-score">${Number(r.overall)||0}<small>/100</small></div>
       <div>
-        <span class="decision ${decClass(r.decision||"")}">${esc(r.decision||"—")}</span> <span class="hint">${esc(r.level_signal||"")}</span>
+        <span class="decision ${decClass(r.decision||"")}">${esc(r.decision||"-")}</span> <span class="hint">${esc(r.level_signal||"")}</span>
         <h2 style="font-size:24px;margin-top:6px">${esc(r.headline||"")}</h2>
         <div class="hint" style="margin-top:6px">${esc(res.round)} · ${esc(res.company)} · ${esc(LEVELS[res.level]||"")} · ${esc(new Date(res.date).toLocaleString())}</div>
       </div>
@@ -1615,9 +1615,9 @@ function renderReport(res, live){
       <div class="cols">
         <div class="panel"><h2>Practise next</h2><ul class="list">${li(r.practice_next)}</ul></div>
         <div class="panel"><h2>How you spoke</h2><div class="metrics">
-          <div class="metric"><b>${met.avgWords ?? "—"}</b><span>words per answer</span></div>
-          <div class="metric"><b>${met.answers ?? "—"}</b><span>answers</span></div>
-          <div class="metric"><b>${met.minutes ?? "—"}</b><span>minutes</span></div>
+          <div class="metric"><b>${met.avgWords ?? "-"}</b><span>words per answer</span></div>
+          <div class="metric"><b>${met.answers ?? "-"}</b><span>answers</span></div>
+          <div class="metric"><b>${met.minutes ?? "-"}</b><span>minutes</span></div>
           <div class="metric"><b>${met.codeShares ?? 0}</b><span>workspace shares</span></div>
         </div></div>
       </div>
@@ -1642,7 +1642,7 @@ async function loopVerdict(){
 ${summary}
 
 Decide like a real committee: weigh the strongest and weakest signals, and how this company weighs rounds. Reply with only JSON:
-{"decision":"Hire"|"No hire"|"Hire at lower level"|"Borderline — more data needed","rationale":"3-4 sentences","strongest_signal":"...","biggest_risk":"...","plan":["concrete prep step for the next 2 weeks", "..."]}`, {modelTier:"default"});
+{"decision":"Hire"|"No hire"|"Hire at lower level"|"Borderline, more data needed","rationale":"3-4 sentences","strongest_signal":"...","biggest_risk":"...","plan":["concrete prep step for the next 2 weeks", "..."]}`, {modelTier:"default"});
     el.innerHTML = `<div class="panel"><h2>Committee decision: ${esc(v.decision)}</h2><p>${esc(v.rationale)}</p><p><b>Strongest signal:</b> ${esc(v.strongest_signal)}</p><p><b>Biggest risk:</b> ${esc(v.biggest_risk)}</p><h3 style="font-size:17px;margin:10px 0 6px">Two-week plan</h3><ul class="list">${(v.plan||[]).map(p=>`<li>${esc(p)}</li>`).join("")}</ul></div>`;
   }catch(e){ el.innerHTML = `<div class="banner err">${esc(aiError(e.code))}</div>`; }
 }

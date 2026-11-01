@@ -80,7 +80,17 @@ pub struct ReportInput<'a> {
 
 pub fn report_prompt(template: &str, r: &ReportInput) -> String {
     let field = |k: &str| r.workspace[k].as_str().filter(|s| !s.trim().is_empty()).unwrap_or("(empty)").to_string();
-    let final_ws = format!("Final editor ({}):\n{}\n\nFinal whiteboard:\n{}", r.lang, field("code"), field("notes"));
+    let final_ws = if r.workspace["issues"].as_str().is_some_and(|s| !s.trim().is_empty()) {
+        // A project round: the work is a diff, graded against the planted issues.
+        format!(
+            "Planted issues (hidden from the candidate; grade each as found, fixed, fixed badly or missed, from the transcript and the diff):\n{}\n\nFinal diff of their edits (empty = they changed nothing):\n{}\n\nFinal whiteboard:\n{}",
+            field("issues"),
+            field("diff"),
+            field("notes")
+        )
+    } else {
+        format!("Final editor ({}):\n{}\n\nFinal whiteboard:\n{}", r.lang, field("code"), field("notes"))
+    };
     let vars: Vars = [
         ("round_name", r.round_name.to_string()),
         ("round_minutes", r.round_minutes.to_string()),

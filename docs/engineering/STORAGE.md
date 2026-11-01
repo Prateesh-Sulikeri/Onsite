@@ -1,4 +1,4 @@
-# STORAGE — `src/store/`, `src/storage.rs`, privacy
+# STORAGE: `src/store/`, `src/storage.rs`, privacy
 
 All data local. One SQLite file + a few files. Shape lives in Rust types (JSON columns, `#[serde(default)]` so new fields
 need no migration).
@@ -41,7 +41,7 @@ delete_dossier` · `create_job update_job job jobs delete_job fail_running_jobs`
 | Key | Value |
 |---|---|
 | `app` | `Settings {provider, claude: ClaudeLocation?, interviewer_model (sonnet), report_model (opus), voice: VoiceSettings {engine, builtin_voice, ...}}` |
-| `api_keys` | `{provider_id: key}` — never to UI/logs |
+| `api_keys` | `{provider_id: key}`, never to UI/logs |
 | `storage_limits` | `{keep_rounds 0=all, keep_days 0=forever, log_max_mb 20}` |
 | `weekly_goal` | `{round_key: n}`, default `{coding:2, sysdesign:1, behavioral:1}`; `set_goal` drops unknown keys/zeros |
 | `openers:<round_key>` | recent openers |

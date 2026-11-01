@@ -1,4 +1,4 @@
-/* Onsite — colors taken from the twilight backdrop (assets/twilight.webp): deep navy neutrals (hue 266),
+/* Onsite, colors taken from the twilight backdrop (assets/twilight.webp): deep navy neutrals (hue 266),
    ridge/lake violet (hue 290) for actions and live state, horizon magenta and sun peach as rare warm accents. */
 :root{
   color-scheme: dark;
@@ -270,6 +270,12 @@ textarea{resize:vertical; line-height:1.5; field-sizing:content; min-height:5.5l
 .drop{display:flex; gap:14px; align-items:flex-start; padding:16px; border-radius:var(--r); border:1px dashed var(--line-2); background:var(--field); cursor:pointer; transition:border-color .18s var(--ease), background .18s var(--ease)}
 .drop:hover,.drop.over{border-color:var(--accent-hi); background:var(--hover)}
 .drop.filled{border-style:solid; border-color:var(--ok)}
+.drop.bad{border-style:solid; border-color:var(--bad); background:color-mix(in srgb, var(--bad) 8%, var(--field))}
+.drop.bad .drop-ic{color:var(--bad); background:color-mix(in srgb, var(--bad) 16%, transparent)}
+.drop-bad{display:flex; flex-direction:column; gap:6px; color:var(--ink)}
+.drop.bad .drop-bad > b{color:var(--bad); font-size:14px}
+.drop-fix{padding:8px 10px; border-radius:8px; background:var(--surface-2)}
+.drop-fix b{color:var(--ink)}
 .drop-ic{width:40px; height:40px; border-radius:11px; display:grid; place-items:center; background:var(--surface-2); color:var(--accent-text); flex:none}
 .drop-ic svg{width:19px; height:19px}
 .drop.filled .drop-ic{color:var(--ok); background:var(--ok-soft)}
@@ -673,6 +679,58 @@ code{font-family:var(--mono); font-variant-ligatures:none; font-size:.9em; backg
 .pane-bar .btn{margin-left:auto}
 select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; background-color:var(--accent-soft); border-color:var(--accent-line); color:var(--accent-text); background-position:right 9px center}
 .editor{flex:1; min-height:0; background:var(--code-bg)}
+/* Multi-file project (code comprehension round): file tree, open-file tabs, changes view. */
+.ws-split{flex:1; min-height:0; display:flex}
+/* Vertical drag bars: conversation | workspace, and file tree | editor. Only shown where they can be used. */
+.split-v{display:none; flex:none; width:9px; margin:0 -4px; position:relative; z-index:2; cursor:col-resize; touch-action:none}
+.split-v::before{content:""; position:absolute; top:0; bottom:0; left:4px; border-left:1px solid var(--line)}
+.split-v::after{content:""; position:absolute; top:50%; left:2px; width:5px; height:36px; margin-top:-18px; border-radius:99px; background:var(--line-2)}
+.split-v:hover::after,.split-v.dragging::after,.split-v:focus-visible::after{background:var(--accent-hi)}
+.split-v:focus-visible{outline:none}
+.room-body.coding > .split-v{display:block}
+.file-tree:not([hidden]) + .split-v{display:block}
+.room-body.coding > .split-v{margin:0 -4px}
+.kbd-btn{margin-left:0 !important}
+.ed-empty{flex:1; display:grid; place-items:center; background:var(--code-bg); color:var(--muted); font-size:13px}
+.ctx-menu{position:fixed; z-index:60; min-width:180px; padding:5px; border:1px solid var(--line-2); border-radius:11px; background:var(--surface-2); box-shadow:var(--shadow), 0 18px 40px -16px var(--deep-shadow)}
+.ctx-menu button{display:block; width:100%; border:0; background:none; color:var(--ink-2); padding:7px 10px; border-radius:7px; text-align:left; font:13px/1.2 inherit}
+.ctx-menu button:hover,.ctx-menu button:focus-visible{background:var(--hover); color:var(--ink); outline:none}
+.ctx-menu button:disabled{color:var(--muted); opacity:.55; pointer-events:none}
+.ctx-menu hr{border:0; border-top:1px solid var(--line); margin:4px 2px}
+.dlg.kbd{max-width:560px}
+.kbd h3{margin:16px 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+.kbd dl{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 18px; margin:0; font-size:13px}
+.kbd dd{margin:0; text-align:right; white-space:nowrap}
+.kbd kbd{font:600 11.5px/1 var(--mono); padding:3px 6px; border:1px solid var(--line-2); border-bottom-width:2px; border-radius:6px; background:var(--field); color:var(--ink)}
+#kbdBody{max-height:60vh; overflow:auto; padding-right:6px}
+.ws-col{flex:1; min-width:0; display:flex; flex-direction:column}
+.proj-btns{display:flex; gap:6px}
+.proj-btns .btn{margin-left:0}
+.file-tree{flex:0 0 190px; overflow:auto; padding:8px 6px; background:var(--pane); font-size:12.5px}
+.file-tree .dir{padding:8px 8px 3px; color:var(--muted); font:600 11px/1.2 var(--mono); text-transform:uppercase; letter-spacing:.04em}
+.file-tree button.file{display:flex; align-items:center; gap:6px; width:100%; border:0; background:none; color:var(--ink-2); padding:5px 8px; border-radius:7px; text-align:left; font:12.5px/1.3 var(--mono)}
+.file-tree button.file:hover{background:var(--hover)}
+.file-tree button.file[aria-current="true"]{background:var(--accent-soft); color:var(--ink)}
+.file-tree .name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.file-tree .lock{color:var(--muted); font-size:11px}
+.file-tree input{width:100%; margin-top:6px; font:12.5px/1.3 var(--mono); padding:5px 8px}
+.dirty-dot{width:7px; height:7px; border-radius:50%; background:var(--warm); flex:none; visibility:hidden}
+.dirty .dirty-dot{visibility:visible}
+.file-tabs{display:flex; gap:2px; overflow-x:auto; padding:6px 8px 0; border-bottom:1px solid var(--line); background:var(--pane)}
+.file-tabs .ftab{display:inline-flex; align-items:center; gap:6px; border:0; background:none; color:var(--muted); padding:6px 8px 6px 10px; border-radius:8px 8px 0 0; font:12px/1.2 var(--mono); white-space:nowrap}
+.file-tabs .ftab:hover{background:var(--hover); color:var(--ink)}
+.file-tabs .ftab[aria-selected="true"]{background:var(--code-bg); color:var(--ink)}
+.file-tabs .x{border:0; background:none; color:inherit; padding:0 2px; border-radius:4px; opacity:.6}
+.file-tabs .x:hover{opacity:1; background:var(--hover)}
+.changes{flex:1; min-height:0; margin:0; overflow:auto; padding:12px 0; background:var(--code-bg); font:13px/1.5 var(--mono); color:var(--ink-2)}
+.changes span{display:block; padding:0 16px; white-space:pre}
+.changes .d-add{background:var(--ok-soft); color:var(--ink)}
+.changes .d-del{background:var(--bad-soft); color:var(--ink)}
+.changes .d-hunk{color:var(--accent-text); margin-top:6px}
+.changes .d-file{color:var(--ink); font-weight:700}
+.changes .empty{padding:24px 16px; color:var(--muted); font-family:inherit}
+.cb-head button{display:none}
+#transcript .cb-head button{display:inline-flex}
 .editor .cm-editor{height:100%}
 .notes{flex:1; border:0 !important; border-radius:0; padding:16px 18px; resize:none; field-sizing:fixed; min-height:0; max-height:none; background:var(--code-bg); box-shadow:none !important}
 /* Excalidraw: its panels take the app's surfaces and violet accent; the canvas is transparent over --code-bg. */
@@ -811,7 +869,10 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 /* ---------- toasts ---------- */
 .toasts{position:fixed; right:20px; bottom:20px; z-index:var(--z-toast); display:flex; flex-direction:column; gap:8px; max-width:380px}
 .toast{padding:12px 14px; border-radius:var(--r); background:var(--surface-2); border:1px solid var(--line-2); font-size:13px; box-shadow:0 16px 40px var(--deep-shadow); animation:toastIn .25s var(--ease)}
+.toast{display:flex; gap:10px; align-items:flex-start}
 .toast.err{border-color:var(--bad)}
+.toast-x{margin-left:auto; flex:none; background:none; border:0; color:var(--muted); font-size:18px; line-height:1; cursor:pointer; padding:0 2px}
+.toast-x:hover{color:var(--ink)}
 @keyframes toastIn{from{opacity:0; transform:translateY(8px)}}
 
 /* Labels on the call buttons only when the conversation column has room. */
@@ -868,7 +929,7 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 
 /* ---------- coding round: problem tab + runner ---------- */
 /* Left: problem on top, conversation below (each scrolls). Right: the editor, full height. */
-.room-body.coding{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}
+.room-body.coding{grid-template-columns:minmax(0,var(--cs,1fr)) 9px minmax(0,var(--ws,1.15fr))}
 .room-body.coding .rail{display:none}
 .convo-prob{flex:1 1 50%; min-height:0; overflow-y:auto; background:var(--pane)}
 .convo-prob .prob{max-width:none}
@@ -918,6 +979,8 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 .voice-warn span{flex:1 1 280px}
 .voice-warn[hidden]{display:none}
 .hint.warn{color:var(--warn)}
+.proj-note{margin-top:14px; padding:12px 14px; border:1px solid var(--warm-line); border-radius:12px; background:var(--tip-bg); font-size:13px; line-height:1.5}
+.proj-note p{margin:0 0 8px}
 .ready-mode{font-weight:600; color:var(--ink)}
 .ready-card .form-msg{text-align:left}
 .persona .meta .vs-only{color:var(--warn)}
@@ -933,3 +996,64 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 .fb-chips{display:flex; flex-wrap:wrap; gap:8px}
 .fb-form .check.span-2{grid-column:1/-1; margin-top:-6px}
 @media (max-width: 980px){ .fb-scales{grid-template-columns:1fr} }
+
+/* ---- getting started + guided tour ---- */
+.start-card{margin-bottom:16px}
+.start-list{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px}
+.start-list li{display:flex; align-items:center; gap:12px; padding:10px 4px; border-top:1px solid var(--line)}
+.start-list li:first-child{border-top:0}
+.start-dot{width:26px; height:26px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:600; background:var(--surface-2); color:var(--muted); border:1px solid var(--line-2)}
+.start-dot svg{width:14px; height:14px}
+.start-list li.done .start-dot{background:var(--ok-soft); color:var(--ok); border-color:var(--ok)}
+.start-tx{display:flex; flex-direction:column; gap:2px; min-width:0; flex:1}
+.start-tx b{font-size:14px; color:var(--ink)}
+.start-tx small{font-size:12.5px; color:var(--muted)}
+.start-list li.done .start-tx b{color:var(--muted); font-weight:500}
+.tour{position:fixed; inset:0; z-index:60}
+.tour-hole{position:fixed; border-radius:12px; box-shadow:0 0 0 9999px color-mix(in srgb, var(--deep-shadow) 80%, transparent); outline:2px solid var(--accent-hi); pointer-events:none; transition:all .22s var(--ease)}
+.tour-card{position:fixed; width:min(340px, calc(100vw - 24px)); padding:16px 18px; border-radius:var(--r); background:var(--surface-2); border:1px solid var(--line-2); box-shadow:0 16px 40px var(--deep-shadow); display:flex; flex-direction:column; gap:8px}
+.tour-card h3{margin:0; font-size:16px}
+.tour-card p{margin:0; font-size:13.5px; color:var(--muted); line-height:1.5}
+.tour-step{color:var(--accent-text); font-weight:600; font-size:12px}
+.tour-actions{display:flex; justify-content:space-between; align-items:center; margin-top:6px}
+
+/* ---- setup: optional fields folded away; tour entry points ---- */
+.more{margin-top:14px; border-top:1px solid var(--line); padding-top:10px}
+.more > summary{cursor:pointer; font-size:13.5px; font-weight:600; color:var(--accent-text); list-style:none; display:flex; gap:8px; align-items:baseline}
+.more > summary::-webkit-details-marker{display:none}
+.more > summary::before{content:"+"; display:inline-grid; place-items:center; width:18px; height:18px; border-radius:5px; background:var(--surface-2); border:1px solid var(--line-2); font-size:13px; line-height:1}
+.more[open] > summary::before{content:"−"}
+.more > summary small{color:var(--muted); font-weight:400}
+.more .form-grid{margin-top:12px}
+.head-actions{display:flex; gap:10px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-left:auto}
+.tour-help{display:inline-flex; gap:8px; align-items:center; color:var(--accent-text); border-color:var(--accent-line-strong); background:var(--sel-bg)}
+.tour-help:hover{box-shadow:var(--glow-sm)}
+.tour-help svg{width:15px; height:15px}
+.page-head{align-items:flex-start}
+.tour-offer{display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin:0 36px 14px; padding:10px 14px; border-radius:var(--r); background:var(--surface-2); border:1px solid var(--accent-line)}
+.tour-offer-ic{color:var(--accent-text); display:grid}
+.tour-offer-ic svg{width:18px; height:18px}
+.tour-offer-tx{flex:1 1 260px; font-size:13.5px}
+.tour-offer-btns{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+.room .tour-offer{margin:0 0 10px}
+.action.quick{margin-bottom:14px}
+.drop.nudge{animation:nudge 1.2s var(--ease) 2; border-color:var(--accent-hi)}
+@keyframes nudge{50%{box-shadow:0 0 0 4px var(--accent-line)}}
+.more-grid{margin-top:12px}
+
+/* ---- setup stages ---- */
+.stepper{list-style:none; display:flex; gap:6px; margin:0 0 6px; padding:0; flex-wrap:wrap}
+.stepper li{flex:1 1 90px; min-width:0}
+.stepper button{width:100%; display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:var(--r); border:1px solid var(--line); background:var(--field); color:var(--muted); font-size:13px; cursor:pointer; text-align:left}
+.stepper button:disabled{opacity:.55; cursor:default}
+.stepper i{width:22px; height:22px; flex:none; border-radius:50%; display:grid; place-items:center; font:600 12px/1 var(--font-body, inherit); font-style:normal; background:var(--surface-2); border:1px solid var(--line-2)}
+.stepper i svg{width:12px; height:12px}
+.stepper li.active button{border-color:var(--accent-line-strong); background:var(--sel-bg); color:var(--ink); font-weight:600}
+.stepper li.active i{background:var(--grad); color:var(--accent-ink); border-color:transparent}
+.stepper li.done button{color:var(--ink)}
+.stepper li.done i{background:var(--ok-soft); color:var(--ok); border-color:var(--ok)}
+.stage{display:flex; flex-direction:column; gap:14px}
+.stage[hidden]{display:none}
+.stage-nav{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+.stage-nav .form-msg{flex:1 1 200px; margin:0}
+#view-ready .stepper{margin-bottom:14px}

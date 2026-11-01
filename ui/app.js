@@ -69,7 +69,8 @@ document.addEventListener("click", async e => {
   const t = e.target.closest("[data-nav]");
   if (!t) return;
   if (session){
-    // Still loading: nothing to lose, so no question.
+    // Still loading: nothing to lose, unless the AI is writing the code project (minutes and tokens).
+    if (session.roundId === null && session.writing && !await ask("Stop writing the project?", "The AI is still writing your code project. If you leave now, that work and its tokens are lost, and the round does not start.", "Stop and leave", true)) return;
     if (session.roundId !== null && !await ask("Leave the call?", "The interviewer stops. The round keeps its transcript.", "Leave")) return;
     leaveRound().then(kept => {
       if (kept !== false) return;
@@ -99,11 +100,42 @@ function toast(msg, kind = ""){
   if (toastSeen.get(msg) > now - 10000) return;
   toastSeen.set(msg, now);
   const el = document.createElement("div");
-  el.className = "toast " + kind; el.textContent = msg;
-  if (kind === "err") el.setAttribute("role", "alert");
+  el.className = "toast " + kind;
+  const tx = document.createElement("span"); tx.textContent = msg; el.appendChild(tx);
+  // Errors stay long enough to read and can be closed; a 6 s flash was easy to miss.
+  if (kind === "err"){
+    el.setAttribute("role", "alert");
+    const x = document.createElement("button"); x.type = "button"; x.className = "toast-x"; x.setAttribute("aria-label", "Dismiss"); x.textContent = "×";
+    x.onclick = () => el.remove(); el.appendChild(x);
+  }
   $("#toasts").appendChild(el);
-  setTimeout(() => el.remove(), 6000);
+  setTimeout(() => el.remove(), kind === "err" ? 20000 : 6000);
 }
+
+/* A file Onsite can't use, in plain words: what is wrong, then what to do about it.
+   `raw` is the message from Rust (or ""), `name` the file. Returns {why, fix}. */
+const BAD_EXT = [
+  [/\.doc$/i, "This is an old Word .doc file. An ATS and Onsite can’t read that format reliably.", "In Word choose File > Save As, pick PDF or Word Document (.docx), then add the new file."],
+  [/\.(pages)$/i, "This is an Apple Pages file. Onsite can’t open it.", "In Pages choose File > Export To > PDF (or Word), then add the exported file."],
+  [/\.(odt|ott|fodt)$/i, "This is an OpenDocument file. Onsite can’t open it.", "In LibreOffice choose File > Export As > Export as PDF, then add the PDF."],
+  [/\.(png|jpe?g|gif|bmp|webp|heic|tiff?)$/i, "This is a picture. An ATS can’t read text inside a picture.", "Use the original PDF or Word file. If you only have a photo, type or paste the text instead."],
+  [/\.(zip|rar|7z|gz)$/i, "This is a compressed archive, not a resume.", "Unzip it and add the PDF or Word file inside."],
+  [/\.(xls|xlsx|csv|ppt|pptx|key|numbers)$/i, "This is not a document Onsite can read as a resume.", "Export your resume as PDF or Word (.docx) and add that."],
+];
+function fileProblem(name, raw){
+  for (const [re, why, fix] of BAD_EXT) if (re.test(name)) return {why, fix};
+  const r = String(raw || "");
+  if (/password/i.test(r)) return {why: "This PDF is password-protected, so an ATS can’t open it either.", fix: "Export a copy with no password: open the PDF, choose Print > Save as PDF, and add that copy."};
+  if (/damaged|not a real PDF/i.test(r)) return {why: "The file looks damaged, or it isn’t really a PDF or Word file (renaming a file doesn’t convert it).", fix: "Open it in your editor and export it again as PDF or .docx. If you can’t, paste the text instead."};
+  if (/No text came out|can’t read any text|can't read any text/i.test(r)) return {why: "The file has no text a machine can read. It is probably a scan or a picture saved as a PDF. That is exactly what an ATS can’t read.", fix: "Export the PDF from the original document (Word, Google Docs, Canva) instead of scanning it. Or paste the text."};
+  if (/over 10 MB/i.test(r)) return {why: "The file is over 10 MB. A resume should be far smaller.", fix: "Remove large images and export it again, or paste the text."};
+  if (/empty/i.test(r)) return {why: "The file is empty.", fix: "Check you picked the right file."};
+  if (/file type|can’t read this|can't read this/i.test(r)) return {why: "Onsite can’t read this kind of file.", fix: "Use PDF, Word (.docx), .rtf, .txt or .md, or paste the text."};
+  return {why: r || "Something went wrong while reading the file.", fix: "Try exporting it again as PDF or Word (.docx), or paste the text instead."};
+}
+/* The same box content for every file drop: used by interview setup and Resume check. */
+const problemHtml = (name, p, extra = "") =>
+  `<span class="drop-bad"><b>Couldn’t use ${esc(name)}</b><span>${esc(p.why)}</span><span class="drop-fix"><b>What to do:</b> ${esc(p.fix)}</span><span>${extra}</span></span>`;
 /* Screen-reader-only announcements (the transcript itself is not live: streaming would flood it). */
 function announce(text){ const el = $("#srLive"); el.textContent = ""; setTimeout(() => el.textContent = text, 30); }
 
@@ -111,12 +143,12 @@ function announce(text){ const el = $("#srLive"); el.textContent = ""; setTimeou
 const PROVIDERS = {
   claude_code: {name: "Claude Code"},
   anthropic: {name: "Claude API", key: "Claude API key", hint: "Create one at console.anthropic.com, under API keys. It starts with sk-ant-.",
-    models: {"claude-sonnet-5-5": "Sonnet 5.5 — fast replies", "claude-opus-5-5": "Opus 5.5 — best judgment", "claude-haiku-5-5": "Haiku 5.5 — fastest, cheapest"}},
+    models: {"claude-sonnet-5-5": "Sonnet 5.5: fast replies", "claude-opus-5-5": "Opus 5.5: best judgment", "claude-haiku-5-5": "Haiku 5.5: fastest, cheapest"}},
   openai: {name: "OpenAI", key: "OpenAI API key", hint: "Create one at platform.openai.com, under API keys. ChatGPT Plus doesn’t cover API use, so add a little credit there."},
   gemini: {name: "Gemini", key: "Gemini API key", hint: "Get a free key at aistudio.google.com (Get API key). The free tier is enough for practice, with daily limits.",
-    models: {"gemini-flash-latest": "Gemini Flash (latest) — free tier"}},
+    models: {"gemini-flash-latest": "Gemini Flash (latest): free tier"}},
   groq: {name: "Groq", key: "Groq API key", hint: "Get a free key at console.groq.com, under API Keys. It starts with gsk_. The free tier has low per-minute limits, so long rounds may hit them.",
-    models: {"qwen/qwen3.8-27b": "Qwen 3.8 27B — best interviewer", "openai/gpt-oss-120b": "GPT-OSS 120B — has web search", "openai/gpt-oss-20b": "GPT-OSS 20B"}},
+    models: {"qwen/qwen3.8-27b": "Qwen 3.8 27B: best interviewer", "openai/gpt-oss-120b": "GPT-OSS 120B: has web search", "openai/gpt-oss-20b": "GPT-OSS 20B"}},
 };
 const builtinVoice = () => !!(VS && VS.engine === "builtin");
 /* Which voice speaks for an interviewer. The built-in engine has two voices, picked by gender. */
@@ -225,7 +257,7 @@ async function voiceNudge(){
 }
 
 /* ---------------- dashboard ---------------- */
-/* Everything here is computed from saved rounds and their feedback JSON. Dimension scores are 1–4. */
+/* Everything here is computed from saved rounds and their feedback JSON. Dimension scores are 1-4. */
 const DAY = 864e5;
 const dayKey = d => { const x = new Date(d); return `${x.getFullYear()}-${x.getMonth()}-${x.getDate()}`; };
 const weekStart = (d = new Date()) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
@@ -276,6 +308,7 @@ async function renderDashboard(){
   const reviewed = h.filter(x => x.overall != null);
   const skills = skillStats(reviewed);
   renderContinue(h);
+  if (typeof renderStart === "function") renderStart(h);
   renderProgress(h, goal);
   renderSkills(skills);
   renderTrend(reviewed);
@@ -307,7 +340,7 @@ function renderProgress(h, goal){
   const done = weekCounts(h);
   const ws = weekStart(), we = new Date(ws.getTime() + 6 * DAY);
   const f = d => d.toLocaleDateString([], {day: "numeric", month: "short"});
-  $("#dashWeekRange").textContent = `${f(ws)} – ${f(we)}`;
+  $("#dashWeekRange").textContent = `${f(ws)} to ${f(we)}`;
   const keys = [...new Set([...Object.keys(goal), ...Object.keys(done)])];
   const target = Object.values(goal).reduce((a, n) => a + n, 0);
   const total = Object.values(done).reduce((a, n) => a + n, 0);
@@ -324,13 +357,13 @@ function renderProgress(h, goal){
 }
 
 function trendHtml(t){
-  if (t == null) return `<span class="trend na" title="Needs 4 scored rounds">—</span>`;
+  if (t == null) return `<span class="trend na" title="Needs 4 scored rounds">-</span>`;
   if (Math.abs(t) < 0.25) return `<span class="trend flat" title="Last 3 vs earlier: steady">→</span>`;
   return `<span class="trend ${t > 0 ? "up" : "down"}" title="Last 3 rounds vs earlier: ${t > 0 ? "+" : ""}${t.toFixed(1)}">${t > 0 ? "↑" : "↓"} ${Math.abs(t).toFixed(1)}</span>`;
 }
 function renderSkills(skills){
   const el = $("#dashSkills");
-  if (!skills.length){ el.innerHTML = `<p class="muted">Scores per skill appear after your first round with feedback. Each round grades 4–5 skills from its rubric.</p>`; return; }
+  if (!skills.length){ el.innerHTML = `<p class="muted">Scores per skill appear after your first round with feedback. Each round grades 4-5 skills from its rubric.</p>`; return; }
   const top = skills.slice().sort((a, b) => b.n - a.n || a.avg - b.avg).slice(0, 6);
   el.innerHTML = `<ul class="skills">${top.map(s => `
     <li title="${esc(`Mostly from ${roundName(s.kind)} rounds`)}">
@@ -493,7 +526,7 @@ function initSetup(){
   fillSelect($("#company"), CAT.COMPANIES, v => v.name);
   fillSelect($("#level"), CAT.LEVELS, v => v);
   fillSelect($("#rqLevel"), CAT.LEVELS, v => v);
-  $("#panel").innerHTML += PANELS.map(p => `<option value="${esc(p.id)}">${esc(p.name)} — the same five people every time</option>`).join("");
+  $("#panel").innerHTML += PANELS.map(p => `<option value="${esc(p.id)}">${esc(p.name)}: the same five people every time</option>`).join("");
   const c = LS.get("onsite.cfg", {company:"auto", level:"sde2", lang:"Java", temper:"realistic", roundLen:"", rounds:DEFAULT_ROUNDS});
   cfgFields.forEach(f => {
     const el = $("#"+f); if (c[f] == null) return;
@@ -541,6 +574,7 @@ function setMode(m, save = true){
   renderTiles();
   if (save) saveCfg();
   renderAgenda();
+  syncMore();
 }
 $("#modeGeneral").onclick = () => setMode("general");
 $("#modeCompany").onclick = () => setMode("company");
@@ -564,7 +598,7 @@ async function loadDossiers(){
   try{ DOSSIERS = await api.invoke("list_dossiers"); }catch(e){ DOSSIERS = []; }
   const sel = $("#dossier"), keep = sel.value || LS.get("onsite.cfg", {}).dossier;
   sel.innerHTML = DOSSIERS.length
-    ? DOSSIERS.map(d => `<option value="${esc(d.id)}">${esc(d.company)} — ${esc(d.role)}</option>`).join("")
+    ? DOSSIERS.map(d => `<option value="${esc(d.id)}">${esc(d.company)}: ${esc(d.role)}</option>`).join("")
     : `<option value="">No dossiers yet</option>`;
   if (DOSSIERS.some(d => d.id === keep)) sel.value = keep;
   sel.disabled = !DOSSIERS.length;
@@ -587,18 +621,26 @@ function hookDrop(dropSel, inputSel, textSel, msgSel, label){
   const drop = $(dropSel), input = $(inputSel), ta = $(textSel), msgEl = $(msgSel);
   const initial = msgEl.innerHTML;
   const lower = label.toLowerCase();
+  let problem = null;   // the last file that couldn't be used, shown until the user does something else
   const show = () => {
     const n = words(ta.value);
-    drop.classList.toggle("filled", n > 0);
+    drop.classList.toggle("filled", n > 0 && !problem);
+    drop.classList.toggle("bad", !!problem);
+    if (problem){
+      msgEl.innerHTML = problemHtml(problem.name, problem.p, `<button type="button" class="linkbtn" data-choose>Choose another file</button> · <button type="button" class="linkbtn" data-paste>Paste ${esc(lower)} text</button>${n ? ` · <button type="button" class="linkbtn" data-dismiss>Keep the earlier ${esc(lower)}</button>` : ""}`);
+      return;
+    }
     msgEl.innerHTML = n
       ? `${n} words loaded. <button type="button" class="linkbtn" data-edit>${ta.hidden ? "Edit" : "Hide"}</button> · <button type="button" class="linkbtn" data-clear>Remove</button>`
       : ta.hidden ? initial : `Type or paste the ${lower} below, or <button type="button" class="linkbtn" data-choose>choose a file</button>`;
   };
   const load = async f => {
-    input.value = "";
+    input.value = ""; problem = null;
+    const early = BAD_EXT.some(([re]) => re.test(f.name));
+    if (early){ problem = {name: f.name, p: fileProblem(f.name, "")}; show(); return; }
     if (TEXT_FILE.test(f.name) || (f.type || "").startsWith("text/")){
       try{ ta.value = (await f.text()).trim(); ta.hidden = true; saveCfg(); show(); }
-      catch(e){ toast(`Couldn’t read that file. Paste the ${lower} instead.`, "err"); }
+      catch(e){ problem = {name: f.name, p: fileProblem(f.name, "")}; show(); }
       if (label === "Resume") rememberResumeFile(null);
       return;
     }
@@ -609,24 +651,79 @@ function hookDrop(dropSel, inputSel, textSel, msgSel, label){
       const doc = await api.invoke("read_document", {name: file.name, data: file.data});
       ta.value = doc.text; ta.hidden = true; saveCfg(); show();
       if (label === "Resume") rememberResumeFile(file);
-    }catch(e){ show(); toast(errText(e), "err"); }
+    }catch(e){ problem = {name: f.name, p: fileProblem(f.name, errText(e))}; show(); drop.scrollIntoView({block: "nearest", behavior: "smooth"}); }
   };
   drop.onclick = e => {
-    const b = e.target.closest("[data-paste],[data-edit],[data-clear],[data-choose]");
-    if (b && b.matches("[data-paste]")){ ta.hidden = false; show(); ta.focus(); return; }
+    const b = e.target.closest("[data-paste],[data-edit],[data-clear],[data-choose],[data-dismiss]");
+    if (b && b.matches("[data-dismiss]")){ problem = null; show(); return; }
+    if (b && b.matches("[data-paste]")){ problem = null; ta.hidden = false; show(); ta.focus(); return; }
     if (b && b.matches("[data-edit]")){ ta.hidden = !ta.hidden; show(); if (!ta.hidden) ta.focus(); return; }
-    if (b && b.matches("[data-clear]")){ ta.value = ""; ta.hidden = true; saveCfg(); show(); if (label === "Resume") rememberResumeFile(null); drop.querySelector("[data-choose]").focus(); return; }
+    if (b && b.matches("[data-clear]")){ problem = null; ta.value = ""; ta.hidden = true; saveCfg(); show(); if (label === "Resume") rememberResumeFile(null); drop.querySelector("[data-choose]").focus(); return; }
     input.click();
   };
   input.onchange = () => input.files[0] && load(input.files[0]);
   drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
   drop.ondragleave = e => { if (!drop.contains(e.relatedTarget)) drop.classList.remove("over"); };
   drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) load(f); };
-  ta.addEventListener("input", show);
+  ta.addEventListener("input", () => { problem = null; show(); });
   // Hand edits mean the file no longer matches what the interviewer reads.
   if (label === "Resume") ta.addEventListener("input", () => { if (RESUME_FILE) rememberResumeFile(null); });
   show();
 }
+/* ---------------- setup stages ----------------
+   1 Experience, 2 Rounds, 3 Resume and job description, 4 Time, 5 Mic check (the Get ready screen), then the room. */
+const STAGES = ["Experience", "Rounds", "Resume", "Time", "Mic check"];
+let STAGE = 1, STAGE_MAX = 1;
+function renderStepper(el, active){
+  el.innerHTML = STAGES.map((name, i) => {
+    const n = i + 1, state = n === active ? "active" : n < active ? "done" : "";
+    const can = n < active || n <= STAGE_MAX;
+    return `<li class="${state}"><button type="button" data-st="${n}"${can ? "" : " disabled"}${n === active ? ' aria-current="step"' : ""}><i>${n < active ? icon("check") : n}</i><span>${name}</span></button></li>`;
+  }).join("");
+}
+function showStage(n){
+  STAGE = Math.max(1, Math.min(4, n)); STAGE_MAX = Math.max(STAGE_MAX, STAGE);
+  $$("#view-interviews .stage").forEach(s => s.hidden = Number(s.dataset.stage) !== STAGE);
+  renderStepper($("#stepper"), STAGE);
+  $("#stageBack").hidden = STAGE === 1;
+  $("#stageNext").hidden = STAGE === 4;
+  $("#startBtn").hidden = STAGE !== 4;
+  const m = $("#startMsg"); if (!/…$/.test(m.textContent)){ m.className = "form-msg"; m.textContent = ""; }
+  $(".main").scrollTop = 0;
+}
+/* What must be true before the next stage. Returns a message, or "" when fine. */
+function stageProblem(n){
+  if (n === 1 && MODE === "company" && !currentDossier()) return "Pick a company dossier, or switch to General practice.";
+  if (n === 2 && !selectedRounds().length) return "Pick at least one round.";
+  if (n === 3 && !words($("#resume").value)) return "Add your resume to continue. A PDF or Word file works best, or paste the text.";
+  return "";
+}
+$("#stageNext").onclick = () => {
+  const p = stageProblem(STAGE), m = $("#startMsg");
+  if (p){ m.className = "form-msg err"; m.textContent = p; return; }
+  showStage(STAGE + 1);
+};
+$("#stageBack").onclick = () => showStage(STAGE - 1);
+$("#stepper").onclick = e => { const b = e.target.closest("button[data-st]"); if (b && !b.disabled) showStage(Number(b.dataset.st)); };
+$("#readyStepper").onclick = e => { const b = e.target.closest("button[data-st]"); if (b && !b.disabled && Number(b.dataset.st) < 5){ nav("interviews"); showStage(Number(b.dataset.st)); } };
+showStage(1);
+
+/* Quick start: one 10-minute coding round with the current settings. Needs a resume, like any loop. */
+$("#quickStart").onclick = () => {
+  setMode("general");
+  selectRounds(["coding"]);
+  $("#roundLen").value = "10";
+  saveCfg(); renderAgenda(); syncMore();
+  if (!words($("#resume").value)){
+    const m = $("#startMsg"), box = $("#dropResume");
+    showStage(3);
+    m.className = "form-msg err"; m.textContent = "Add your resume, then press Next.";
+    box.scrollIntoView({behavior: "smooth", block: "center"});
+    box.classList.add("nudge"); setTimeout(() => box.classList.remove("nudge"), 2400);
+    return;
+  }
+  $("#startBtn").click();
+};
 /* Who runs round i. A panel gives each round type a fixed person; "Mixed" rotates names. */
 function interviewerFor(i, key, panelId){
   const panel = PANELS.find(p => p.id === panelId);
@@ -648,11 +745,15 @@ function persona(i){ return interviewerFor(i, selectedRounds()[i], $("#panel").v
 let panelNote = "";
 function syncPanels(){
   const sel = $("#panel"); if (!sel || !PANELS.length) return;
+  // The built-in engine has two international voices, so there is no panel to choose: always "Mixed".
+  const field = sel.closest("label.field");
+  if (field) field.hidden = builtinVoice();
+  if (builtinVoice() && sel.value){ sel.value = ""; saveCfg(); }
   [...sel.options].forEach(o => {
     const p = PANELS.find(x => x.id === o.value); if (!p) return;
     const bad = panelBlocked(p);
     o.disabled = bad;
-    o.textContent = `${p.name} — ${bad ? "needs VoiceStudio voices" : "the same five people every time"}`;
+    o.textContent = `${p.name}: ${bad ? "needs VoiceStudio voices" : "the same five people every time"}`;
   });
   const cur = PANELS.find(p => p.id === sel.value);
   if (cur && panelBlocked(cur)){
@@ -672,7 +773,20 @@ function renderPanelPeople(){
     w.textContent = `${panelNote}The built-in voice has American and British voices only. Switch to VoiceStudio in Settings › Voice to use the Indian panel.`;
   }
   $("#panelPeople").textContent = panel ? panel.interviewers.map(iv => `${iv.name} (${iv.role})`).join(" · ") : "Names rotate. Pick a panel to meet the same people every time.";
+  syncMore();
 }
+/* The folded "More options": its title shows the current choices, and it opens by itself when a warning needs to be seen. */
+function syncMore(){
+  const d = $("#moreOpts"); if (!d) return;
+  const t = $("#temper"), p = $("#panel");
+  const style = t.selectedOptions[0] ? t.selectedOptions[0].text.split(":")[0] : "";
+  const who = builtinVoice() ? "" : p.value ? (p.selectedOptions[0].text.split(":")[0]) : "Mixed interviewers";
+  d.querySelector("summary small").textContent = [style, who].filter(Boolean).join(" · ");
+  const w = $("#panelWarn");
+  if (w && !w.hidden) d.open = true;
+}
+document.addEventListener("change", e => { if (e.target.closest("#moreOpts")) syncMore(); });
+
 function tileMinutes(b){ return Number($("#roundLen").value) || Number(b.dataset.min); }
 
 function renderAgenda(){
@@ -680,10 +794,11 @@ function renderAgenda(){
   $$("#roundList .chip").forEach(b => b.querySelector(".min").textContent = `${tileMinutes(b)} min`);
   const on = pickedTiles();
   $("#roundCount").textContent = on.length ? `${on.length} selected` : "";
+  $("#projNote").hidden = !on.some(b => b.dataset.round === "comprehension");
   if (!on.length){
     const why = MODE === "company" && !currentDossier() ? "Pick a dossier first." : "Pick at least one round.";
     $("#agenda").innerHTML = `<li><span class="empty">${why}</span></li>`;
-    $("#duration").textContent = "—"; $("#startBtn").disabled = true; return;
+    $("#duration").textContent = "-"; $("#startBtn").disabled = true; return;
   }
   $("#startBtn").disabled = starting;
   const total = on.reduce((a, b) => a + tileMinutes(b), 0);
@@ -700,18 +815,20 @@ $("#startBtn").onclick = async () => {
     lang: $("#lang").value, resume: $("#resume").value, jd: $("#jd").value.trim() || (d && d.jd) || "", notes: $("#extra").value,
     minutes: Number($("#roundLen").value) || null,
     panel: $("#panel").value,
+    ready_made_project: $("#readyMade").checked,
     // Company mode: Rust copies the dossier into the loop. The rest is for this screen only.
     dossier_id: d ? d.id : "", dossier_rounds: d ? on.map(b => Number(b.dataset.di)) : [],
     dossier_company: d ? d.company : "", dossierRounds: on.map(b => ({name: b.dataset.name, minutes: Number(b.dataset.min)})),
   };
   const btn = $("#startBtn"), m = $("#startMsg");
-  if (MODE === "company" && !d){ m.className = "form-msg err"; m.innerHTML = `Pick a dossier, or <button type="button" class="linkbtn" data-nav="dossiers">research a company</button> first.`; return; }
+  if (MODE === "company" && !d){ showStage(1); m.className = "form-msg err"; m.innerHTML = `Pick a dossier, or <button type="button" class="linkbtn" data-nav="dossiers">research a company</button> first.`; return; }
   if (!aiReady()){ m.className = "form-msg err"; m.innerHTML = `Connect an AI model first. <button type="button" class="linkbtn" data-nav="settings" data-sec="models">Open Settings</button>`; return; }
-  if (!words(setup.resume)){ m.className = "form-msg err"; m.textContent = "Add your resume. Every interview starts with a resume check."; return; }
+  if (!words(setup.resume)){ showStage(3); m.className = "form-msg err"; m.textContent = "Add your resume. Every interview starts with a resume check."; return; }
   btn.disabled = true; btn.setAttribute("aria-busy", "true"); btn.classList.add("is-busy");
   m.className = "form-msg"; m.textContent = "Checking your resume…";
   try{
     const check = await api.invoke("ats_check", resumeArgs(setup.jd));
+    if (check.extractability === "none"){ showStage(3); }
     if (check.extractability === "none") throw "An ATS can’t read any text in your resume file, so neither can the panel. Open Resume check to see why.";
     RESUME_CHECK = check; atsShown = false;
     m.textContent = "Setting up your loop…";
@@ -736,7 +853,7 @@ function companyLabel(setup){
   const dc = setup.dossier_company || (setup.dossier && setup.dossier.company);
   if (dc) return dc;
   return setup.company === "auto" ? "General" : shortName((CAT.COMPANIES[setup.company] || {}).name || setup.company); }
-function temperLabel(v){ const o = [...$("#temper").options].find(o => o.value === v); return o ? o.text.split(" —")[0] : v; }
+function temperLabel(v){ const o = [...$("#temper").options].find(o => o.value === v); return o ? o.text.split(":")[0] : v; }
 
 async function startRound(index){
   if (starting) return;
@@ -744,9 +861,33 @@ async function startRound(index){
   try{ await openRoom(index); }
   finally{ starting = false; }
 }
+/* Code comprehension: say that the AI writes the code, and let the candidate pick a bundled project instead.
+   The answer is kept for this round, so "Try again" doesn't ask twice. */
+const READY_MADE_LANGS = ["Java", "Python"];
+function askProject(lang){
+  const d = $("#projDlg"), ready = READY_MADE_LANGS.includes(lang);
+  $("#projDlgBody").textContent = `The AI writes a small code project for this job, from your job description, the company and your resume. Nothing is run, so a planted bug can be wrong or hard to spot. ${ready ? "Or use a ready-made project that ships with Onsite. It is instant and checked by hand." : `There is no ready-made project in ${lang}. If you skip the AI, the interviewer writes one file instead.`}`;
+  $("#projDlgReady").textContent = ready ? "Use a ready-made project" : "Skip the AI";
+  d.returnValue = ""; d.showModal();
+  return new Promise(r => d.addEventListener("close", () => r(d.returnValue === "ai" ? false : d.returnValue === "ready" ? true : null), {once: true}));
+}
 async function openRoom(index){
   await refreshStatus();
   const k = loop.setup.rounds[index];
+  // undefined = not asked yet; the setup screen's "ready-made" tick already answers it.
+  let readyMade;
+  if (k === "comprehension"){
+    loop.projChoice ||= {};
+    if (loop.setup.ready_made_project) loop.projChoice[index] = true;
+    while (loop.projChoice[index] === undefined){
+      const a = await askProject(loop.setup.lang);
+      if (a === null) return;
+      // Choosing the AI costs time and tokens, so it needs a second yes. "No" goes back to the choice.
+      if (a === false && !(await ask("This can take 3 to 5 minutes", "The AI writes and checks a whole code project before the interview starts. That can take 3 to 5 minutes, and it uses tokens: it counts against your Claude plan, or is billed to your API key. Start writing?", "Yes, write it"))) continue;
+      loop.projChoice[index] = a;
+    }
+    readyMade = loop.projChoice[index];
+  }
   const who = interviewerFor(index, loop.setup.rounds[index], loop.setup.panel);
   const name = who.name;
   const voiceOn = !!(SETTINGS && SETTINGS.voice.enabled && VS.up);
@@ -758,7 +899,7 @@ async function openRoom(index){
   openPrep(index, who);
   const comp = companyLabel(loop.setup);
   $("#roomIc").textContent = $("#ctxIc").textContent = comp[0];
-  $("#roomTitle").textContent = `${comp} — ${s.name}`;
+  $("#roomTitle").textContent = `${comp}: ${s.name}`;
   $("#roomSub").textContent = `${CAT.LEVELS[loop.setup.level]} · ${s.minutes} minutes · round ${index+1} of ${loop.count} · with ${who.full ? `${who.full}, ${who.role}` : name}`;
   $("#ctxCompany").textContent = comp === "General" ? "General practice" : comp;
   $("#ctxRound").textContent = s.name;
@@ -774,13 +915,13 @@ async function openRoom(index){
   $("#sharedDot").hidden = true; $('.tab[data-tab="shared"]').hidden = true;
   applyVoiceUi();
   fillRoomMic();
-  showProblem(null);
+  showProblem(null); resetProject();
   renderShared(); selectTab(startTab(k));
   buildWaves();
   setPhase("thinking");
   s.pendingEl = addMsg("iv", "", true);
   let info;
-  try{ info = await api.invoke("start_round", {loopId: loop.id, index}); }
+  try{ info = await api.invoke("start_round", {loopId: loop.id, index, readyMade}); }
   catch(e){
     if (session !== s || s.abandoned) return;
     session = null;
@@ -796,6 +937,7 @@ async function openRoom(index){
   s.roundId = info.round_id;
   s.minutes = info.plan.minutes;
   if (info.problem) showProblem(info.problem);
+  if (info.project) showProject(info.project);
   // Rust decides whether voice really started. If it was wanted and didn't, say so before the call.
   const lostVoice = !!(SETTINGS && SETTINGS.voice.enabled) && info.voice === false;
   if (typeof info.voice === "boolean" && info.voice !== s.voiceOn){
@@ -818,7 +960,7 @@ function enterRoom(s){
 /* ---------------- preparing (between Get ready and the call) ---------------- */
 /* Every line is a real check reported by Rust (`prep` events); the call opens when they're done. */
 const PREP_STEPS = [
-  ["claude", "AI model"], ["question", "First question"],
+  ["claude", "AI model"], ["project", "Code project"], ["question", "First question"],
   ["voicestudio", "VoiceStudio"], ["voice", "Interviewer’s voice"],
   ["stt", "Live captions"], ["whisper", "Accurate transcript"],
   ["speaker", "Speaker"], ["mic", "Microphone"],
@@ -830,7 +972,8 @@ function openPrep(index, who){
   $("#prepIc").textContent = companyLabel(loop.setup)[0];
   $("#prepTitle").textContent = "Getting the room ready";
   $("#prepSub").textContent = `${loopRound(index).name} with ${who.full || who.name}. ${modeLine(who)}. The call opens when everything below is ready.`;
-  $("#prepList").innerHTML = PREP_STEPS.map(([id, name]) => [id, id === "voicestudio" && builtinVoice() ? "Voice models" : name]).map(([id, name]) =>
+  // The code project step is only for the comprehension round.
+  $("#prepList").innerHTML = PREP_STEPS.filter(([id]) => id !== "project" || loopRound(index).key === "comprehension").map(([id, name]) => [id, id === "voicestudio" && builtinVoice() ? "Voice models" : name]).map(([id, name]) =>
     `<li class="wait" data-step="${id}"><i class="dot"></i><div><b>${esc(name)}</b><small></small></div><span>Waiting</span></li>`).join("");
   msg("#prepMsg", "");
   prepButtons(`<button class="btn ghost" data-prep="cancel">Cancel</button>`, {cancel: cancelPrep});
@@ -845,6 +988,7 @@ function prepButtons(html, actions){
 api.listen("prep", ev => {
   if ($("#view-prep").hidden) return;
   if (session && !session.voiceWhy && ["warn", "fail"].includes(ev.state) && ["voicestudio", "voice", "speaker", "mic"].includes(ev.step) && ev.detail) session.voiceWhy = ev.detail.replace(/\.?$/, ".");
+  if (session && ev.step === "project") session.writing = ev.state === "run";
   const li = $(`#prepList li[data-step="${ev.step}"]`); if (!li) return;
   if (ev.state === "run" && !li.classList.contains("run")) li.dataset.since = Date.now();
   li.className = ev.state;
@@ -934,13 +1078,13 @@ function setPhase(p){
   const orb = $("#orb");
   const label = {
     thinking: `${session.persona} is thinking…`,
-    speaking: `${session.persona} is speaking — tap to cut in`,
+    speaking: `${session.persona} is speaking: tap to cut in`,
     cutting: "Go ahead…",
     listening: "Listening…",
     hearing: "Hearing you… tap when done",
     transcribing: "Got it. Writing it down…",
-    idle: session.voiceOn ? "Mic off — tap to talk" : "Your turn — type below",
-    muted: "Mic off — type below, or tap to talk",
+    idle: session.voiceOn ? "Mic off: tap to talk" : "Your turn: type below",
+    muted: "Mic off: type below, or tap to talk",
     closed: "Round closed",
   }[p];
   orb.dataset.state = p === "hearing" || p === "cutting" ? "listening" : p === "transcribing" ? "thinking" : (p === "idle" && !session.voiceOn) || p === "closed" ? "off" : p;
@@ -1045,7 +1189,7 @@ api.listen("round", ev => {
     case "code":
       s.shared.push({lang: ev.lang || "code", code: ev.code});
       renderShared(); $("#sharedDot").hidden = false; $('.tab[data-tab="shared"]').hidden = false;
-      if (s.key === "coding" || s.key === "comprehension") selectTab("shared");
+      if (s.key === "coding" || (s.key === "comprehension" && !s.proj)) selectTab("shared");
       break;
     case "turn_done":
       if (s.pendingEl) renderIvMsg(s.pendingEl, ev.text);
@@ -1175,9 +1319,13 @@ function failPending(message, extra = ""){
 
 /* Editor code, plus the notes (unless still the template) and a text reading of the drawing. */
 function currentWorkspace(s = session){
+  if (s.proj) flushBuffer();
   const notes = $("#notes").value.trim() === notesTemplate(s.key).trim() ? "" : $("#notes").value;
   const board = BOARD ? BOARD.text() : "";
-  return {code: ED.get(), notes: [notes, board && `Diagram (read from the drawing):\n${board}`].filter(Boolean).join("\n\n")};
+  const text = [notes, board && `Diagram (read from the drawing):\n${board}`].filter(Boolean).join("\n\n");
+  // A project round sends every editable file; Rust turns them into diffs against the originals.
+  if (s.proj) return {code: "", notes: text, files: projFiles(s.proj)};
+  return {code: ED.get(), notes: text};
 }
 
 async function sendAnswer({text, force = false, fromVoice = false} = {}){
@@ -1381,7 +1529,6 @@ function addMsg(who, text, pending = false, draft = false, sharedWs = false){
 }
 function renderIvMsg(el, text){
   el.querySelector(".bubble").innerHTML = md(text.replace(/\[\[END\]\]/g, ""));
-  el.querySelectorAll("[data-open]").forEach(b => b.onclick = () => selectTab("shared"));
   scrollDown();
 }
 function inlineMd(s){ return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>"); }
@@ -1390,7 +1537,7 @@ function md(text){
   let last = 0, m;
   while ((m = re.exec(text))){
     if (m.index > last) out.push(mdBlock(text.slice(last, m.index)));
-    out.push(`<div class="codeblock"><div class="cb-head"><span>${esc(m[1]||"code")}</span><button class="btn ghost sm" data-open>Open in workspace</button></div><pre><code>${esc(m[2])}</code></pre></div>`);
+    out.push(`<div class="codeblock"><div class="cb-head"><span>${esc(m[1]||"code")}</span><button class="btn ghost sm" data-copy>Copy to editor</button></div><pre><code>${esc(m[2])}</code></pre></div>`);
     last = re.lastIndex;
     if (m[0].length === 0) re.lastIndex++;
   }
@@ -1453,7 +1600,7 @@ $(".tabs").addEventListener("keydown", e => {
 });
 
 /* Code editor (CodeMirror, ui/vendor/editor.js). Each language keeps its own code, like LeetCode. */
-const ED = OnsiteEditor.create($("#code"), {lang: "Java"});
+const ED = OnsiteEditor.create($("#code"), {lang: "Java", onChange: () => session && session.proj && editedFile()});
 $("#edLang").innerHTML = $("#lang").innerHTML;
 $("#edLang").onchange = async e => {
   const s = session, lang = e.target.value;
@@ -1471,6 +1618,318 @@ $("#edLang").onchange = async e => {
   if (s.problem){ s.problem.runnable = info.runnable; setRunnable(info.runnable); $("#runOut").hidden = true; }
   ED.focus();
 };
+
+/* ---------------- multi-file project (code comprehension round) ----------------
+   The project's files come from Rust (info.project). Nothing runs. Edits are sent as diffs against the
+   originals: Rust builds them from the text of every editable file (see currentWorkspace). */
+const EXT_LANG = {java: "Java", py: "Python", cpp: "C++", cc: "C++", cxx: "C++", c: "C++", h: "C++", hpp: "C++", js: "JavaScript", mjs: "JavaScript", jsx: "JavaScript", ts: "TypeScript", tsx: "TypeScript", go: "Go"};
+const FENCE_EXT = {java: "java", python: "py", py: "py", "c++": "cpp", cpp: "cpp", javascript: "js", js: "js", typescript: "ts", ts: "ts", go: "go"};
+const MAX_NEW_FILES = 6;
+const extLang = p => EXT_LANG[(p.split(".").pop() || "").toLowerCase()] || "";
+/* `orig` is null for a file the candidate added. */
+const isDirty = f => f.orig === null ? f.text.trim() !== "" : f.text !== f.orig;
+const projFiles = P => Object.fromEntries(Object.entries(P.files).filter(([, f]) => !f.readonly).map(([p, f]) => [p, f.text]));
+
+function resetProject(){
+  if (session) session.proj = null;
+  $("#fileTree").hidden = $("#fileTabs").hidden = $("#projBtns").hidden = true;
+  $("#fileTree").innerHTML = $("#fileTabs").innerHTML = "";
+  $("#changesView").hidden = true; $("#code").hidden = false; $("#edEmpty").hidden = true;
+  $("#edLang").hidden = false; ED.setReadOnly(false);
+}
+function showProject(p){
+  const s = session; if (!s) return;
+  const files = {};
+  for (const f of p.files) files[f.path] = {orig: f.text, text: f.text, readonly: !!f.readonly};
+  s.proj = {id: p.id, files, tabs: p.files.filter(f => f.open).map(f => f.path), cur: null, changes: false};
+  s.problem = null;
+  $("#convoProb").hidden = $("#probSplit").hidden = false;
+  $(".room-body").classList.add("coding");
+  $("#convoProb").scrollTop = 0;
+  $("#probBody").innerHTML = `
+    <h2>${esc(p.title)} <span class="diff d-${esc((p.difficulty || "medium").toLowerCase())}">${esc(p.difficulty)}</span></h2>
+    <div class="prob-text">${md(p.brief)}</div>
+    <p class="muted prob-foot">Nothing runs in this round. Read the files, change them, then press Send or Share now. The interviewer reviews your edits. ${p.topics.length ? "Topics: " + esc(p.topics.join(", ")) : ""}</p>`;
+  $("#runBtns").hidden = true; $("#runOut").hidden = true; $("#edHint").hidden = true; $("#edLang").hidden = true;
+  $("#fileTree").hidden = $("#fileTabs").hidden = $("#projBtns").hidden = false;
+  openFile((p.files.find(f => f.open) || p.files[0]).path);
+  selectTab("editor");
+}
+function flushBuffer(){
+  const P = session && session.proj; if (!P || !P.cur) return;
+  const f = P.files[P.cur]; if (f && !f.readonly) f.text = ED.get();
+}
+/* Typing: refresh the changed-file dots for the open file only. */
+function editedFile(){
+  const P = session.proj; if (!P.cur) return;
+  flushBuffer();
+  const dirty = isDirty(P.files[P.cur]);
+  $$("[data-fp]").filter(el => el.dataset.fp === P.cur).forEach(el => el.classList.toggle("dirty", dirty));
+}
+function openFile(path){
+  const P = session && session.proj; if (!P || !P.files[path]) return;
+  flushBuffer();
+  P.cur = path;
+  if (!P.tabs.includes(path)) P.tabs.push(path);
+  const f = P.files[path];
+  showChanges(false);
+  ED.setLang(extLang(path)); ED.setReadOnly(f.readonly); ED.set(f.text);
+  renderTree(); renderTabs();
+}
+/* Closing a tab keeps the file's text; only the tab goes. With no tab left the editor shows a hint. */
+function closeTabs(paths){
+  const P = session.proj; flushBuffer();
+  P.tabs = P.tabs.filter(t => !paths.includes(t));
+  if (P.cur && !P.tabs.includes(P.cur)){
+    P.cur = null;
+    if (P.tabs.length){ openFile(P.tabs[P.tabs.length - 1]); return; }
+    ED.set(""); ED.setReadOnly(true); syncPane();
+  }
+  renderTree(); renderTabs();
+}
+const closeTab = path => closeTabs([path]);
+/* Editor, empty-state hint or changes view: exactly one is shown. */
+function syncPane(){
+  const P = session.proj;
+  $("#changesView").hidden = !P.changes; $("#code").hidden = P.changes || !P.cur; $("#edEmpty").hidden = P.changes || !!P.cur;
+}
+function renderTree(){
+  const P = session.proj; let html = "", dir = null;
+  for (const p of Object.keys(P.files).sort((a, b) => a.localeCompare(b))){
+    const i = p.lastIndexOf("/"), d = i < 0 ? "" : p.slice(0, i), f = P.files[p];
+    if (d !== dir){ dir = d; if (d) html += `<div class="dir">${esc(d)}</div>`; }
+    html += `<button class="file${isDirty(f) ? " dirty" : ""}" data-fp="${esc(p)}"${p === P.cur ? ' aria-current="true"' : ""} title="${esc(p)}"><span class="name">${esc(p.slice(i + 1))}</span>${f.readonly ? '<span class="lock">read-only</span>' : ""}<i class="dirty-dot" title="Changed"></i></button>`;
+  }
+  $("#fileTree").innerHTML = html;
+}
+function renderTabs(){
+  const P = session.proj;
+  $("#fileTabs").hidden = !P.tabs.length;
+  $("#fileTabs").innerHTML = P.tabs.map(p => `<button class="ftab${isDirty(P.files[p]) ? " dirty" : ""}" role="tab" data-fp="${esc(p)}" aria-selected="${p === P.cur}" title="${esc(p)}">${esc(p.split("/").pop())}<i class="dirty-dot" title="Changed"></i><span class="x" data-close="${esc(p)}" role="button" aria-label="Close ${esc(p)}">×</span></button>`).join("");
+}
+$("#fileTree").addEventListener("click", e => { const b = e.target.closest("[data-fp]"); if (b) openFile(b.dataset.fp); });
+$("#fileTabs").addEventListener("auxclick", e => {
+  const b = e.target.closest("[data-fp]");
+  if (e.button === 1 && b){ e.preventDefault(); closeTab(b.dataset.fp); }
+});
+$("#fileTabs").addEventListener("click", e => {
+  const x = e.target.closest("[data-close]");
+  if (x){ closeTab(x.dataset.close); return; }
+  const b = e.target.closest("[data-fp]"); if (b) openFile(b.dataset.fp);
+});
+
+$("#fileNew").onclick = () => {
+  const P = session && session.proj; if (!P) return;
+  const open = $("#fileTree input"); if (open){ open.focus(); return; }
+  if (Object.values(P.files).filter(f => f.orig === null).length >= MAX_NEW_FILES){ toast(`You can add up to ${MAX_NEW_FILES} new files.`); return; }
+  const inp = document.createElement("input");
+  inp.placeholder = "src/Name.java"; inp.spellcheck = false; inp.setAttribute("aria-label", "New file path");
+  inp.value = P.cur && P.cur.includes("/") ? P.cur.slice(0, P.cur.lastIndexOf("/") + 1) : "";
+  inp.onkeydown = e => {
+    if (e.key === "Escape"){ inp.remove(); return; }
+    if (e.key !== "Enter") return;
+    const name = inp.value.trim();
+    if (!/^[A-Za-z0-9_][A-Za-z0-9_./-]{0,78}$/.test(name) || name.includes("..") || name.includes("//") || name.endsWith("/")){ toast("Use a path like src/Name.java.", "err"); return; }
+    if (P.files[name]){ toast("That file already exists.", "err"); return; }
+    P.files[name] = {orig: null, text: "", readonly: false};
+    openFile(name);
+    ED.focus();
+  };
+  inp.onblur = () => setTimeout(() => inp.remove(), 150);
+  $("#fileTree").append(inp); inp.focus();
+};
+/* Reset asks twice (no browser dialogs): the first press arms it for 3 seconds. */
+$("#fileReset").onclick = e => {
+  const P = session && session.proj; if (!P || !P.cur) return;
+  const f = P.files[P.cur], b = e.currentTarget;
+  if (f.readonly){ toast("This file is read-only."); return; }
+  if (!isDirty(f)){ toast("No changes in this file."); return; }
+  if (!b.dataset.armed){
+    b.dataset.armed = "1"; b.textContent = "Press again to reset";
+    setTimeout(() => { delete b.dataset.armed; b.textContent = "Reset file"; }, 3000);
+    return;
+  }
+  delete b.dataset.armed; b.textContent = "Reset file";
+  if (f.orig === null){
+    // A file the candidate added: resetting removes it.
+    delete P.files[P.cur]; P.tabs = P.tabs.filter(t => t !== P.cur); P.cur = null;
+    openFile(P.tabs[P.tabs.length - 1] || Object.keys(P.files)[0]);
+    return;
+  }
+  f.text = f.orig; ED.set(f.orig); renderTree(); renderTabs();
+};
+function showChanges(on){
+  const P = session.proj; P.changes = on; syncPane();
+  const b = $("#fileChanges"); b.setAttribute("aria-pressed", String(on)); b.textContent = on ? "Back to code" : "Changes";
+}
+/* What you changed against the original files. Rust builds the diff, the same one the interviewer gets. */
+$("#fileChanges").onclick = async () => {
+  const s = session, P = s && s.proj; if (!P) return;
+  if (P.changes){ showChanges(false); ED.focus(); return; }
+  flushBuffer();
+  let diff = "";
+  try{ diff = await api.invoke("project_diff", {roundId: s.roundId, files: projFiles(P)}); }
+  catch(err){ toast(errText(err), "err"); return; }
+  if (session !== s) return;
+  const cls = l => /^(\+\+\+|---) /.test(l) ? "d-file" : l.startsWith("@@") ? "d-hunk" : l.startsWith("+") ? "d-add" : l.startsWith("-") ? "d-del" : "";
+  $("#changesView").innerHTML = diff.trim() ? diff.replace(/\n$/, "").split("\n").map(l => `<span class="${cls(l)}">${esc(l) || " "}</span>`).join("") : `<span class="empty">No changes yet.</span>`;
+  showChanges(true);
+};
+
+/* "Copy to editor" on a code block from the interviewer. Never overwrites: a project gets a new file,
+   an empty editor gets the code, otherwise it goes under what is already there. */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-copy]"); if (!b || !session) return;
+  const block = b.closest(".codeblock"), code = block.querySelector("code").textContent;
+  const fence = (block.querySelector(".cb-head span").textContent || "").toLowerCase();
+  const P = session.proj;
+  if (P){
+    flushBuffer();
+    if (Object.values(P.files).filter(f => f.orig === null).length >= MAX_NEW_FILES){ toast(`You can add up to ${MAX_NEW_FILES} new files.`); return; }
+    const ext = FENCE_EXT[fence] || (P.cur && P.cur.includes(".") ? P.cur.split(".").pop() : "txt");
+    let n = 1; while (P.files[`from-interviewer-${n}.${ext}`]) n++;
+    const name = `from-interviewer-${n}.${ext}`;
+    P.files[name] = {orig: null, text: code, readonly: false};
+    openFile(name);
+    toast(`Saved as ${name}.`);
+  } else {
+    const cur = ED.get();
+    ED.set(cur.trim() ? cur.replace(/\s+$/, "") + "\n\n" + code + "\n" : code);
+    toast(cur.trim() ? "Added under your code." : "Copied to the editor.");
+  }
+  selectTab("editor");
+});
+
+/* ---------------- resizable panes, shortcuts, tab menu ---------------- */
+function dragSplit(bar, move, commit){
+  bar.addEventListener("pointerdown", e => {
+    e.preventDefault(); bar.setPointerCapture(e.pointerId); bar.classList.add("dragging");
+    bar.addEventListener("pointermove", move);
+    bar.addEventListener("pointerup", ev => { bar.removeEventListener("pointermove", move); bar.classList.remove("dragging"); commit(ev); }, {once: true});
+  });
+}
+/* Conversation | workspace (coding and comprehension rounds). Share of the width, remembered. */
+const COL_SHARE = "onsite.colShare", COL_DEFAULT = .465;
+function setColShare(f){
+  f = Math.min(.8, Math.max(.15, f));
+  const b = $(".room-body"); b.style.setProperty("--cs", `${f}fr`); b.style.setProperty("--ws", `${1 - f}fr`);
+  return f;
+}
+setColShare(LS.get(COL_SHARE, COL_DEFAULT));
+const colPos = ev => { const r = $(".room-body").getBoundingClientRect(); return (ev.clientX - r.left) / r.width; };
+dragSplit($("#colSplit"), ev => setColShare(colPos(ev)), ev => LS.set(COL_SHARE, setColShare(colPos(ev))));
+$("#colSplit").addEventListener("dblclick", () => LS.set(COL_SHARE, setColShare(COL_DEFAULT)));
+$("#colSplit").addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  LS.set(COL_SHARE, setColShare(LS.get(COL_SHARE, COL_DEFAULT) + (e.key === "ArrowRight" ? .03 : -.03)));
+});
+/* File tree | editor. Width in pixels, remembered. */
+const TREE_W = "onsite.treeW", TREE_DEFAULT = 190;
+function setTreeW(w){ w = Math.min(420, Math.max(110, Math.round(w))); $("#fileTree").style.flexBasis = `${w}px`; return w; }
+setTreeW(LS.get(TREE_W, TREE_DEFAULT));
+const treePos = ev => ev.clientX - $("#fileTree").getBoundingClientRect().left;
+dragSplit($("#treeSplit"), ev => setTreeW(treePos(ev)), ev => LS.set(TREE_W, setTreeW(treePos(ev))));
+$("#treeSplit").addEventListener("dblclick", () => LS.set(TREE_W, setTreeW(TREE_DEFAULT)));
+$("#treeSplit").addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  LS.set(TREE_W, setTreeW(LS.get(TREE_W, TREE_DEFAULT) + (e.key === "ArrowRight" ? 16 : -16)));
+});
+
+/* Right-click on the file tabs. */
+const tabMenu = document.createElement("div");
+tabMenu.className = "ctx-menu"; tabMenu.setAttribute("role", "menu"); tabMenu.hidden = true;
+document.body.append(tabMenu);
+const hideTabMenu = () => { tabMenu.hidden = true; };
+$("#fileTabs").addEventListener("contextmenu", e => {
+  const P = session && session.proj; if (!P) return;
+  e.preventDefault();
+  const hit = e.target.closest("[data-fp]"), path = hit && hit.dataset.fp;
+  const items = [
+    ["Close", path && (() => closeTab(path)), !path],
+    ["Close others", path && (() => closeTabs(P.tabs.filter(t => t !== path))), !path || P.tabs.length < 2],
+    ["Close unchanged", () => closeTabs(P.tabs.filter(t => !isDirty(P.files[t]))), !P.tabs.some(t => !isDirty(P.files[t]))],
+    null,
+    ["Close all", () => closeTabs([...P.tabs]), false],
+  ];
+  tabMenu.innerHTML = items.map((it, i) => it ? `<button role="menuitem" data-i="${i}"${it[2] ? " disabled" : ""}>${it[0]}</button>` : "<hr>").join("");
+  tabMenu.onclick = ev => { const b = ev.target.closest("[data-i]"); if (!b) return; hideTabMenu(); items[Number(b.dataset.i)][1](); };
+  tabMenu.hidden = false;
+  tabMenu.style.left = `${Math.min(e.clientX, innerWidth - tabMenu.offsetWidth - 8)}px`;
+  tabMenu.style.top = `${Math.min(e.clientY, innerHeight - tabMenu.offsetHeight - 8)}px`;
+  tabMenu.querySelector("button:not(:disabled)")?.focus();
+});
+document.addEventListener("pointerdown", e => { if (!tabMenu.hidden && !tabMenu.contains(e.target)) hideTabMenu(); });
+addEventListener("blur", hideTabMenu);
+addEventListener("resize", hideTabMenu);
+
+/* Shortcuts. The editor ones come from CodeMirror; the rest are Onsite's. "Mod" is Ctrl, or Cmd on a Mac. */
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+const kbd = keys => keys.split("+").map(k => `<kbd>${k === "Mod" ? (IS_MAC ? "⌘" : "Ctrl") : k === "Alt" && IS_MAC ? "⌥" : k === "Shift" && IS_MAC ? "⇧" : esc(k)}</kbd>`).join("+");
+const SHORTCUTS = [
+  ["Files", [
+    ["Go to file", "Mod+P"], ["Next tab", "Ctrl+Tab"], ["Previous tab", "Ctrl+Shift+Tab"], ["Close tab", "Mod+W"],
+    ["Show or hide the file tree", "Mod+B"], ["Show changes", "Mod+Shift+D"], ["Share now", "Mod+Shift+S"], ["This list", "F1"],
+  ]],
+  ["Editing", [
+    ["Undo", "Mod+Z"], ["Redo", "Mod+Y"], ["Comment or uncomment", "Mod+/"], ["Indent more or less", "Mod+]  /  Mod+["],
+    ["Move line up or down", "Alt+↑  /  Alt+↓"], ["Copy line up or down", "Shift+Alt+↑  /  Shift+Alt+↓"],
+    ["Delete line", "Mod+Shift+K"], ["Select line", "Alt+L"], ["Add blank line below", "Mod+Enter"], ["Add blank line above", "Mod+Shift+Enter"],
+    ["Select next match of the word", "Mod+D"], ["Jump to matching bracket", "Mod+Shift+\\"],
+  ]],
+  ["Search and navigate", [
+    ["Find", "Mod+F"], ["Find next", "Mod+G"], ["Find previous", "Mod+Shift+G"], ["Go to line", "Mod+Alt+G"],
+    ["Fold or unfold", "Mod+Shift+[  /  Mod+Shift+]"], ["Show suggestions", "Ctrl+Space"],
+  ]],
+];
+function showShortcuts(){
+  // "A  /  B" is two alternatives for one action.
+  $("#kbdBody").innerHTML = SHORTCUTS.map(([h, rows]) => `<h3>${h}</h3><dl>${rows.map(([what, keys]) =>
+    `<dt>${what}</dt><dd>${keys.split(/\s{2}\/\s{2}/).map(kbd).join(" / ")}</dd>`).join("")}</dl>`).join("");
+  if (!$("#kbdDlg").open) $("#kbdDlg").showModal();
+}
+$("#kbdBtn").onclick = showShortcuts;
+
+/* Go to file: a small box in the tree with the project's paths to pick from. */
+function goToFile(){
+  const P = session && session.proj; if (!P) return;
+  $("#fileTree").hidden = false;
+  const open = $("#fileTree input[list]"); if (open){ open.focus(); return; }
+  const inp = document.createElement("input"), list = document.createElement("datalist");
+  list.id = "goFiles"; list.innerHTML = Object.keys(P.files).map(p => `<option value="${esc(p)}">`).join("");
+  inp.setAttribute("list", "goFiles"); inp.placeholder = "Go to file…"; inp.spellcheck = false; inp.setAttribute("aria-label", "Go to file");
+  const finish = () => { inp.remove(); list.remove(); };
+  inp.onkeydown = e => {
+    if (e.key === "Escape"){ finish(); if (P.cur) ED.focus(); return; }
+    if (e.key !== "Enter") return;
+    const q = inp.value.trim().toLowerCase();
+    const hit = Object.keys(P.files).find(p => p.toLowerCase() === q) || Object.keys(P.files).find(p => p.toLowerCase().includes(q));
+    if (!hit){ toast("No file matches that.", "err"); return; }
+    openFile(hit); ED.focus();
+  };
+  inp.onblur = () => setTimeout(finish, 150);
+  $("#fileTree").prepend(inp); $("#fileTree").append(list); inp.focus();
+}
+function cycleTab(step){
+  const P = session.proj; if (!P.tabs.length) return;
+  const i = P.tabs.indexOf(P.cur);
+  openFile(P.tabs[(i + step + P.tabs.length) % P.tabs.length]);
+  ED.focus();
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "F1" && $("#view-room") && !$("#view-room").hidden){ e.preventDefault(); showShortcuts(); return; }
+  const P = session && session.proj; if (!P || $("[data-pane=editor]").hidden || $("dialog[open]") || e.target.closest("textarea, input")) return;
+  const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+  if (e.ctrlKey && k === "tab"){ e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); }
+  else if (e.ctrlKey && (k === "pagedown" || k === "pageup")){ e.preventDefault(); cycleTab(k === "pagedown" ? 1 : -1); }
+  else if (mod && !e.shiftKey && !e.altKey && k === "p"){ e.preventDefault(); goToFile(); }
+  else if (mod && !e.shiftKey && !e.altKey && k === "w"){ e.preventDefault(); if (P.cur) closeTab(P.cur); }
+  else if (mod && !e.shiftKey && !e.altKey && k === "b"){ e.preventDefault(); const t = $("#fileTree"); t.hidden = !t.hidden; }
+  else if (mod && e.shiftKey && k === "d"){ e.preventDefault(); $("#fileChanges").click(); }
+  else if (mod && e.shiftKey && k === "s"){ e.preventDefault(); sendAnswer({force: true}); }
+});
+
 
 /* Whiteboard (Excalidraw, ui/vendor/whiteboard.js). About 2 MB, so it loads the first time it's opened. */
 let BOARD = null, boardLoad = null;
@@ -1594,7 +2053,7 @@ function renderUnreviewed(round, live, st, seq){
 }
 async function writeFeedback(round, live, st, seq){
   const stale = () => seq !== reportSeq || $("#view-report").hidden;
-  $("#repBody").innerHTML = `<div class="stack"><div class="panel" role="status"><h2>Writing your feedback…</h2><p class="muted" style="margin-top:6px">The panel is reviewing the transcript. This takes 20–90 seconds.</p></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
+  $("#repBody").innerHTML = `<div class="stack"><div class="panel" role="status"><h2>Writing your feedback…</h2><p class="muted" style="margin-top:6px">The panel is reviewing the transcript. This takes 20-90 seconds.</p></div><div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:220px"></div></div>`;
   let rep;
   try{ rep = await api.invoke("generate_report", {roundId: round.id}); }
   catch(e){
@@ -1666,9 +2125,9 @@ function reportHtml(round, r, actions = ""){
   return `
     <div class="stack">
       <div class="panel rep-head">
-        <div class="ring" style="--v:${n}; --ring-c:${ringC}" role="img" aria-label="${has ? `Score ${n} of 100` : "No score"}"><div><div><b>${has ? n : "—"}</b><small>of 100</small></div></div></div>
+        <div class="ring" style="--v:${n}; --ring-c:${ringC}" role="img" aria-label="${has ? `Score ${n} of 100` : "No score"}"><div><div><b>${has ? n : "-"}</b><small>of 100</small></div></div></div>
         <div>
-          <span class="decision ${decClass(r.decision||"")}">${esc(r.decision||"—")}</span><span class="muted">${esc(r.level_signal||"")}</span>
+          <span class="decision ${decClass(r.decision||"")}">${esc(r.decision||"-")}</span><span class="muted">${esc(r.level_signal||"")}</span>
           <h2>${esc(r.headline||"")}</h2>
           <div class="btn-row">
             ${actions}
@@ -1686,9 +2145,9 @@ function reportHtml(round, r, actions = ""){
       <div class="cols">
         <div class="panel"><h2>Practise next</h2><ul class="list">${li(r.practice_next)}</ul></div>
         <div class="panel"><h2>How you answered</h2><div class="metrics">
-          <div class="metric"><b>${met.avg_words ?? "—"}</b><span>words per answer</span></div>
-          <div class="metric"><b>${met.answers ?? "—"}</b><span>answers</span></div>
-          <div class="metric"><b>${met.minutes ?? "—"}</b><span>minutes</span></div>
+          <div class="metric"><b>${met.avg_words ?? "-"}</b><span>words per answer</span></div>
+          <div class="metric"><b>${met.answers ?? "-"}</b><span>answers</span></div>
+          <div class="metric"><b>${met.minutes ?? "-"}</b><span>minutes</span></div>
           <div class="metric"><b>${met.code_shares ?? 0}</b><span>workspace shares</span></div>
         </div></div>
       </div>
@@ -1792,7 +2251,7 @@ function renderInterview(fb, focus){
 
 /* ---------------- resume check (ATS) ---------------- */
 const MAX_FILE = 10 * 1024 * 1024;
-let RESUME_FILE = LS.get("onsite.resumeFile", null);   // {name, data(base64), size} — the last resume file, for layout checks
+let RESUME_FILE = LS.get("onsite.resumeFile", null);   // {name, data(base64), size}, the last resume file, for layout checks
 let RESUME_CHECK = null;   // the check run when this loop started, shown on Get ready
 /* The resume as both checks read it: the file when there is one (layout checks need it), else the text. */
 function resumeArgs(jd){
@@ -1822,10 +2281,17 @@ function parsedHtml(text){
     return head ? `<b class="pv-h">${esc(t)}</b>` : esc(l);
   }).join("\n");
 }
+let ATS_PROBLEM = null;   // the last file that couldn't be used; shown in the box until the user acts
 function renderAtsInput(){
   const drop = $("#atsDrop"), msg = $("#atsMsg"), pv = $("#atsPreview");
   const pasted = words($("#resume").value);
-  drop.classList.toggle("filled", !!RESUME_FILE || pasted > 0);
+  drop.classList.toggle("filled", (!!RESUME_FILE || pasted > 0) && !ATS_PROBLEM);
+  drop.classList.toggle("bad", !!ATS_PROBLEM);
+  if (ATS_PROBLEM){
+    msg.innerHTML = problemHtml(ATS_PROBLEM.name, ATS_PROBLEM.p, `<button type="button" class="linkbtn" data-choose>Choose another file</button>${RESUME_FILE ? ` · <button type="button" class="linkbtn" data-dismiss>Keep ${esc(RESUME_FILE.name)}</button>` : ""}`);
+    pv.hidden = true;
+    return;
+  }
   msg.innerHTML = RESUME_FILE
     ? `${esc(RESUME_FILE.name)} · ${Math.max(1, Math.round(RESUME_FILE.size / 1024))} KB. <button type="button" class="linkbtn" data-choose>Choose another</button> · <button type="button" class="linkbtn" data-clear>Remove</button>`
     : pasted
@@ -1842,14 +2308,22 @@ function renderAtsInput(){
 function initAts(){
   const drop = $("#atsDrop"), input = $("#atsFile");
   const load = async f => {
-    input.value = "";
-    try{ rememberResumeFile(await fileToB64(f)); $("#atsStatus").textContent = ""; }
-    catch(e){ toast(errText(e), "err"); }
+    input.value = ""; ATS_PROBLEM = null; $("#atsStatus").textContent = "";
+    // Look at the file now, so a bad one is explained here and not after "Check resume".
+    try{
+      if (BAD_EXT.some(([re]) => re.test(f.name))) throw "";
+      const file = await fileToB64(f);
+      await api.invoke("read_document", {name: file.name, data: file.data});
+      rememberResumeFile(file);
+    }catch(e){
+      ATS_PROBLEM = {name: f.name, p: fileProblem(f.name, errText(e) === "Something went wrong." ? "" : errText(e))};
+      renderAtsInput();
+    }
   };
   drop.onclick = e => {
     if (e.target.closest("#atsPreview")) return;
-    const b = e.target.closest("[data-clear]");
-    if (b){ rememberResumeFile(null); return; }
+    const b = e.target.closest("[data-clear],[data-dismiss]");
+    if (b){ ATS_PROBLEM = null; if (b.matches("[data-clear]")) rememberResumeFile(null); else renderAtsInput(); return; }
     input.click();
   };
   input.onchange = () => input.files[0] && load(input.files[0]);
@@ -1882,12 +2356,16 @@ async function runAts(){
     st.textContent = "";
     atsShown = true;
     renderAts(r, false);
-  }catch(e){ st.className = "form-msg err"; st.textContent = errText(e); }
+  }catch(e){
+    st.className = "form-msg err";
+    const p = RESUME_FILE ? fileProblem(RESUME_FILE.name, errText(e)) : null;
+    st.textContent = p && !/Something went wrong while/.test(p.why) ? `${p.why} ${p.fix}` : errText(e);
+  }
   finally{ btn.disabled = false; btn.classList.remove("is-busy"); btn.removeAttribute("aria-busy"); }
 }
 const ringColor = n => n >= 70 ? "var(--ok)" : n >= 50 ? "var(--warn)" : "var(--bad)";
 function ring(n, label, has = true){
-  return `<div class="ats-ring"><div class="ring" style="--v:${has ? n : 0}; --ring-c:${has ? ringColor(n) : "var(--surface-3)"}" role="img" aria-label="${esc(label)}: ${has ? `${n} of 100` : "not scored"}"><div><div><b>${has ? n : "—"}</b><small>of 100</small></div></div></div><span>${esc(label)}</span></div>`;
+  return `<div class="ats-ring"><div class="ring" style="--v:${has ? n : 0}; --ring-c:${has ? ringColor(n) : "var(--surface-3)"}" role="img" aria-label="${esc(label)}: ${has ? `${n} of 100` : "not scored"}"><div><div><b>${has ? n : "-"}</b><small>of 100</small></div></div></div><span>${esc(label)}</span></div>`;
 }
 function renderAts(r, saved){
   ATS_LAST = r; renderAtsInput();
@@ -1969,7 +2447,7 @@ function renderAiScreen(s, err){
   if (!s){
     el.innerHTML = err
       ? `<div class="panel ai-card"><div class="panel-head"><h2>AI screen</h2></div><p class="form-msg err">${esc(err)}</p><div class="btn-row"><button class="btn" id="aiRetry">${icon("refresh")}Run AI screen</button></div></div>`
-      : `<div class="panel ai-card"><div class="panel-head"><h2>AI screen</h2><span class="pill">Grading…</span></div><p class="muted">Claude is reading the extracted text the way HiredScore or Role Fit would. This takes 15–30 s.</p><div class="skeleton" style="height:64px; margin-top:12px"></div></div>`;
+      : `<div class="panel ai-card"><div class="panel-head"><h2>AI screen</h2><span class="pill">Grading…</span></div><p class="muted">Claude is reading the extracted text the way HiredScore or Role Fit would. This takes 15-30 s.</p><div class="skeleton" style="height:64px; margin-top:12px"></div></div>`;
     const b = $("#aiRetry"); if (b) b.onclick = runAiScreen;
     return;
   }
@@ -2013,7 +2491,7 @@ function renderDossierList(){
   if (!DOSSIERS.length){ el.innerHTML = `<p class="muted small">No dossiers yet. Research a company, or import a dossier file a friend shared.</p>`; return; }
   el.innerHTML = DOSSIERS.map(d => `<button class="row-item" data-ds="${esc(d.id)}" aria-pressed="${d.id === dsOpen}">
     <span class="row-ic">${esc((d.company || "?")[0])}</span>
-    <span class="row-tx"><b>${esc(d.company)} — ${esc(d.role)}</b><span>${esc([CAT.LEVELS[d.level] || d.level, `${d.process.length} rounds`, `${(d.sources || []).length} sources`, String(d.preparedAt || "").slice(0, 10)].filter(Boolean).join(" · "))}</span></span>
+    <span class="row-tx"><b>${esc(d.company)}: ${esc(d.role)}</b><span>${esc([CAT.LEVELS[d.level] || d.level, `${d.process.length} rounds`, `${(d.sources || []).length} sources`, String(d.preparedAt || "").slice(0, 10)].filter(Boolean).join(" · "))}</span></span>
     ${icon("arrow")}</button>`).join("");
 }
 $("#dossierList").onclick = e => {
@@ -2026,7 +2504,7 @@ function renderDossierDetail(){
   const d = DOSSIERS.find(x => x.id === dsOpen), el = $("#dossierDetail");
   el.hidden = !d; if (!d) return;
   const list = xs => `<ul>${xs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
-  el.innerHTML = `<div class="panel-head"><h2>${esc(d.company)} — ${esc(d.role)}</h2><div class="ds-actions">
+  el.innerHTML = `<div class="panel-head"><h2>${esc(d.company)}: ${esc(d.role)}</h2><div class="ds-actions">
       <button class="btn primary sm" data-ds-act="use">${icon("play")}Use</button>
       <button class="btn ghost sm" data-ds-act="export">${icon("download")}Export</button>
       <button class="btn ghost danger sm" data-ds-act="delete" aria-label="Delete dossier">${icon("trash")}</button></div></div>
@@ -2038,7 +2516,7 @@ function renderDossierDetail(){
       ${d.process.map(r => `<div class="ds-round"><b>${esc(r.name)}</b> <span class="muted small">· ${r.minutes} min · ${esc(roundName(r.type))}</span>
         ${r.what ? `<p>${esc(r.what)}</p>` : ""}${(r.questions || []).length ? list(r.questions) : ""}</div>`).join("")}
       ${(d.pitfalls || []).length ? `<h3>Where people fail</h3>${list(d.pitfalls)}` : ""}
-      ${(d.sources || []).length ? `<h3>Sources</h3><ul class="ds-sources">${d.sources.map(x => `<li>${esc(x.title ? `${x.title} — ${x.url}` : x.url)}</li>`).join("")}</ul>` : ""}
+      ${(d.sources || []).length ? `<h3>Sources</h3><ul class="ds-sources">${d.sources.map(x => `<li>${esc(x.title ? `${x.title}: ${x.url}` : x.url)}</li>`).join("")}</ul>` : ""}
     </div>`;
 }
 function useDossier(id){
@@ -2066,7 +2544,7 @@ $("#dsFile").onchange = async () => {
   const f = $("#dsFile").files[0]; $("#dsFile").value = ""; if (!f) return;
   try{
     const d = await api.invoke("import_dossier", {text: await f.text()});
-    toast(`Imported ${d.company} — ${d.role}.`);
+    toast(`Imported ${d.company}: ${d.role}.`);
     dsOpen = d.id; renderDossiersView();
   }catch(e){ toast(errText(e), "err"); }
 };
@@ -2086,7 +2564,7 @@ $("#rqForm").onsubmit = async e => {
 };
 function jobCard(j){
   const r = j.request || {}, live = j.live || {};
-  const title = `${esc(r.company || "?")} — ${esc(r.role || "")}`;
+  const title = `${esc(r.company || "?")}: ${esc(r.role || "")}`;
   const log = j.log && j.log.trim() ? `<pre class="job-log">${esc(j.log.trim())}</pre>` : "";
   if (j.status === "running"){
     const stage = Math.max(1, Math.min(6, live.stage || 1));
@@ -2169,7 +2647,7 @@ async function renderSettings(){
   }
   let opts = profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
   if (saved && !profiles.some(p => p.id === saved)) opts += `<option value="${esc(saved)}">${VS.up ? "Saved voice (missing in VoiceStudio)" : "Saved voice"}</option>`;
-  if (!opts) opts = `<option value="" disabled>${VS.up ? "No voices in VoiceStudio — create one there" : "Start VoiceStudio to pick a voice"}</option>`;
+  if (!opts) opts = `<option value="" disabled>${VS.up ? "No voices in VoiceStudio: create one there" : "Start VoiceStudio to pick a voice"}</option>`;
   await loadDevices();
   fillDevice($("#vMic"), DEVICES.inputs, s.voice.input_device);
   fillDevice($("#vSpk"), DEVICES.outputs, s.voice.output_device);
@@ -2204,7 +2682,7 @@ function renderBuiltin(){
   else if (!(VS.models || []).every(m => m.installed)) msg("#biMsg", "Until both models are downloaded, spoken rounds are typed.");
   else msg("#biMsg", "");
   const cur = SETTINGS.voice.builtin_voice || "ethan_brooks";
-  $("#vBiVoice").innerHTML = (VS.voices || []).map(v => `<option value="${esc(v.id)}">${esc(v.name)} — ${esc(v.accent)}</option>`).join("");
+  $("#vBiVoice").innerHTML = (VS.voices || []).map(v => `<option value="${esc(v.id)}">${esc(v.name)}: ${esc(v.accent)}</option>`).join("");
   $("#vBiVoice").value = cur;
   $("#biVoices").innerHTML = (VS.voices || []).map(v => `<div class="row-item vm">
       <span class="row-ic">${esc(v.name[0])}</span><span class="row-tx"><b>${esc(v.name)}</b><span>${esc(v.accent)}${v.id === cur ? " · default" : ""}</span></span>
@@ -2260,14 +2738,19 @@ function setSection(sec){
   if (sec === "updates") renderUpdates();
   if (sec === "storage") renderStorage();
   if (sec === "share") renderFeedbackForm();
+  if (sec === "about") api.invoke("app_version").then(v => { $("#abVersion").textContent = `v${v}`; }).catch(() => {});
 }
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-link]");
+  if (b) api.invoke("open_link", {which: b.dataset.link}).catch(err => toast(errText(err), "err"));
+});
 $("#setNav").onclick = e => { const b = e.target.closest("button[data-sec]"); if (b) setSection(b.dataset.sec); };
 
 /* ---- send feedback (answers go to the owner's Google Form, see feedback.rs) ---- */
 /* Choice labels must match feedback.rs and the live form exactly. */
 const FB = {
   os: ["Windows", "macOS", "Linux"],
-  mode: ["Spoken — built-in voice", "Spoken — VoiceStudio", "Typed", "I didn't finish a round"],
+  mode: ["Spoken \u2014 built-in voice", "Spoken \u2014 VoiceStudio", "Typed", "I didn't finish a round"],
   features: ["Mock interview rounds", "Coding editor / Run code", "Whiteboard", "Round report & feedback", "Resume check", "Company research (dossiers)"],
   would: ["Definitely", "Maybe", "Depends on the company", "Probably not"],
 };
@@ -2396,6 +2879,8 @@ $("#bgNone").onclick = () => dropImage(true);
 /* ---- interviewers ---- */
 function renderPersonas(){
   const el = $("#personaGrid");
+  // Built-in voice: no panels to pick, so nothing to show here.
+  el.closest(".panel").hidden = builtinVoice();
   if (!PANELS.length){ el.innerHTML = `<p class="muted small">No interviewer panels found.</p>`; return; }
   const dots = n => `<span class="strict" title="Strictness ${n} of 5">${[1,2,3,4,5].map(i => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>`;
   el.innerHTML = PANELS.map(p => `<div class="persona-panel"><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p><div class="persona-grid">${p.interviewers.map(iv => `
@@ -2534,8 +3019,8 @@ $("#view-settings").addEventListener("click", async e => {
 
 /* ---- AI model ---- */
 const CLI_MODELS = {
-  iv: [["sonnet", "Sonnet — fast replies"], ["opus", "Opus — sharper, slower"], ["haiku", "Haiku — fastest, lighter"]],
-  rep: [["opus", "Opus — best judgment"], ["sonnet", "Sonnet — faster"]],
+  iv: [["sonnet", "Sonnet: fast replies"], ["opus", "Opus: sharper, slower"], ["haiku", "Haiku: fastest, lighter"]],
+  rep: [["opus", "Opus: best judgment"], ["sonnet", "Sonnet: faster"]],
 };
 const MODELS = {};       // provider → model ids from its API
 function renderAi(){
@@ -2729,7 +3214,7 @@ function fillDevice(sel, list, saved){
   const def = list.find(d => d.default);
   let opts = `<option value="">Windows default${def ? ` (${esc(def.name)})` : ""}</option>`;
   opts += list.map(d => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join("");
-  if (saved && !list.some(d => d.id === saved)) opts += `<option value="${esc(saved)}">Saved device (not connected — using default)</option>`;
+  if (saved && !list.some(d => d.id === saved)) opts += `<option value="${esc(saved)}">Saved device (not connected: using default)</option>`;
   sel.innerHTML = opts;
   sel.value = saved || "";
 }
@@ -2765,11 +3250,12 @@ const readyEvery = () => !!LS.get("onsite.readyEvery", false);
 async function openReady(index){
   readyIndex = index;
   nav("ready");
+  STAGE_MAX = 4; renderStepper($("#readyStepper"), 5);
   const k = loop.setup.rounds[index];
   const who = interviewerFor(index, k, loop.setup.panel);
   const comp = companyLabel(loop.setup);
   $("#readyIc").textContent = comp[0];
-  $("#readyRound").textContent = `${comp} — ${loopRound(index).name}`;
+  $("#readyRound").textContent = `${comp}: ${loopRound(index).name}`;
   $("#readyWho").textContent = `Round ${index+1} of ${loop.count} · ${loopRound(index).minutes} minutes · with ${who.full ? `${who.full}, ${who.role}` : who.name}`;
   $("#readyEvery").checked = readyEvery();
   renderReadyResume();

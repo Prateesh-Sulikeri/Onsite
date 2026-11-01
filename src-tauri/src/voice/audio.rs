@@ -451,9 +451,22 @@ impl Mic {
         let level: Arc<Level> = Default::default();
         let dead: Arc<AtomicBool> = Default::default();
         let (lv, d) = (level.clone(), dead.clone());
-        let mut handle = move |mut mono: Vec<f32>| {
-            lv.set(rms(&mono));
-            let _ = tx.send(f32_to_i16(&rs.process(&mut mono)));
+        // The device callback only hands raw samples over. The 511-tap low-pass runs on a worker thread:
+        // done inside the callback it overran the device buffer (a slow or busy CPU, and unoptimised dev
+        // builds), the OS dropped those samples, and words went missing from what STT heard.
+        let (raw_tx, raw_rx) = std::sync::mpsc::channel::<Vec<f32>>();
+        std::thread::Builder::new()
+            .name("onsite-mic-dsp".into())
+            .spawn(move || {
+                // Ends when the stream (and with it `raw_tx`) is dropped.
+                for mut mono in raw_rx {
+                    lv.set(rms(&mono));
+                    let _ = tx.send(f32_to_i16(&rs.process(&mut mono)));
+                }
+            })
+            .map_err(err)?;
+        let handle = move |mono: Vec<f32>| {
+            let _ = raw_tx.send(mono);
         };
         let on_err = move |e: cpal::Error| {
             tracing::warn!("mic stream: {e}");

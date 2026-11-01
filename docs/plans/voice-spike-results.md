@@ -75,7 +75,7 @@ Notes:
 | NeMo streaming FastConformer transducer 480 ms int8 | 132 MB |
 | Nemotron speech streaming 0.6B 560 ms int8 | 633 MB |
 
-Pocket + Parakeet + a small caption model ≈ 1 GB, inside the plan's 1–2 GB estimate.
+Pocket + Parakeet + a small caption model ≈ 1 GB, inside the plan's 1-2 GB estimate.
 
 ## TTS identity: tuning for steady voices
 

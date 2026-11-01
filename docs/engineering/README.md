@@ -1,4 +1,4 @@
-# docs/engineering — agent docs
+# docs/engineering: agent docs
 
 Docs for AI coding agents working on Onsite. Dense on purpose. Open only the file you need.
 Humans: read `pdf/` (snapshot of tag `docs-human-2026-10-30`).

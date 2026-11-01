@@ -92,6 +92,7 @@ async fn run(client: ApiClient, iv_model: &str, rep_model: &str, skip_research: 
         dossier_id: String::new(),
         dossier_rounds: vec![],
         dossier: None,
+        ready_made_project: false,
         voice_female: None,
     };
     let templates = PromptTemplates {
@@ -115,7 +116,7 @@ async fn run(client: ApiClient, iv_model: &str, rep_model: &str, skip_research: 
     let mut ttfts = Vec::new();
     let mut to_send = vec![interview::opening_message(plan.minutes)];
     for (i, a) in ANSWERS.iter().enumerate() {
-        let ws = if i == 1 { Workspace { code: String::new(), notes: "client -> API -> [idempotency table] -> ledger\nledger -> outbox -> relay -> Kafka".into() } } else { Workspace::default() };
+        let ws = if i == 1 { Workspace { code: String::new(), notes: "client -> API -> [idempotency table] -> ledger\nledger -> outbox -> relay -> Kafka".into(), ..Default::default() } } else { Workspace::default() };
         let (msg, _) = interview::candidate_message(a, &ws, &mut last, false, &setup.lang, started.elapsed().as_secs_f64() / 60.0, plan.minutes).unwrap();
         to_send.push(msg);
     }

@@ -107,7 +107,7 @@ const highlight = HighlightStyle.define([
 ]);
 
 function create(parent, { doc = "", lang = "Java", onChange } = {}) {
-  const langConf = new Compartment(), wordsConf = new Compartment();
+  const langConf = new Compartment(), wordsConf = new Compartment(), roConf = new Compartment();
   const view = new EditorView({
     parent,
     state: EditorState.create({
@@ -120,7 +120,10 @@ function create(parent, { doc = "", lang = "Java", onChange } = {}) {
         bracketMatching(), closeBrackets(), autocompletion({ activateOnTyping: true, maxRenderedOptions: 40 }),
         highlightActiveLine(), highlightSelectionMatches(),
         syntaxHighlighting(highlight), theme, syntaxLint,
+        // Long lines wrap at the pane edge, always, so a narrow editor never scrolls sideways.
+        EditorView.lineWrapping,
         langConf.of(language(lang)), wordsConf.of(completions(lang)),
+        roConf.of([EditorState.readOnly.of(false), EditorView.editable.of(true)]),
         keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap,
           ...foldKeymap, ...completionKeymap, ...lintKeymap, indentWithTab]),
         EditorView.contentAttributes.of({ "aria-label": "Code editor", spellcheck: "false", autocorrect: "off", autocapitalize: "off" }),
@@ -134,6 +137,8 @@ function create(parent, { doc = "", lang = "Java", onChange } = {}) {
     // Loading a buffer (new round, other language) is not an edit, so Undo can't step back into it.
     set(text) { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text || "" }, annotations: Transaction.addToHistory.of(false) }); },
     setLang(l) { view.dispatch({ effects: [langConf.reconfigure(language(l)), wordsConf.reconfigure(completions(l))] }); },
+    // Read-only files (a project's tests) can be read, selected and searched, not changed.
+    setReadOnly(on) { view.dispatch({ effects: roConf.reconfigure([EditorState.readOnly.of(!!on), EditorView.editable.of(true)]) }); },
     focus: () => view.focus(),
   };
 }

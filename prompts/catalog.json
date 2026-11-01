@@ -5,7 +5,7 @@
       "min": 30,
       "tab": "notes",
       "blurb": "Recruiter/HM screen. Every line of your resume gets probed.",
-      "guide": "Open with a short intro of yourself and ask the candidate to walk through their background. Then go line by line through the resume: for each claim ask what exactly they did, scope, numbers, and why. Check fit with the JD and motivation (why this company, why now, why leave). Probe gaps, short stints, and buzzwords. Ask 1–2 light technical sanity questions on their main stack. Leave time for their questions.",
+      "guide": "Open with a short intro of yourself and ask the candidate to walk through their background. Then go line by line through the resume: for each claim ask what exactly they did, scope, numbers, and why. Check fit with the JD and motivation (why this company, why now, why leave). Probe gaps, short stints, and buzzwords. Ask 1-2 light technical sanity questions on their main stack. Leave time for their questions.",
       "rubric": [
         "Clarity of story",
         "Depth behind claims",
@@ -89,7 +89,7 @@
       "min": 45,
       "tab": "shared",
       "blurb": "Read unfamiliar code, trace it, find the bugs, fix and test it.",
-      "guide": "Share a realistic piece of production-style code (60–120 lines) in the candidate's language, built around the scenario given under THIS SESSION. Put it in ONE code fence in your first technical message. Seed 3–5 real issues across categories (correctness, concurrency, resource leak, performance, security, idempotency/retry, error handling, design smell) without comments that give them away. Sequence: (1) ask what the code does at a high level, (2) ask them to trace a specific input or scenario, (3) ask what problems they see and which matter most, (4) ask how they would fix the top issues and how they would test it, (5) if time remains, ask how they would extend it for a new requirement. Do not reveal issues they miss until the end, and even then only name one or two.",
+      "guide": "If THE PROJECT FOR THIS ROUND is given below, use it as the code and do not write or paste any. Otherwise share a realistic piece of production-style code (60-120 lines) in the candidate's language, built around the scenario given under THIS SESSION. Put it in ONE code fence in your first technical message. Seed 3-5 real issues across categories (correctness, concurrency, resource leak, performance, security, idempotency/retry, error handling, design smell) without comments that give them away. Sequence: (1) ask what the code does at a high level, (2) ask them to trace a specific input or scenario, (3) ask what problems they see and which matter most, (4) ask how they would fix the top issues and how they would test it, (5) if time remains, ask how they would extend it for a new requirement. Do not reveal issues they miss until the end, and even then only name one or two.",
       "rubric": [
         "Reading accuracy",
         "Bug finding",
@@ -158,7 +158,7 @@
       "min": 60,
       "tab": "notes",
       "blurb": "High-level design: scope, estimates, architecture, deep dives, failures.",
-      "guide": "Give the open-ended system design problem named under THIS SESSION, framed for the company. Stay vague at first; the candidate must drive. Expect: functional and non-functional requirements, rough capacity estimates, APIs, data model, high-level architecture (on the whiteboard as text), then deep dives into 1–2 components. Push with real interviewer moves: change the scale 10x, kill a node or a region, introduce a hot key, ask about consistency vs availability, idempotency, exactly-once claims, monitoring, cost. Calibrate depth to level: SDE-2 should drive most of it; senior must lead trade-offs unprompted.",
+      "guide": "Give the open-ended system design problem named under THIS SESSION, framed for the company. Stay vague at first; the candidate must drive. Expect: functional and non-functional requirements, rough capacity estimates, APIs, data model, high-level architecture (on the whiteboard as text), then deep dives into 1-2 components. Push with real interviewer moves: change the scale 10x, kill a node or a region, introduce a hot key, ask about consistency vs availability, idempotency, exactly-once claims, monitoring, cost. Calibrate depth to level: SDE-2 should drive most of it; senior must lead trade-offs unprompted.",
       "rubric": [
         "Requirements and scoping",
         "Architecture",
@@ -193,8 +193,8 @@
       "name": "Behavioral",
       "min": 45,
       "tab": "notes",
-      "blurb": "Values, conflict, failure, ownership — with hard follow-ups.",
-      "guide": "Ask 3–5 behavioral questions mapped to this company's values (e.g. Amazon Leadership Principles, Google 'Googleyness and leadership', Meta's signals like conflict, growth, drive). Expect STAR. After each story, dig: what exactly did YOU do, what did you say to that person, what was the data, what would you do differently, what was the result in numbers. Push back on vague 'we' answers and rehearsed polish.",
+      "blurb": "Values, conflict, failure, ownership, with hard follow-ups.",
+      "guide": "Ask 3-5 behavioral questions mapped to this company's values (e.g. Amazon Leadership Principles, Google 'Googleyness and leadership', Meta's signals like conflict, growth, drive). Expect STAR. After each story, dig: what exactly did YOU do, what did you say to that person, what was the data, what would you do differently, what was the result in numbers. Push back on vague 'we' answers and rehearsed polish.",
       "rubric": [
         "Specificity",
         "Ownership",
@@ -250,7 +250,7 @@
     },
     "amazon": {
       "name": "Amazon",
-      "style": "Amazon: Leadership Principles in every round, typically 1–2 LP questions even in technical rounds, STAR stories dug into with data. A bar raiser in the loop. Coding medium, often practical. OOD/LLD common. System design for SDE-2 and above, with focus on scale, operational excellence and customer impact."
+      "style": "Amazon: Leadership Principles in every round, typically 1-2 LP questions even in technical rounds, STAR stories dug into with data. A bar raiser in the loop. Coding medium, often practical. OOD/LLD common. System design for SDE-2 and above, with focus on scale, operational excellence and customer impact."
     },
     "meta": {
       "name": "Meta",
@@ -299,9 +299,9 @@
   },
   "LEVELS": {
     "ng": "New grad / intern",
-    "sde1": "SDE-1 (0–2 yrs)",
-    "sde2": "SDE-2 (2–5 yrs)",
-    "senior": "Senior (5–8 yrs)",
+    "sde1": "SDE-1 (0-2 yrs)",
+    "sde2": "SDE-2 (2-5 yrs)",
+    "senior": "Senior (5-8 yrs)",
     "staff": "Staff / principal"
   },
   "LEVEL_BAR": {

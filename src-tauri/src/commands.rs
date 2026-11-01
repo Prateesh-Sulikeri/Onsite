@@ -177,8 +177,8 @@ pub fn create_loop(state: State<AppState>, setup: LoopSetup) -> Result<i64> {
 }
 
 #[tauri::command]
-pub async fn start_round(app: AppHandle, loop_id: i64, index: usize) -> Result<RoundInfo> {
-    live::start_round(&app, loop_id, index).await
+pub async fn start_round(app: AppHandle, loop_id: i64, index: usize, ready_made: Option<bool>) -> Result<RoundInfo> {
+    live::start_round(&app, loop_id, index, ready_made).await
 }
 
 /// Stops a round that is still loading; its `start_round` returns an error.
@@ -228,6 +228,12 @@ pub fn get_loop_feedback(state: State<AppState>, loop_id: i64) -> Result<live::L
 #[tauri::command]
 pub async fn run_code(app: AppHandle, round_id: i64, code: String, submit: bool) -> Result<crate::runner::Report> {
     live::run_code(&app, round_id, code, submit).await
+}
+
+/// The candidate's edits to a comprehension project so far, as unified diffs ("" = no changes).
+#[tauri::command]
+pub async fn project_diff(app: AppHandle, round_id: i64, files: std::collections::BTreeMap<String, String>) -> Result<String> {
+    live::project_diff(&app, round_id, &files).await
 }
 
 /// The editor language picker in the call room.
@@ -660,6 +666,13 @@ pub fn open_link(which: String) -> Result<()> {
         "privacy" => format!("{REPO}/blob/main/PRIVACY.md"),
         "security" => format!("{REPO}/blob/main/SECURITY.md"),
         "notices" => format!("{REPO}/blob/main/THIRD_PARTY_NOTICES.md"),
+        "author" => "https://github.com/Prateesh-Sulikeri".to_string(),
+        "resume_matcher" => "https://github.com/srbhr/Resume-Matcher".to_string(),
+        "ats_screener" => "https://github.com/sunnypatell/ats-screener".to_string(),
+        "voicestudio" => "https://github.com/debpalash/VoiceStudio".to_string(),
+        "sherpa_onnx" => "https://github.com/k2-fsa/sherpa-onnx".to_string(),
+        "codemirror" => "https://codemirror.net/".to_string(),
+        "excalidraw" => "https://github.com/excalidraw/excalidraw".to_string(),
         _ => return Err(AppError::Invalid("Unknown link.".into())),
     };
     crate::storage::open_url(&url)

@@ -17,7 +17,7 @@ METHOD
 3. Find the company's stated values from its own site or job posts.
 4. Note disagreements between reports (e.g. some loops have a DSA round, some don't) and say so in the summary.
 
-PROGRESS (the app shows these to the user — print them as plain lines in your text output as you go)
+PROGRESS (the app shows these to the user, print them as plain lines in your text output as you go)
 PROGRESS stage=<1-6> pct=<0-100> note=<one short sentence>
 Stages: 1 reading request, 2 finding the current process, 3 collecting candidate experiences, 4 extracting questions per round, 5 values and interviewer style, 6 building the dossier.
 
@@ -39,4 +39,4 @@ Your FINAL message must be only one JSON object, no prose, matching this shape:
   ],
   "sources": [{"title": string, "url": string}]
 }
-Rules: only include questions that a source actually reported (paraphrase, never copy long passages). 4–10 questions per round. Order rounds as they usually happen. If evidence is thin, say so in "summary" instead of inventing.
+Rules: only include questions that a source actually reported (paraphrase, never copy long passages). 4-10 questions per round. Order rounds as they usually happen. If evidence is thin, say so in "summary" instead of inventing.
