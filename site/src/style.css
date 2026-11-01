@@ -261,3 +261,29 @@ pre code{ background: none; border: 0; padding: 0; font: inherit; overflow-wrap:
 .doc-links span{ color: var(--muted); font-size: .86rem; }
 .arch-head code{ text-transform: none; letter-spacing: 0; }
 td code{ white-space: nowrap; overflow-wrap: normal; }
+
+/* Guides */
+.recipes{ display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 18px; }
+@media (min-width: 700px){ .recipes{ grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1280px){ .recipes{ grid-template-columns: repeat(3, 1fr); } }
+.recipe{ padding: 20px; display: flex; flex-direction: column; gap: 8px; transition: border-color .2s; }
+.recipe:hover{ border-color: var(--accent-line); }
+.recipe header{ display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.recipe h3{ margin: 0; font-size: 1.05rem; }
+.recipe .badge{ flex-shrink: 0; }
+.recipe p{ margin: 0; font-size: .92rem; }
+.prose .recipe ol{ margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; font-size: .93rem; }
+.prose .recipe li::marker{ color: var(--accent-text); font-weight: 700; }
+.prose ol.how{ padding-left: 22px; margin: 14px 0 0; display: grid; gap: 10px; }
+.prose ol.how li::marker{ color: var(--accent-text); font-weight: 700; }
+.prose ol.how strong{ color: var(--ink); }
+.shot{ margin: 22px 0 6px; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--deep-shadow); }
+.shot figcaption{ padding: 10px 16px 12px; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); }
+.shot.narrow{ max-width: 480px; }
+.shots-pair{ margin: 6px 0; align-items: start; }
+.shots-pair .shot{ margin: 16px 0 0; }
+.callout{ margin: 18px 0; padding: 14px 18px; border-radius: var(--r); border: 1px solid var(--accent-line); background: linear-gradient(160deg, oklch(0.3 0.1 292 / .35), var(--panel) 70%); }
+.callout.warn{ border-color: var(--warm-soft); background: linear-gradient(160deg, var(--warm-soft), var(--panel) 70%); }
+.callout strong{ color: var(--ink); }
+.prose pre + p{ margin-top: 12px; }
+.prose ol.how + p, .prose ol.how + .grid{ margin-top: 14px; }
