@@ -1,0 +1,105 @@
+--- a/src/Account.java
++++ b/src/Account.java
+@@ -2,24 +2,24 @@
+ 
+ import java.util.concurrent.locks.ReentrantLock;
+ 
+-/** One wallet. Balance is in rupees. */
++/** One wallet. Balance is in paise. */
+ public class Account {
+     public final String id;
+     public final String ownerId;
+     public final ReentrantLock lock = new ReentrantLock();
+-    private double balance;
++    private long balance;
+ 
+-    public Account(String id, String ownerId, double openingBalance) {
++    public Account(String id, String ownerId, long openingBalance) {
+         this.id = id;
+         this.ownerId = ownerId;
+         this.balance = openingBalance;
+     }
+ 
+-    public double getBalance() {
++    public long getBalance() {
+         return balance;
+     }
+ 
+-    public void setBalance(double balance) {
++    public void setBalance(long balance) {
+         this.balance = balance;
+     }
+ 
+--- a/src/AccountStore.java
++++ b/src/AccountStore.java
+@@ -19,8 +19,8 @@
+         return account;
+     }
+ 
+-    public double total() {
+-        double sum = 0;
++    public long total() {
++        long sum = 0;
+         for (Account account : accounts.values()) {
+             sum += account.getBalance();
+         }
+--- a/src/TransferService.java
++++ b/src/TransferService.java
+@@ -8,7 +8,7 @@
+         this.store = store;
+     }
+ 
+-    public void transfer(String fromId, String toId, double amount) {
++    public void transfer(String fromId, String toId, long amount) {
+         if (amount <= 0) {
+             throw new IllegalArgumentException("amount must be positive");
+         }
+@@ -18,9 +18,11 @@
+         Account from = store.get(fromId);
+         Account to = store.get(toId);
+ 
+-        from.lock.lock();
++        Account first = fromId.compareTo(toId) < 0 ? from : to;
++        Account second = first == from ? to : from;
++        first.lock.lock();
+         try {
+-            to.lock.lock();
++            second.lock.lock();
+             try {
+                 if (from.getBalance() < amount) {
+                     throw new InsufficientFundsException(fromId, amount);
+@@ -28,24 +30,28 @@
+                 from.setBalance(from.getBalance() - amount);
+                 to.setBalance(to.getBalance() + amount);
+             } finally {
+-                to.lock.unlock();
++                second.lock.unlock();
+             }
+         } finally {
+-            from.lock.unlock();
++            first.lock.unlock();
+         }
+     }
+ 
+-    public void topUp(String accountId, double amount) {
++    public void topUp(String accountId, long amount) {
+         if (amount <= 0) {
+             throw new IllegalArgumentException("amount must be positive");
+         }
+         Account account = store.get(accountId);
+-        double current = account.getBalance();
+-        account.setBalance(current + amount);
++        account.lock.lock();
++        try {
++            account.setBalance(account.getBalance() + amount);
++        } finally {
++            account.lock.unlock();
++        }
+     }
+ 
+     public static class InsufficientFundsException extends RuntimeException {
+-        public InsufficientFundsException(String accountId, double amount) {
++        public InsufficientFundsException(String accountId, long amount) {
+             super("account " + accountId + " cannot cover " + amount);
+         }
+     }

@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "outbox-worker-python",
+  "title": "Outbox worker",
+  "language": "python",
+  "difficulty": "Hard",
+  "levels": ["sde2", "senior", "staff"],
+  "topics": ["postgres", "outbox", "concurrency", "reliability"],
+  "companies": ["fintech", "razorpay", "stripe", "general"],
+  "minutes": 45,
+  "brief": "Incident INC-884. We run three copies of the outbox worker. Customers got duplicate payment emails, a few emails never came during a broker blip, and one bad row made the worker log the same warning thousands of times an hour. Read the worker and the repo and find out why.",
+  "files": [
+    {"path": "src/worker.py", "open": true},
+    {"path": "src/outbox.py"},
+    {"path": "src/publisher.py"},
+    {"path": "test/test_worker.py", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "no-claim",
+      "file": "src/outbox.py",
+      "lines": [19, 27],
+      "category": "concurrency",
+      "why": "fetch_pending is a plain SELECT. Three workers read the same pending rows at the same time and each publishes them, so consumers see duplicates. There is also no lease, so a crashed worker cannot be told apart from a slow one.",
+      "good_fix": "Claim rows atomically: UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED LIMIT n) RETURNING, set status to processing with a locked_until lease, and also pick up processing rows whose lease has expired."
+    },
+    {
+      "id": "sent-before-publish",
+      "file": "src/worker.py",
+      "lines": [22, 27],
+      "category": "atomicity",
+      "why": "The row is marked sent before the publish. If the publish fails, mark_failed only bumps attempts and leaves the status as sent, so the message is never retried. A crash between the two lines also loses it.",
+      "good_fix": "Publish first, mark sent only after the broker acknowledged. Duplicates after a crash are then possible, so give each message a stable id the consumer can dedupe on."
+    },
+    {
+      "id": "unbounded-retry",
+      "file": "src/outbox.py",
+      "lines": [36, 41],
+      "category": "reliability",
+      "why": "A failing row stays pending with no delay and no cap. Every loop picks it up again, so one poison row is retried forever at full speed and hides real failures in the logs.",
+      "good_fix": "Back off with available_at (exponential, capped) and move the row to a dead status after a maximum number of attempts, with an alert on the dead count."
+    }
+  ],
+  "extension": "Add ordering. Messages for the same order key must be published in id order, even with three workers. What changes in the claim query and in the failure path?"
+}

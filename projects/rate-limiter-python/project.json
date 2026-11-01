@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "rate-limiter-python",
+  "title": "Redis token bucket",
+  "language": "python",
+  "difficulty": "Medium",
+  "levels": ["sde1", "sde2", "senior"],
+  "topics": ["redis", "rate limiting", "concurrency", "distributed systems"],
+  "companies": ["general", "stripe", "razorpay", "uber"],
+  "minutes": 40,
+  "brief": "Ticket API-512. A customer on the free plan sent 200 requests in a second and almost all of them got through. Another customer is throttled even though they are under the limit. Redis memory also keeps growing after every sales demo. Read the limiter and explain all three.",
+  "files": [
+    {"path": "src/limiter.py", "open": true},
+    {"path": "src/middleware.py"},
+    {"path": "src/plans.py"},
+    {"path": "test/test_limiter.py", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "read-modify-write-race",
+      "file": "src/limiter.py",
+      "lines": [19, 32],
+      "category": "concurrency",
+      "why": "The bucket is read with HGETALL, changed in Python, and written back with HSET. Many requests in the same moment all read the same token count and all pass. The limit only holds for one caller at a time.",
+      "good_fix": "Do the read, refill and spend in one atomic step: a Lua script run with EVAL/EVALSHA (or WATCH/MULTI with retry). Return allowed and the new token count from the script."
+    },
+    {
+      "id": "client-clock",
+      "file": "src/limiter.py",
+      "lines": [17, 17],
+      "category": "distributed systems",
+      "why": "now comes from time.time() on each app server. Servers with clocks a few seconds apart write different timestamps into the same bucket. A server that is behind sees a negative elapsed time and drains tokens, so some callers are throttled early. A server that is ahead refills too much.",
+      "good_fix": "Use one clock for everyone: read the Redis TIME inside the Lua script. Also clamp elapsed time at zero."
+    },
+    {
+      "id": "no-ttl",
+      "file": "src/limiter.py",
+      "lines": [32, 32],
+      "category": "resource leak",
+      "why": "Every client id creates a hash that is never given an expiry. Idle keys stay forever, so Redis memory grows with the number of distinct callers.",
+      "good_fix": "Set an expiry on every write, a little longer than the time to refill a full bucket (capacity / refill rate), for example with EXPIRE in the same Lua script."
+    }
+  ],
+  "extension": "Some routes cost more than others (an export costs 10 tokens). Also add a header that tells the client how many tokens are left. What has to change so the header is accurate under concurrency?"
+}

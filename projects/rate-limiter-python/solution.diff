@@ -1,0 +1,68 @@
+--- a/src/limiter.py
++++ b/src/limiter.py
+@@ -1,5 +1,27 @@
+ """Token bucket rate limiter backed by Redis. State is shared by every app server."""
+-import time
++LUA_TAKE = """
++local t = redis.call('TIME')
++local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
++local capacity = tonumber(ARGV[1])
++local rate = tonumber(ARGV[2])
++local cost = tonumber(ARGV[3])
++local tokens = capacity
++local last = now
++local state = redis.call('HMGET', KEYS[1], 'tokens', 'ts')
++if state[1] then
++  tokens = tonumber(state[1])
++  last = tonumber(state[2])
++end
++tokens = math.min(capacity, tokens + math.max(0, now - last) * rate)
++local allowed = 0
++if tokens >= cost then
++  tokens = tokens - cost
++  allowed = 1
++end
++redis.call('HSET', KEYS[1], 'tokens', tokens, 'ts', now)
++redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
++return allowed
++"""
+ 
+ 
+ class TokenBucket:
+@@ -8,29 +30,18 @@
+         self.capacity = capacity
+         self.refill_per_sec = refill_per_sec
+         self.prefix = prefix
++        self.ttl_seconds = int(capacity / refill_per_sec) + 60
++        self._script = redis_client.register_script(LUA_TAKE)
+ 
+     def _key(self, client_id: str) -> str:
+         return f"{self.prefix}:{client_id}"
+ 
+     def allow(self, client_id: str, cost: int = 1) -> bool:
+-        key = self._key(client_id)
+-        now = time.time()
+-
+-        state = self.redis.hgetall(key)
+-        if state:
+-            tokens = float(state[b"tokens"])
+-            last = float(state[b"ts"])
+-        else:
+-            tokens = float(self.capacity)
+-            last = now
+-
+-        tokens = min(float(self.capacity), tokens + (now - last) * self.refill_per_sec)
+-        allowed = tokens >= cost
+-        if allowed:
+-            tokens -= cost
+-
+-        self.redis.hset(key, mapping={"tokens": tokens, "ts": now})
+-        return allowed
++        allowed = self._script(
++            keys=[self._key(client_id)],
++            args=[self.capacity, self.refill_per_sec, cost, self.ttl_seconds],
++        )
++        return bool(allowed)
+ 
+     def retry_after(self, client_id: str, cost: int = 1) -> float:
+         state = self.redis.hgetall(self._key(client_id))

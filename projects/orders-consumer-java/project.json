@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "id": "orders-consumer-java",
+  "title": "Payment events consumer",
+  "language": "java",
+  "difficulty": "Hard",
+  "levels": ["sde2", "senior", "staff"],
+  "topics": ["kafka", "idempotency", "at-least-once", "payments"],
+  "companies": ["fintech", "razorpay", "stripe", "uber"],
+  "minutes": 50,
+  "brief": "Ticket PAY-2291. After last night's deploy, finance says some paid orders show too little paid, and some show too much. Ops also saw one partition stop moving for hours. We read payment events from Kafka and update the orders table. Read the consumer and find out how all three can happen.",
+  "files": [
+    {"path": "src/EventConsumer.java", "open": true},
+    {"path": "src/PaymentEventHandler.java"},
+    {"path": "src/EventHandler.java"},
+    {"path": "src/DeadLetterSink.java"},
+    {"path": "test/EventConsumerTest.java", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "commit-before-process",
+      "file": "src/EventConsumer.java",
+      "lines": [41, 41],
+      "category": "delivery semantics",
+      "why": "Offsets are committed right after poll(), before any record is handled. If the process dies or a handler fails mid-batch, the broker thinks those records are done and they are never processed. Orders end up under-paid.",
+      "good_fix": "Commit after the batch is handled (or commit per record offset+1 after it succeeds). That gives at-least-once delivery, so the handler must also be idempotent."
+    },
+    {
+      "id": "non-idempotent-handler",
+      "file": "src/PaymentEventHandler.java",
+      "lines": [28, 40],
+      "category": "idempotency",
+      "why": "The event insert and the paid_cents update are separate autocommit statements with no dedupe on event_id. A redelivery (rebalance, retry after a crash) adds the amount again, or inserts the event and then fails before the update.",
+      "good_fix": "Use one transaction. Insert with ON CONFLICT (event_id) DO NOTHING and update paid_cents only when a row was inserted. A unique index on event_id makes this safe under concurrency."
+    },
+    {
+      "id": "poison-message-loop",
+      "file": "src/EventConsumer.java",
+      "lines": [61, 65],
+      "category": "error handling",
+      "why": "On any exception the consumer seeks back to the same offset and stops the batch. The next poll returns the same record, which fails the same way, so the partition is stuck forever and everything behind it waits.",
+      "good_fix": "Count attempts per record. After a small number of retries, publish it to the dead letter sink and move on. Treat parse errors as non-retryable and send them straight to the sink."
+    }
+  ],
+  "extension": "Add a rebalance listener. When partitions are revoked, the consumer should finish and commit what it has handled, and drop work for partitions it no longer owns. What happens to in-flight records today?"
+}

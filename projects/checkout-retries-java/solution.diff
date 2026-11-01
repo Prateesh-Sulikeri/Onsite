@@ -1,0 +1,23 @@
+--- a/src/CheckoutService.java
++++ b/src/CheckoutService.java
+@@ -34,7 +34,7 @@
+         while (true) {
+             attempt++;
+             try {
+-                return gateway.charge(order.customerId, order.totalCents);
++                return gateway.charge(order.customerId, order.totalCents, "order-" + order.id);
+             } catch (TimeoutException e) {
+                 if (attempt >= MAX_ATTEMPTS) {
+                     throw new IllegalStateException("payment timed out for order " + order.id, e);
+@@ -49,7 +49,9 @@
+     private void sleep(long ms) {
+         try {
+             Thread.sleep(ms);
+-        } catch (InterruptedException ignored) {
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            throw new IllegalStateException("interrupted while retrying payment", e);
+         }
+     }
+ }
+(The race in checkout() is fixed by claiming the order atomically before charging, for example a per-order lock or a compare-and-set from NEW to PROCESSING.)

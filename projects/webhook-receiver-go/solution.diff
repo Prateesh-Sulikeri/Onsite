@@ -1,0 +1,115 @@
+--- a/src/handler.go
++++ b/src/handler.go
+@@ -53,22 +53,22 @@
+ 		return
+ 	}
+ 
+-	seen, err := h.store.Seen(r.Context(), e.ID)
++	first, err := h.store.Claim(r.Context(), e.ID)
+ 	if err != nil {
+ 		http.Error(w, "store error", http.StatusInternalServerError)
+ 		return
+ 	}
+-	if seen {
++	if !first {
+ 		w.WriteHeader(http.StatusOK)
+ 		return
+ 	}
+ 	if err := h.processor.Process(r.Context(), e); err != nil {
+ 		log.Printf("event %s failed: %v", e.ID, err)
++		if rerr := h.store.Release(r.Context(), e.ID); rerr != nil {
++			log.Printf("event %s could not be released: %v", e.ID, rerr)
++		}
+ 		http.Error(w, "processing failed", http.StatusInternalServerError)
+ 		return
+ 	}
+-	if err := h.store.MarkSeen(r.Context(), e.ID); err != nil {
+-		log.Printf("event %s handled but not recorded: %v", e.ID, err)
+-	}
+ 	w.WriteHeader(http.StatusOK)
+ }
+--- a/src/signature.go
++++ b/src/signature.go
+@@ -5,13 +5,19 @@
+ 	"crypto/sha256"
+ 	"encoding/hex"
+ 	"errors"
++	"strconv"
+ 	"strings"
++	"time"
+ )
+ 
+ var (
+ 	ErrBadHeader    = errors.New("malformed signature header")
+ 	ErrBadSignature = errors.New("signature does not match")
++	ErrStale        = errors.New("timestamp outside the allowed window")
+ )
++
++// Tolerance is how far the signed timestamp may be from our clock.
++const Tolerance = 5 * time.Minute
+ 
+ // parseHeader reads "t=1700000000,v1=<hex>" and returns the timestamp text and the signature.
+ func parseHeader(header string) (ts string, sig string, err error) {
+@@ -48,9 +54,21 @@
+ 	if err != nil {
+ 		return err
+ 	}
+-	expected := Sign(secret, ts, body)
+-	if expected != sig {
++	provided, err := hex.DecodeString(sig)
++	if err != nil {
+ 		return ErrBadSignature
++	}
++	expected, _ := hex.DecodeString(Sign(secret, ts, body))
++	if !hmac.Equal(expected, provided) {
++		return ErrBadSignature
++	}
++	sent, err := strconv.ParseInt(ts, 10, 64)
++	if err != nil {
++		return ErrBadHeader
++	}
++	age := time.Since(time.Unix(sent, 0))
++	if age > Tolerance || age < -Tolerance {
++		return ErrStale
+ 	}
+ 	return nil
+ }
+--- a/src/store.go
++++ b/src/store.go
+@@ -7,8 +7,10 @@
+ 
+ // Store remembers which event ids we have already handled.
+ type Store interface {
+-	Seen(ctx context.Context, id string) (bool, error)
+-	MarkSeen(ctx context.Context, id string) error
++	// Claim returns true for the first caller of an id and false for everyone after.
++	Claim(ctx context.Context, id string) (bool, error)
++	// Release gives a claim back, so a retry of a failed event can run.
++	Release(ctx context.Context, id string) error
+ }
+ 
+ // MemoryStore is used in tests and local runs. Production uses a table with a unique id column.
+@@ -21,15 +23,19 @@
+ 	return &MemoryStore{seen: make(map[string]bool)}
+ }
+ 
+-func (m *MemoryStore) Seen(ctx context.Context, id string) (bool, error) {
++func (m *MemoryStore) Claim(ctx context.Context, id string) (bool, error) {
+ 	m.mu.Lock()
+ 	defer m.mu.Unlock()
+-	return m.seen[id], nil
++	if m.seen[id] {
++		return false, nil
++	}
++	m.seen[id] = true
++	return true, nil
+ }
+ 
+-func (m *MemoryStore) MarkSeen(ctx context.Context, id string) error {
++func (m *MemoryStore) Release(ctx context.Context, id string) error {
+ 	m.mu.Lock()
+ 	defer m.mu.Unlock()
+-	m.seen[id] = true
++	delete(m.seen, id)
+ 	return nil
+ }

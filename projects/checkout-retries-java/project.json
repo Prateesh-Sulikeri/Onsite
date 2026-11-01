@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "checkout-retries-java",
+  "title": "Checkout with retries",
+  "language": "java",
+  "difficulty": "Medium",
+  "levels": ["sde2", "senior", "staff"],
+  "topics": ["idempotency", "concurrency", "payments", "retries"],
+  "companies": ["fintech", "razorpay", "stripe"],
+  "minutes": 45,
+  "brief": "Support says some customers were charged twice for one order, mostly when the card processor was slow. Read the checkout code, find out how that can happen, and fix it.",
+  "files": [
+    {"path": "src/CheckoutService.java", "open": true},
+    {"path": "src/PaymentGateway.java"},
+    {"path": "src/OrderRepo.java"},
+    {"path": "test/CheckoutServiceTest.java", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "retry-no-key",
+      "file": "src/CheckoutService.java",
+      "lines": [36, 36],
+      "category": "idempotency",
+      "why": "A timeout does not mean the charge failed. The retry calls charge() again with no idempotency key, so the processor charges the card a second time. The test gateway does exactly this.",
+      "good_fix": "Make one key per order (for example the order id) and pass it on every attempt via the three-argument charge(). Keep it stable across retries and across repeated checkout calls."
+    },
+    {
+      "id": "check-then-act",
+      "file": "src/CheckoutService.java",
+      "lines": [18, 28],
+      "category": "concurrency",
+      "why": "Two requests for the same order both read NEW and both charge. Reading the status and marking PAID are not one atomic step.",
+      "good_fix": "Claim the order atomically first (compare-and-set NEW to PROCESSING, a lock per order id, or a conditional UPDATE in the database). The key from the first fix also makes the second charge harmless."
+    },
+    {
+      "id": "swallowed-interrupt",
+      "file": "src/CheckoutService.java",
+      "lines": [49, 54],
+      "category": "error handling",
+      "why": "The empty catch drops the interrupt flag, so a shutdown or a cancelled request keeps retrying.",
+      "good_fix": "Restore the flag with Thread.currentThread().interrupt() and stop retrying."
+    }
+  ],
+  "extension": "Add partial refunds. A refund must be safe to retry too, must not exceed what was charged, and must not break the retry fix."
+}
