@@ -217,6 +217,11 @@ pub fn run() {
                 Ok(n) => tracing::info!(n, "deleted rounds with no answers"),
                 Err(e) => tracing::warn!("sweeping empty rounds: {e}"),
             }
+            // Nothing of this process is running yet, so old round/job scratch dirs are leftovers of a killed one.
+            match storage::sweep_stale_scratch(&std::env::temp_dir(), std::time::SystemTime::now(), std::time::Duration::from_secs(3600)) {
+                0 => {}
+                n => tracing::info!(n, "deleted stale round/job temp dirs"),
+            }
             if let Err(e) = store.fail_running_jobs() {
                 tracing::warn!("marking interrupted research jobs: {e}");
             }

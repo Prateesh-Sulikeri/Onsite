@@ -417,7 +417,7 @@ pub fn tips(i: &Inputs) -> Vec<String> {
         }
     }
     if sub.date_consistency.is_some_and(|d| d < 100.0) {
-        out.push("Write every date the same way, e.g. \"Jan 2020 \u{2013} Mar 2023\". Mixed formats make ATSs miscount your experience.".to_string());
+        out.push("Write every date the same way, e.g. \"Jan 2020 to Mar 2023\". Mixed formats make ATSs miscount your experience.".to_string());
     }
     if i.facts.bullets >= 3 && (i.facts.quantified as f64) < i.facts.bullets as f64 * 0.3 {
         out.push(format!("Only {} of {} experience lines have a number. Add scale, latency, money or percentages.", i.facts.quantified, i.facts.bullets));

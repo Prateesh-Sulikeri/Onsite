@@ -161,6 +161,32 @@ pub fn clear_temp() -> Result<u64> {
     Ok(freed)
 }
 
+/// Startup sweep: round and job scratch dirs left behind by a killed process (the round ones hold the
+/// hidden project issues). Only exact `onsite-round-*` / `onsite-job-*` dirs older than `max_age` go.
+/// Called before any round or job of this process exists. Best effort: never fails.
+pub fn sweep_stale_scratch(base: &Path, now: std::time::SystemTime, max_age: std::time::Duration) -> usize {
+    let Ok(rd) = std::fs::read_dir(base) else { return 0 };
+    let mut n = 0;
+    for e in rd.filter_map(|e| e.ok()) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !(name.starts_with("onsite-round-") || name.starts_with("onsite-job-")) {
+            continue;
+        }
+        let Ok(meta) = e.metadata() else { continue };
+        if !meta.is_dir() {
+            continue;
+        }
+        let old = meta.modified().ok().and_then(|m| now.duration_since(m).ok()).is_some_and(|age| age >= max_age);
+        if old {
+            match std::fs::remove_dir_all(e.path()) {
+                Ok(()) => n += 1,
+                Err(err) => tracing::warn!("stale temp dir {name}: {err}"),
+            }
+        }
+    }
+    n
+}
+
 pub fn open_folder(path: &Path) -> Result<()> {
     if !path.exists() {
         return Err(AppError::NotFound("That folder doesn't exist yet.".into()));
@@ -257,6 +283,30 @@ mod tests {
         assert_eq!(image_ext(b"RIFF\0\0\0\0WEBPVP8 "), Some("webp"));
         assert_eq!(image_ext(b"<svg"), None);
         assert_eq!(image_ext(b""), None);
+    }
+
+    #[test]
+    fn sweep_removes_only_old_scratch_dirs() {
+        use std::time::{Duration, SystemTime};
+        let base = tempfile::tempdir().unwrap();
+        for d in ["onsite-round-abc", "onsite-job-xyz", "onsite-roundabc", "other", "onsite-update"] {
+            std::fs::create_dir(base.path().join(d)).unwrap();
+        }
+        std::fs::write(base.path().join("onsite-round-file"), b"x").unwrap();
+        std::fs::write(base.path().join("onsite-round-abc/.system-prompt.md"), b"x").unwrap();
+        let hour = Duration::from_secs(3600);
+        // Fresh dirs stay.
+        assert_eq!(sweep_stale_scratch(base.path(), SystemTime::now(), hour), 0);
+        assert!(base.path().join("onsite-round-abc").exists());
+        // Two hours later they are stale; look-alikes and files stay.
+        let later = SystemTime::now() + hour * 2;
+        assert_eq!(sweep_stale_scratch(base.path(), later, hour), 2);
+        assert!(!base.path().join("onsite-round-abc").exists());
+        assert!(!base.path().join("onsite-job-xyz").exists());
+        for keep in ["onsite-roundabc", "other", "onsite-update", "onsite-round-file"] {
+            assert!(base.path().join(keep).exists(), "{keep}");
+        }
+        assert_eq!(sweep_stale_scratch(&base.path().join("missing"), later, hour), 0);
     }
 
     #[test]

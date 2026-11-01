@@ -2973,16 +2973,16 @@ let STORAGE = null;
 async function renderStorage(){
   try{ STORAGE = await api.invoke("storage_info"); }
   catch(e){ $("#stItems").innerHTML = `<p class="form-msg err">${esc(errText(e))}</p>`; return; }
-  const st = STORAGE, c = st.counts;
-  $("#stTotal").textContent = `Onsite uses ${fmtBytes(st.total)}`;
+  const st = STORAGE, c = st.counts || {}, lim = st.limits || {};
+  $("#stTotal").textContent = `Onsite uses ${fmtBytes(st.total || 0)}`;
   $("#stCounts").innerHTML = [[c.rounds, "rounds"], [c.reports, "with feedback"], [c.loops, "interviews"], [c.dossiers, "dossiers"], [c.research_jobs, "research jobs"]]
-    .map(([n, l]) => `<span><b>${n}</b> ${l}</span>`).join("") + (c.oldest_round ? `<span>Oldest round <b>${esc(c.oldest_round.slice(0, 10))}</b></span>` : "");
-  $("#stItems").innerHTML = st.items.map(i => `<div class="st-item${i.ours ? "" : " theirs"}"><b>${esc(i.label)}</b><span class="size">${fmtBytes(i.bytes)}</span><small>${esc(i.note)} · ${esc(i.path)}</small></div>`).join("");
-  $("#stKeepRounds").value = String(st.limits.keep_rounds);
-  $("#stKeepDays").value = String(st.limits.keep_days);
-  $("#stLogMax").value = String(st.limits.log_max_mb);
+    .map(([n, l]) => `<span><b>${n ?? 0}</b> ${l}</span>`).join("") + (c.oldest_round ? `<span>Oldest round <b>${esc(c.oldest_round.slice(0, 10))}</b></span>` : "");
+  $("#stItems").innerHTML = (st.items || []).map(i => `<div class="st-item${i.ours ? "" : " theirs"}"><b>${esc(i.label)}</b><span class="size">${fmtBytes(i.bytes)}</span><small>${esc(i.note)} · ${esc(i.path)}</small></div>`).join("");
+  $("#stKeepRounds").value = String(lim.keep_rounds ?? "");
+  $("#stKeepDays").value = String(lim.keep_days ?? "");
+  $("#stLogMax").value = String(lim.log_max_mb ?? "");
   // A saved value that isn't in the list (set elsewhere) still shows.
-  [["#stKeepRounds", st.limits.keep_rounds, "rounds"], ["#stKeepDays", st.limits.keep_days, "days"], ["#stLogMax", st.limits.log_max_mb, "MB"]].forEach(([sel, v, unit]) => {
+  [["#stKeepRounds", lim.keep_rounds, "rounds"], ["#stKeepDays", lim.keep_days, "days"], ["#stLogMax", lim.log_max_mb, "MB"]].filter(x => x[1] != null).forEach(([sel, v, unit]) => {
     if ($(sel).value !== String(v)){ $(sel).insertAdjacentHTML("beforeend", `<option value="${v}">${v} ${unit}</option>`); $(sel).value = String(v); }
   });
 }

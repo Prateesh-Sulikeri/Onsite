@@ -55,7 +55,8 @@ localStorage: `onsite.theme {family, mode, image, plain, dim}` · `onsite.cfg` (
 
 Finished rounds over `keep_rounds` (newest kept) or older than `keep_days` → `delete_round`; empty loops older than 1 day
 deleted; log over `log_max_mb` → truncated in place. Live rounds (`ended_at IS NULL`) never touched. Startup also:
-`delete_unanswered_rounds`, `fail_running_jobs`. Clean-up commands: `clear_log`, `clear_temp` (onsite-update, onsite-stt;
+`delete_unanswered_rounds`, `fail_running_jobs`, `sweep_stale_scratch` (temp `onsite-round-*` / `onsite-job-*` dirs over 1 h old,
+left by a killed process; best effort, logged). Clean-up commands: `clear_log`, `clear_temp` (onsite-update, onsite-stt;
 in-use files skipped), `vacuum_db`, `open_folder`.
 Backdrop: UI shrinks to ≤ 2560×1600 JPEG → base64 → `set_backdrop` checks type from bytes (`image_ext`: jpg/png/webp),
 writes `backdrop.<ext>`, removes others.
