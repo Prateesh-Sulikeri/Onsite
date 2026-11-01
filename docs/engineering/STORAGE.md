@@ -87,8 +87,9 @@ lock → save.
 
 Local: resume/JD, transcripts, code, whiteboards, feedback, dossiers, settings, voice audio, API keys (unencrypted), log
 (errors/timings only). Outbound: chosen AI provider (prompt, resume, JD, answers, shared workspace; also feedback,
-resume check, research) · research web search by that provider · GitHub release lists on Check for updates. Never:
-accounts, analytics, telemetry, data to the developer.
+resume check, research) · research web search by that provider · GitHub release lists on Check for updates · the owner's
+Google Form on Settings → Send feedback (`feedback.rs`; only the form answers + optional app details/email). Never:
+accounts, analytics, telemetry, other data to the developer.
 **Rule:** a new outbound flow ships only with updated Privacy text + `PRIVACY.md`.
 
 ## Gaps

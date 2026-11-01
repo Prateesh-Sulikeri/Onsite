@@ -639,6 +639,32 @@ pub fn open_folder(state: State<AppState>, which: String) -> Result<()> {
     crate::storage::open_folder(&path)
 }
 
+/// Sends the "Send feedback" answers to the owner's Google Form.
+#[tauri::command]
+pub async fn send_feedback(feedback: crate::feedback::Feedback) -> Result<()> {
+    crate::feedback::submit(&feedback).await
+}
+
+/// Opens one of Onsite's own pages in the default browser. Only fixed links: the UI can't pass a URL.
+#[tauri::command]
+pub fn open_link(which: String) -> Result<()> {
+    const REPO: &str = "https://github.com/Prateesh-Sulikeri/Onsite";
+    let url = match which.as_str() {
+        "feedback_form" => crate::feedback::FORM_VIEW.to_string(),
+        "site" => "https://prateesh-sulikeri.github.io/Onsite/".to_string(),
+        "guides" => "https://prateesh-sulikeri.github.io/Onsite/guides.html".to_string(),
+        "repo" => REPO.to_string(),
+        "issues" => format!("{REPO}/issues/new/choose"),
+        "releases" => format!("{REPO}/releases"),
+        "license" => format!("{REPO}/blob/main/LICENSE"),
+        "privacy" => format!("{REPO}/blob/main/PRIVACY.md"),
+        "security" => format!("{REPO}/blob/main/SECURITY.md"),
+        "notices" => format!("{REPO}/blob/main/THIRD_PARTY_NOTICES.md"),
+        _ => return Err(AppError::Invalid("Unknown link.".into())),
+    };
+    crate::storage::open_url(&url)
+}
+
 #[tauri::command]
 pub fn get_backdrop(state: State<AppState>) -> Result<Option<String>> {
     crate::storage::backdrop(&state)

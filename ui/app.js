@@ -2259,8 +2259,75 @@ function setSection(sec){
   if (sec === "voice") renderPersonas();
   if (sec === "updates") renderUpdates();
   if (sec === "storage") renderStorage();
+  if (sec === "share") renderFeedbackForm();
 }
 $("#setNav").onclick = e => { const b = e.target.closest("button[data-sec]"); if (b) setSection(b.dataset.sec); };
+
+/* ---- send feedback (answers go to the owner's Google Form, see feedback.rs) ---- */
+/* Choice labels must match feedback.rs and the live form exactly. */
+const FB = {
+  os: ["Windows", "macOS", "Linux"],
+  mode: ["Spoken — built-in voice", "Spoken — VoiceStudio", "Typed", "I didn't finish a round"],
+  features: ["Mock interview rounds", "Coding editor / Run code", "Whiteboard", "Round report & feedback", "Resume check", "Company research (dossiers)"],
+  would: ["Definitely", "Maybe", "Depends on the company", "Probably not"],
+};
+const PROVIDER_NAMES = {claude_code: "Claude Code", anthropic: "Claude API", openai: "OpenAI", gemini: "Gemini", groq: "Groq"};
+let fbBuilt = false, fbDetails = "";
+function fbGuessOs(){
+  const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
+  return /mac/i.test(p) ? "macOS" : /linux|x11/i.test(p) ? "Linux" : "Windows";
+}
+async function renderFeedbackForm(){
+  if (!fbBuilt){
+    fbBuilt = true;
+    $$("#fbForm .fb-scale .seg").forEach(seg => {
+      seg.innerHTML = [1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="false" data-v="${n}">${n}</button>`).join("");
+      seg.onclick = e => { const b = e.target.closest("button"); if (!b) return; seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-checked", String(x === b))); };
+    });
+    const opts = list => list.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+    $("#fbOs").innerHTML = opts(FB.os);
+    const choose = `<option value="">Choose…</option>`;
+    $("#fbMode").innerHTML = choose + opts(FB.mode);
+    $("#fbUseful").innerHTML = choose + opts(FB.features);
+    $("#fbWould").innerHTML = choose + opts(FB.would);
+    $("#fbTried").innerHTML = FB.features.map(v => `<button type="button" class="chip" aria-pressed="false" data-v="${esc(v)}">${esc(v)}</button>`).join("");
+    $("#fbTried").onclick = e => { const b = e.target.closest(".chip"); if (b) b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true")); };
+    $("#fbOs").value = fbGuessOs();
+    $("#fbMode").onchange = () => { $("#fbMode").dataset.touched = "1"; };
+  }
+  let version = "";
+  try{ version = await api.invoke("app_version"); }catch(e){}
+  const s = SETTINGS || {};
+  const voice = !s.voice ? "" : !s.voice.enabled ? "typed" : s.voice.engine === "voicestudio" ? "VoiceStudio" : "built-in voice";
+  if (s.voice && !$("#fbMode").dataset.touched) $("#fbMode").value = !s.voice.enabled ? "Typed" : s.voice.engine === "voicestudio" ? FB.mode[1] : FB.mode[0];
+  fbDetails = [`Onsite ${version || "?"}`, fbGuessOs(), PROVIDER_NAMES[s.provider] || "", voice].filter(Boolean).join(" · ");
+  $("#fbDetailsText").textContent = `Add app details to the bug report: ${fbDetails}`;
+}
+function fbScale(name){ const b = $(`#fbForm .fb-scale[data-name="${name}"] [aria-checked="true"]`); return b ? Number(b.dataset.v) : 0; }
+$("#fbForm").onsubmit = async e => {
+  e.preventDefault();
+  const msg = $("#fbMsg"), send = $("#fbSend");
+  let wrong = $("#fbWrong").value.trim();
+  if ($("#fbDetails").checked && fbDetails) wrong = wrong ? `${wrong}\n\n(${fbDetails})` : `(${fbDetails})`;
+  const feedback = {
+    overall: fbScale("overall"), realistic: fbScale("realistic"), setup: fbScale("setup"),
+    os: $("#fbOs").value, mode: $("#fbMode").value,
+    tried: $$("#fbTried .chip[aria-pressed=true]").map(b => b.dataset.v),
+    useful: $("#fbUseful").value, would_use: $("#fbWould").value,
+    experience: $("#fbExperience").value, missing: $("#fbMissing").value, wrong,
+    email: $("#fbEmail").value,
+  };
+  msg.className = "form-msg"; msg.textContent = "Sending…";
+  send.disabled = true;
+  try{
+    await api.invoke("send_feedback", {feedback});
+    msg.className = "form-msg ok"; msg.textContent = "Sent. Thank you, every response is read.";
+    $("#fbForm").reset(); delete $("#fbMode").dataset.touched; fbBuilt = false; await renderFeedbackForm();
+    toast("Feedback sent. Thank you.", "ok");
+  }catch(err){ msg.className = "form-msg err"; msg.textContent = errText(err); }
+  finally{ send.disabled = false; }
+};
+$("#fbBrowser").onclick = () => api.invoke("open_link", {which: "feedback_form"}).catch(e => toast(errText(e), "err"));
 
 /* ---- appearance ---- */
 /* Swatches are the themes' own palette colors (bg, panel, accent, text), as in themes.css. */

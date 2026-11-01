@@ -127,6 +127,7 @@ u:hover{text-decoration:underline}
 .side-foot{margin-top:auto; display:flex; flex-direction:column; gap:2px; padding-top:14px; border-top:1px solid var(--line)}
 .sys{display:flex; align-items:center; gap:10px; border:0; background:none; color:var(--ink-2); font-size:12.5px; padding:6px 10px; border-radius:var(--r-sm); text-align:left}
 .sys:hover{background:var(--hover); color:var(--ink)}
+.sys > svg{width:14px; height:14px; margin-left:-3px; flex:none; color:var(--muted)}
 .dot{width:8px; height:8px; border-radius:50%; background:var(--surface-3); flex:none}
 .sys.ok .dot{background:var(--ok); box-shadow:0 0 0 3px oklch(0.76 0.16 160 / .18), 0 0 10px oklch(0.76 0.16 160 / .6)}
 .sys.warn .dot{background:var(--warn); box-shadow:0 0 0 3px oklch(0.83 0.14 80 / .18)}
@@ -921,3 +922,14 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 .ready-card .form-msg{text-align:left}
 .persona .meta .vs-only{color:var(--warn)}
 @media (max-width: 720px){ .room-meta{flex-wrap:wrap} .voice-warn{padding:10px 16px} }
+
+/* ---- send feedback ---- */
+.fb-scales{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:16px}
+.fb-scale{display:flex; flex-direction:column; gap:8px; min-width:0}
+.fb-q{font-size:13px; font-weight:600; color:var(--ink-2)}
+.fb-scale .seg{align-self:stretch; justify-content:space-between}
+.fb-scale .seg button{flex:1; padding:7px 0}
+.fb-ends{display:flex; justify-content:space-between; gap:8px; font-size:11.5px; color:var(--muted)}
+.fb-chips{display:flex; flex-wrap:wrap; gap:8px}
+.fb-form .check.span-2{grid-column:1/-1; margin-top:-6px}
+@media (max-width: 980px){ .fb-scales{grid-template-columns:1fr} }

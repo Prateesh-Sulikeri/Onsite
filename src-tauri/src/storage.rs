@@ -176,6 +176,25 @@ pub fn open_folder(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Opens an https URL in the default browser. Callers pass fixed URLs only.
+pub fn open_url(url: &str) -> Result<()> {
+    if !url.starts_with("https://") {
+        return Err(AppError::Invalid("Only https links open.".into()));
+    }
+    let mut cmd = if cfg!(windows) {
+        // Not `cmd /c start`: cmd would read `&` in the URL as a command separator.
+        let mut c = std::process::Command::new("rundll32.exe");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    } else if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    cmd.arg(url).spawn()?;
+    Ok(())
+}
+
 // ---------- background image ----------
 
 fn backdrop_file(dir: &Path) -> Option<PathBuf> {

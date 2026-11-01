@@ -5,6 +5,7 @@ pub mod catalog;
 mod commands;
 pub mod dossier;
 pub mod error;
+pub mod feedback;
 pub mod interview;
 pub mod panels;
 pub mod research;
@@ -252,6 +253,8 @@ pub fn run() {
             commands::get_catalog,
             commands::get_panels,
             commands::ui_log,
+            commands::send_feedback,
+            commands::open_link,
             commands::get_settings,
             commands::save_settings,
             commands::detect_claude,

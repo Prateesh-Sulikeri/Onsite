@@ -73,6 +73,7 @@
     <div class="side-foot">
       <button class="sys" id="sysClaude" data-nav="settings" data-sec="models" title="AI model"><i class="dot"></i><span id="sysClaudeName">AI model</span></button>
       <button class="sys" id="sysVoice" data-nav="settings" data-sec="voice" title="VoiceStudio"><i class="dot"></i><span>VoiceStudio</span></button>
+      <button class="sys" data-nav="settings" data-sec="share" title="Send feedback"><svg><use href="#i-send"/></svg><span>Send feedback</span></button>
     </div>
   </aside>
 
@@ -422,6 +423,7 @@
           <button data-sec="updates"><svg><use href="#i-download"/></svg>Updates</button>
           <button data-sec="privacy"><svg><use href="#i-shield"/></svg>Privacy</button>
           <button data-sec="storage"><svg><use href="#i-folder"/></svg>Storage</button>
+          <button data-sec="share"><svg><use href="#i-send"/></svg>Send feedback</button>
         </nav>
         <div class="set-body">
           <section class="set-sec" data-sec="appearance" aria-label="Appearance">
@@ -587,12 +589,13 @@
                 <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI, Gemini or Groq): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
                 <li><b>Research jobs</b> ask that provider to search the web. The company, role and job description you enter are part of the request.</li>
                 <li><b>Voice models</b> (built-in engine) download once from github.com when you press Download in Settings. GitHub sees your IP address. Speech itself never leaves this computer.</li>
+                <li><b>Feedback</b> you write in Send feedback goes to the developer’s Google Form, only when you press Send. It holds what you typed and picked, the app details if you leave that box ticked, and your email only if you enter it. Google sees your IP address.</li>
                 <li><b>Update checks</b> ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
               </ul>
               <h3>What Onsite never does</h3>
               <ul>
                 <li>No accounts, analytics, telemetry, ads or tracking.</li>
-                <li>No data is sent to the Onsite developer.</li>
+                <li>Nothing is sent to the Onsite developer except feedback you choose to send.</li>
                 <li>The interviewer gets no tools: it can’t browse, run commands or read your files.</li>
                 <li>Model replies and dossiers are shown and saved as text, never run as code.</li>
               </ul>
@@ -645,6 +648,34 @@
               <div class="btn-row"><button class="btn danger" id="unGo">Uninstall Onsite</button></div>
               <p class="form-msg" id="unMsg" role="status"></p>
             </div>
+          </section>
+          <section class="set-sec" data-sec="share" aria-label="Send feedback" hidden>
+            <form class="panel fb-form" id="fbForm" novalidate>
+              <div class="panel-head"><h2>Send feedback</h2><span class="muted small">About 2 minutes</span></div>
+              <p class="hint" style="margin-top:0">Tell the developer what worked, what didn’t, and anything that broke. Your answers go to a Google Form when you press Send. Nothing else is attached: no transcripts, resume, keys or logs.</p>
+              <div class="fb-scales">
+                <div class="fb-scale" data-name="overall"><span class="fb-q">Overall, how was your experience?</span><div class="seg" role="radiogroup" aria-label="Overall experience, 1 to 5"></div><span class="fb-ends"><span>Poor</span><span>Excellent</span></span></div>
+                <div class="fb-scale" data-name="realistic"><span class="fb-q">How realistic did the interview feel?</span><div class="seg" role="radiogroup" aria-label="How realistic, 1 to 5"></div><span class="fb-ends"><span>Not at all</span><span>Like the real thing</span></span></div>
+                <div class="fb-scale" data-name="setup"><span class="fb-q">How easy was setup (install, AI model, voice)?</span><div class="seg" role="radiogroup" aria-label="How easy setup was, 1 to 5"></div><span class="fb-ends"><span>Very hard</span><span>Very easy</span></span></div>
+              </div>
+              <div class="form-grid" style="margin-top:18px">
+                <label class="field"><span>Which computer?</span><select id="fbOs"></select></label>
+                <label class="field"><span>How did you mostly run rounds?</span><select id="fbMode"><option value="">Choose…</option></select></label>
+                <div class="field span-2"><span>What did you try? <small>(pick all that apply)</small></span><div class="fb-chips" id="fbTried"></div></div>
+                <label class="field"><span>Most useful feature <small>(optional)</small></span><select id="fbUseful"><option value="">Choose…</option></select></label>
+                <label class="field"><span>Interview in 2 days: would you use Onsite to prepare?</span><select id="fbWould"><option value="">Choose…</option></select></label>
+                <label class="field span-2"><span>Tell us about your experience</span><textarea id="fbExperience" rows="4" maxlength="4000" placeholder="What did you like? What felt off? What would make you use it again?"></textarea></label>
+                <label class="field span-2"><span>What was missing? <small>(optional)</small></span><textarea id="fbMissing" rows="2" maxlength="4000" placeholder="Anything you expected to find, or wished Onsite could do."></textarea></label>
+                <label class="field span-2"><span>Did anything go wrong? <small>(optional)</small></span><textarea id="fbWrong" rows="3" maxlength="4000" placeholder="Bugs, crashes, voice or mic problems. Which screen, what you did, any error you saw."></textarea></label>
+                <label class="check span-2"><input type="checkbox" id="fbDetails" checked><span id="fbDetailsText">Add app details to the bug report</span></label>
+                <label class="field span-2"><span>Email <small>(optional, only if you’re OK with a reply)</small></span><input type="text" id="fbEmail" inputmode="email" autocomplete="email" spellcheck="false" placeholder="you@example.com"></label>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="fbSend"><svg><use href="#i-send"/></svg>Send</button>
+                <button type="button" class="btn ghost" id="fbBrowser">Open the form in your browser</button>
+              </div>
+              <p class="form-msg" id="fbMsg" role="status"></p>
+            </form>
           </section>
           <p class="form-msg save-msg" id="saveMsg" role="status">Changes save automatically.</p>
         </div>

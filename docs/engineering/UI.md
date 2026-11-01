@@ -102,6 +102,14 @@ Flow: dashboard → interviews → (resume check) → ready → prep → room �
 - Setup: `syncPanels()` (run at end of `refreshStatus`) disables blocked `<option>`s, relabels them, moves a blocked selection to the first allowed panel or Mixed (`panelNote`), shows `#panelWarn`.
 - Get ready: `#readyMode` line and `#readyPanelWarn` (loop already made with a blocked panel; does not block). Loader subtitle includes `modeLine`. Persona cards in Settings show the built-in voice, or "VoiceStudio only", when engine is builtin.
 
+## Send feedback (Settings › Send feedback, `data-sec="share"`)
+- Also linked from the sidebar foot. `renderFeedbackForm()` builds the choices from `FB` (app.js); `send_feedback` →
+  `feedback.rs` posts them to the owner's Google Form (`formResponse`, `entry.<id>` fields, no sign-in).
+- `FB` labels, `feedback.rs` constants and the live form must match exactly (em dashes included). If the owner edits the
+  form, re-read ids/labels from `FB_PUBLIC_LOAD_DATA_` in the viewform HTML. Google answers 400 to unknown labels.
+- "Add app details" appends `(Onsite x · OS · provider · voice)` to the "went wrong" answer. Nothing else is attached.
+- `open_link(which)` opens fixed https links (form, site, guides, repo, issues…) in the browser; the UI never passes a URL.
+
 ## Gaps
 
 Whiteboard theme fixed dark · no full keyboard support in whiteboard · `--muted` contrast over photos depends on dim.

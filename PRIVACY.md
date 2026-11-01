@@ -3,7 +3,8 @@
 Plain terms for what Onsite does with your data. The same text is in the app under Settings → Privacy.
 
 Onsite sends data only to services you choose: the AI provider you connect, and GitHub when you press
-Download (voice models) or Check for updates. It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to the developer.
+Download (voice models) or Check for updates, and Google Forms when you press Send in Settings → Send feedback.
+It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to the developer unless you send feedback.
 
 ## What stays on this computer
 - Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite's
@@ -23,6 +24,10 @@ Download (voice models) or Check for updates. It has no accounts, analytics, tel
   the request.
 - **Voice models** (built-in engine) download once from github.com when you press Download in Settings → Voice.
   GitHub sees your IP address. Speech itself never leaves this computer.
+- **Feedback** you write in Settings → Send feedback goes to the developer's Google Form, only when you press Send.
+  It holds only what you typed and picked there, plus the app version, system, AI provider and voice engine if you
+  leave "Add app details" ticked. Your email is included only if you enter it. Transcripts, resume, keys and logs are
+  never attached. Google's privacy policy applies: [Google privacy policy](https://policies.google.com/privacy).
 - **Update checks** ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates.
   Installing an update downloads the file from GitHub. GitHub sees your IP address, as with any website:
   [GitHub privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
@@ -31,7 +36,7 @@ Onsite talks to VoiceStudio only on this computer (`127.0.0.1`). VoiceStudio is 
 
 ## What Onsite never does
 - No accounts, analytics, telemetry, ads or tracking.
-- No data is sent to the Onsite developer.
+- Nothing is sent to the Onsite developer except feedback you choose to send.
 - The interviewer gets no tools: it can't browse, run commands or read your files.
 - Model replies and dossiers are shown and saved as text, never run as code.
 
