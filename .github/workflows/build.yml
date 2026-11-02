@@ -61,6 +61,14 @@ jobs:
         with:
           workspaces: src-tauri
           key: ${{ matrix.os }}
+      # sherpa-onnx-sys downloads its library into target/sherpa-onnx-prebuilt, which rust-cache does not keep, but
+      # the cached build-script output says it already ran. Without the folder, make the build script run again.
+      - name: Rerun the sherpa-onnx download if the cache dropped it
+        shell: bash
+        run: |
+          if [ ! -d src-tauri/target/sherpa-onnx-prebuilt ] && [ -d src-tauri/target ]; then
+            find src-tauri/target -type d \( -path '*/build/sherpa-onnx-sys-*' -o -path '*/.fingerprint/sherpa-onnx-sys-*' \) -prune -exec rm -rf {} +
+          fi
       # The npm package ships a prebuilt CLI: seconds, where `cargo install tauri-cli` compiled for ~5 min.
       - uses: actions/setup-node@v4
         with:
