@@ -3,8 +3,10 @@
 Plain terms for what Onsite does with your data. The same text is in the app under Settings → Privacy.
 
 Onsite sends data only to services you choose: the AI provider you connect, and GitHub when you press
-Download (voice models) or Check for updates, and Google Forms when you press Send in Settings → Send feedback.
-It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to the developer unless you send feedback.
+Download (voice models) or Check for updates, Google Forms when you press Send in the feedback survey, and GitHub
+when you open a bug report or idea in your browser (you submit it there).
+It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to the developer unless you send feedback
+or submit a report.
 
 ## What stays on this computer
 - Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite's
@@ -12,7 +14,7 @@ It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to 
 - Your voice. The built-in voice engine, VoiceStudio and Whisper run locally; audio is never uploaded by Onsite.
 - API keys, stored in the same local database. They are not encrypted, so anyone with access to your account on
   this computer can read them. Remove a key in Settings → AI model when you stop using it.
-- The log file, which holds errors and timings, not transcripts or keys.
+- The log file, which holds errors and timings, not transcripts, speech text, your resume, job descriptions or keys.
 
 ## What leaves this computer
 - **To the AI you connect** (Claude Code, the Claude API, OpenAI, Gemini or Groq): the interview prompt, your resume
@@ -24,10 +26,17 @@ It has no accounts, analytics, telemetry, ads or tracking, and sends nothing to 
   the request.
 - **Voice models** (built-in engine) download once from github.com when you press Download in Settings → Voice.
   GitHub sees your IP address. Speech itself never leaves this computer.
-- **Feedback** you write in Settings → Send feedback goes to the developer's Google Form, only when you press Send.
-  It holds only what you typed and picked there, plus the app version, system, AI provider and voice engine if you
-  leave "Add app details" ticked. Your email is included only if you enter it. Transcripts, resume, keys and logs are
+- **The feedback survey** in Settings → Send feedback goes to the developer's Google Form, only when you press Send.
+  It holds only what you typed and picked there. Your email is included only if you enter it. Transcripts, resume, keys and logs are
   never attached. Google's privacy policy applies: [Google privacy policy](https://policies.google.com/privacy).
+- **Bug reports and ideas** (the Report a bug button in the sidebar): Onsite shows you the full report, lets you
+  edit any line, and opens a GitHub page in your browser with the form filled in. You press Submit there. Onsite itself
+  sends nothing. The app version, system, AI provider name (not the model or key), how you ran the round, the screen you
+  were on and the last error text are added for you; you can remove any of them. Keys, your home folder and file paths
+  are removed from that text, and error text that matches your resume or transcript is dropped. The recent log lines are
+  never put in the link: if you tick "Copy recent log lines" they go to your clipboard and you paste them yourself. What
+  you submit on GitHub is public and tied to your GitHub account. GitHub's privacy statement applies (linked below).
+  Questions go to [GitHub Discussions](https://github.com/Prateesh-Sulikeri/Onsite/discussions) and are public too.
 - **Update checks** ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates.
   Installing an update downloads the file from GitHub. GitHub sees your IP address, as with any website:
   [GitHub privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement).
@@ -36,7 +45,7 @@ Onsite talks to VoiceStudio only on this computer (`127.0.0.1`). VoiceStudio is 
 
 ## What Onsite never does
 - No accounts, analytics, telemetry, ads or tracking.
-- Nothing is sent to the Onsite developer except feedback you choose to send.
+- Nothing is sent to the Onsite developer except feedback or a report you choose to send.
 - The interviewer gets no tools: it can't browse, run commands or read your files.
 - Model replies and dossiers are shown and saved as text, never run as code.
 

@@ -107,8 +107,9 @@ Flow: dashboard → interviews → (resume check) → ready → prep → room �
   `feedback.rs` posts them to the owner's Google Form (`formResponse`, `entry.<id>` fields, no sign-in).
 - `FB` labels, `feedback.rs` constants and the live form must match exactly (em dashes included). If the owner edits the
   form, re-read ids/labels from `FB_PUBLIC_LOAD_DATA_` in the viewform HTML. Google answers 400 to unknown labels.
-- "Add app details" appends `(Onsite x · OS · provider · voice)` to the "went wrong" answer. Nothing else is attached.
-- `open_link(which)` opens fixed https links (form, site, guides, repo, issues, releases, license, privacy, security, notices, author, resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw) in the browser; the UI never passes a URL.
+- The survey attaches nothing but the answers. Bugs and ideas use the report view below, not the survey.
+- Report view `#view-issue` (`openIssue(cat, err)`; not `openReport`, which is the round report. In a round it asks "Leave the call?" first (`leaveCall`, shared with `data-nav`); reopening keeps the typed text. Entry points: sidebar "Report a bug" (`#sideReport`), About "Report a bug", error toast "Report this", a link atop the survey): Bug|Idea, editable fields, "Added by Onsite" fields with Remove, a live preview from `report_preview` (debounced 300 ms), then `open_issue`. `lastErr` (set by `toast`) and `issueFrom` (set by `nav`) fill the error and screen fields. Clipboard is written inside the click, before the browser opens. Backend and rules: `REPORT.md`.
+- `open_link(which)` opens fixed https links (form, site, guides, repo, issues, issues_search, discussions, releases, license, privacy, security, notices, author, resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw) in the browser; the UI never passes a URL.
 
 ## Gaps
 

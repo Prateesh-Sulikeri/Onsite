@@ -10,6 +10,7 @@ pub mod interview;
 pub mod panels;
 pub mod projects;
 pub mod projgen;
+pub mod report;
 pub mod research;
 pub mod runner;
 pub mod storage;
@@ -274,6 +275,11 @@ pub fn run() {
             commands::ui_log,
             commands::send_feedback,
             commands::open_link,
+            commands::report_context,
+            commands::report_preview,
+            commands::open_issue,
+            commands::report_log,
+            commands::report_save,
             commands::get_settings,
             commands::save_settings,
             commands::detect_claude,

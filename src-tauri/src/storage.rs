@@ -207,8 +207,12 @@ pub fn open_url(url: &str) -> Result<()> {
     if !url.starts_with("https://") {
         return Err(AppError::Invalid("Only https links open.".into()));
     }
+    #[cfg(windows)]
+    if shell_open(url) {
+        return Ok(());
+    }
     let mut cmd = if cfg!(windows) {
-        // Not `cmd /c start`: cmd would read `&` in the URL as a command separator.
+        // Fallback only. Not `cmd /c start`: cmd would read `&` in the URL as a command separator.
         let mut c = std::process::Command::new("rundll32.exe");
         c.arg("url.dll,FileProtocolHandler");
         c
@@ -219,6 +223,26 @@ pub fn open_url(url: &str) -> Result<()> {
     };
     cmd.arg(url).spawn()?;
     Ok(())
+}
+
+/// Windows: ShellExecuteW from this process, so the default browser is handed the URL by the foreground app
+/// (a child rundll32 has no foreground rights, and a browser that is already running can show the new tab behind).
+/// No command line is built, so `&` in the URL is safe. Returns false when Windows refuses; the caller then falls back.
+#[cfg(windows)]
+fn shell_open(url: &str) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "shell32")]
+    extern "system" {
+        fn ShellExecuteW(hwnd: isize, op: *const u16, file: *const u16, params: *const u16, dir: *const u16, show: i32) -> isize;
+    }
+    let wide = |s: &str| -> Vec<u16> { std::ffi::OsStr::new(s).encode_wide().chain(Some(0)).collect() };
+    let (op, file) = (wide("open"), wide(url));
+    // SAFETY: both strings are NUL-terminated and outlive the call; the other pointers are allowed to be null.
+    let r = unsafe { ShellExecuteW(0, op.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), 1) };
+    if r <= 32 {
+        tracing::warn!(code = r, "ShellExecute refused the link; using rundll32");
+    }
+    r > 32
 }
 
 // ---------- background image ----------

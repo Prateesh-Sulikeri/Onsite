@@ -862,7 +862,9 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 .ats-preview pre{flex:1; margin:0; min-height:240px; max-height:460px; overflow:auto; padding:14px 16px; background:var(--code-bg); border:1px solid var(--line); border-radius:var(--r); font:13px/1.6 var(--font); color:var(--ink-2); white-space:pre-wrap; word-break:break-word; cursor:text}
 .ats-preview .pv-h{display:inline-block; margin-top:6px; color:var(--accent-text); font-weight:650; font-size:12px; letter-spacing:.06em; text-transform:uppercase}
 #view-resume .drops{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); align-items:stretch; margin-top:0}
-#view-resume .drops .field textarea{min-height:8lh}
+#view-resume .drops .field{flex:1 1 auto}
+#view-resume .drops .field textarea{flex:1 1 auto; min-height:8lh; resize:vertical}
+#view-resume #atsDrop{align-self:stretch}
 @media (max-width:1180px){ .ats-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @media (max-width:900px){ .ats-head{grid-template-columns:auto auto} .ats-head > div:last-child{grid-column:1/-1} .ats-grid,#view-resume .drops{grid-template-columns:1fr} }
 
@@ -1057,3 +1059,15 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 .stage-nav{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
 .stage-nav .form-msg{flex:1 1 200px; margin:0}
 #view-ready .stepper{margin-bottom:14px}
+
+/* ---- report a bug or idea ---- */
+.rp-form{display:flex; flex-direction:column; gap:14px}
+.rp-form .hint{margin:0}
+.rp-auto-head{display:flex; align-items:baseline; gap:10px; margin-top:4px}
+.rp-x{font-size:12px; font-weight:500; margin-left:8px}
+.rp-h{margin:6px 0 0}
+.rp-pre{margin:0; padding:12px 14px; max-height:280px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--pane); border:1px solid var(--line); border-radius:var(--r); color:var(--ink-2); font:12.5px/1.55 var(--mono, ui-monospace, Consolas, monospace)}
+.rp-flags{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px; font-size:12.5px; color:var(--warn)}
+.rp-flags:empty{display:none}
+.rp-copybox{width:100%; background:var(--field); border:1px solid var(--line); border-radius:var(--r); color:var(--ink); padding:10px; font:12.5px/1.5 var(--mono, ui-monospace, Consolas, monospace)}
+.toast-rp{flex:none; font-size:12.5px; white-space:nowrap}

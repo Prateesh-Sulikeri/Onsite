@@ -3,6 +3,7 @@
 ## Reporting a problem
 Please don't open a public issue for a security problem. Use **Security → Report a vulnerability** on this repo
 (GitHub private vulnerability reporting). I'll reply within a week.
+Do not use the in-app "Report a bug" button for a security problem: it opens a public issue.
 
 Examples that count: an API key leaving the machine or reaching the log, the interviewer getting tools,
 text from a model or dossier being run as code, the updater installing a file that isn't from this repo's releases.

@@ -51,9 +51,12 @@ const ROUND_ICONS = {resume:"doc-check", project:"folder", fundamentals:"gear", 
   lld:"layers", sysdesign:"network", behavioral:"user", hm:"chart"};
 
 /* ---------------- shell ---------------- */
+let curView = "dashboard", issueFrom = "dashboard";   // screen names for the bug report ("Screen you were on")
 function nav(view){
+  if (view === "issue" && curView !== "issue") issueFrom = curView;
+  curView = view;
   $$(".view").forEach(v => v.hidden = v.id !== "view-" + view);
-  const section = view === "report" ? "feedback" : ["room", "ready", "prep"].includes(view) ? "interviews" : view;
+  const section = view === "issue" ? "settings" : view === "report" ? "feedback" : ["room", "ready", "prep"].includes(view) ? "interviews" : view;
   $$(".nav-item").forEach(b => b.dataset.nav === section ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
   $("#app").classList.toggle("in-call", view === "room");
   $(".main").scrollTop = 0;
@@ -65,21 +68,25 @@ function nav(view){
   if (view === "resume") openAts();
   if (view === "dossiers") renderDossiersView();
 }
+/* Leaving the room or the loader: asks first, then ends the round. Resolves false if the user stays. */
+async function leaveCall(){
+  if (!session) return true;
+  // Still loading: nothing to lose, unless the AI is writing the code project (minutes and tokens).
+  if (session.roundId === null && session.writing && !await ask("Stop writing the project?", "The AI is still writing your code project. If you leave now, that work and its tokens are lost, and the round does not start.", "Stop and leave", true)) return false;
+  if (session.roundId !== null && !await ask("Leave the call?", "The interviewer stops. The round keeps its transcript.", "Leave")) return false;
+  leaveRound().then(kept => {
+    if (kept !== false) return;
+    toast("You didn’t answer anything, so the round wasn’t saved.");
+    // The list may have rendered before Rust dropped the round.
+    if (!$("#view-feedback").hidden) renderHistory();
+    if (!$("#view-dashboard").hidden) renderDashboard();
+  });
+  return true;
+}
 document.addEventListener("click", async e => {
   const t = e.target.closest("[data-nav]");
   if (!t) return;
-  if (session){
-    // Still loading: nothing to lose, unless the AI is writing the code project (minutes and tokens).
-    if (session.roundId === null && session.writing && !await ask("Stop writing the project?", "The AI is still writing your code project. If you leave now, that work and its tokens are lost, and the round does not start.", "Stop and leave", true)) return;
-    if (session.roundId !== null && !await ask("Leave the call?", "The interviewer stops. The round keeps its transcript.", "Leave")) return;
-    leaveRound().then(kept => {
-      if (kept !== false) return;
-      toast("You didn’t answer anything, so the round wasn’t saved.");
-      // The list may have rendered before Rust dropped the round.
-      if (!$("#view-feedback").hidden) renderHistory();
-      if (!$("#view-dashboard").hidden) renderDashboard();
-    });
-  }
+  if (!await leaveCall()) return;
   if (t.dataset.sec) SET_SEC = t.dataset.sec;
   nav(t.dataset.nav);
 });
@@ -95,6 +102,7 @@ function ask(title, body, ok, danger = false){
 }
 
 const toastSeen = new Map();
+let lastErr = "";   // last error toast text, offered to the bug report
 function toast(msg, kind = ""){
   const now = Date.now();
   if (toastSeen.get(msg) > now - 10000) return;
@@ -102,6 +110,11 @@ function toast(msg, kind = ""){
   const el = document.createElement("div");
   el.className = "toast " + kind;
   const tx = document.createElement("span"); tx.textContent = msg; el.appendChild(tx);
+  if (kind === "err"){
+    lastErr = String(msg);
+    const rp = document.createElement("button"); rp.type = "button"; rp.className = "linkbtn toast-rp"; rp.textContent = "Report this";
+    rp.onclick = () => { el.remove(); openIssue("bug", lastErr); }; el.appendChild(rp);
+  }
   // Errors stay long enough to read and can be closed; a 6 s flash was easy to miss.
   if (kind === "err"){
     el.setAttribute("role", "alert");
@@ -2754,8 +2767,7 @@ const FB = {
   features: ["Mock interview rounds", "Coding editor / Run code", "Whiteboard", "Round report & feedback", "Resume check", "Company research (dossiers)"],
   would: ["Definitely", "Maybe", "Depends on the company", "Probably not"],
 };
-const PROVIDER_NAMES = {claude_code: "Claude Code", anthropic: "Claude API", openai: "OpenAI", gemini: "Gemini", groq: "Groq"};
-let fbBuilt = false, fbDetails = "";
+let fbBuilt = false;
 function fbGuessOs(){
   const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent;
   return /mac/i.test(p) ? "macOS" : /linux|x11/i.test(p) ? "Linux" : "Windows";
@@ -2778,20 +2790,14 @@ async function renderFeedbackForm(){
     $("#fbOs").value = fbGuessOs();
     $("#fbMode").onchange = () => { $("#fbMode").dataset.touched = "1"; };
   }
-  let version = "";
-  try{ version = await api.invoke("app_version"); }catch(e){}
   const s = SETTINGS || {};
-  const voice = !s.voice ? "" : !s.voice.enabled ? "typed" : s.voice.engine === "voicestudio" ? "VoiceStudio" : "built-in voice";
   if (s.voice && !$("#fbMode").dataset.touched) $("#fbMode").value = !s.voice.enabled ? "Typed" : s.voice.engine === "voicestudio" ? FB.mode[1] : FB.mode[0];
-  fbDetails = [`Onsite ${version || "?"}`, fbGuessOs(), PROVIDER_NAMES[s.provider] || "", voice].filter(Boolean).join(" · ");
-  $("#fbDetailsText").textContent = `Add app details to the bug report: ${fbDetails}`;
 }
 function fbScale(name){ const b = $(`#fbForm .fb-scale[data-name="${name}"] [aria-checked="true"]`); return b ? Number(b.dataset.v) : 0; }
 $("#fbForm").onsubmit = async e => {
   e.preventDefault();
   const msg = $("#fbMsg"), send = $("#fbSend");
-  let wrong = $("#fbWrong").value.trim();
-  if ($("#fbDetails").checked && fbDetails) wrong = wrong ? `${wrong}\n\n(${fbDetails})` : `(${fbDetails})`;
+  const wrong = $("#fbWrong").value.trim();
   const feedback = {
     overall: fbScale("overall"), realistic: fbScale("realistic"), setup: fbScale("setup"),
     os: $("#fbOs").value, mode: $("#fbMode").value,
@@ -2811,6 +2817,133 @@ $("#fbForm").onsubmit = async e => {
   finally{ send.disabled = false; }
 };
 $("#fbBrowser").onclick = () => api.invoke("open_link", {which: "feedback_form"}).catch(e => toast(errText(e), "err"));
+
+/* ---- report a bug or idea (opens a GitHub issue with the form filled in; see report.rs) ---- */
+const RP_IDS = {
+  bug: ["what", "steps", "expected", "actual", "app_version", "os", "ai", "voice", "view", "error"],
+  idea: ["problem", "idea", "alternatives"],
+};
+const RP_LABELS = {what: "What happened", steps: "Steps to reproduce", expected: "What you expected", actual: "What happened instead", problem: "What would help"};
+const RP_REQUIRED = {bug: ["what", "steps", "expected", "actual"], idea: ["problem"]};
+/* Must equal the dropdown options in .github/ISSUE_TEMPLATE/bug_report.yml (report.rs has a test for that). */
+const RP_OPTS = {
+  os: ["Windows", "macOS", "Linux (AppImage)", "Linux (.deb)"],
+  ai: ["Claude Code", "Claude API", "OpenAI", "Gemini", "Groq"],
+  voice: ["Typed", "Spoken (built-in voice)", "Spoken (VoiceStudio)", "Not in a round"],
+};
+const VIEW_NAMES = {dashboard: "Dashboard", interviews: "Setup", ready: "Get ready", prep: "Getting the room ready", room: "Call room", report: "Report", feedback: "Past rounds", settings: "Settings", resume: "Resume check", dossiers: "Dossiers", issue: "Dashboard"};
+let rpCat = "bug", rpLast = null, rpTimer = 0, rpSeq = 0, rpLogText = "", rpBusy = false;
+
+function rpFill(sel, list){ sel.innerHTML = `<option value="">Leave out</option>` + list.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(""); }
+function rpSetCat(cat){
+  rpCat = cat;
+  $$("#rpCat button").forEach(b => b.setAttribute("aria-checked", String(b.dataset.cat === cat)));
+  $("#rpBugFields").hidden = cat !== "bug"; $("#rpIdeaFields").hidden = cat !== "idea"; $("#rpLogBox").hidden = cat !== "bug";
+  rpSchedule();
+}
+/* Opens the bug report form. Named apart from openReport (the round report): app.js is one script, a second declaration would replace it. */
+async function openIssue(cat = "bug", err = ""){
+  // Already open: keep what was typed, only offer the newer error.
+  if (curView === "issue"){ if (err){ $("#rp_error").value = err; rpSchedule(); } return; }
+  if (!await leaveCall()) return;
+  if (!$("#rp_os").options.length){ rpFill($("#rp_os"), RP_OPTS.os); rpFill($("#rp_ai"), RP_OPTS.ai); rpFill($("#rp_voice"), RP_OPTS.voice); }
+  [...RP_IDS.bug, ...RP_IDS.idea].forEach(id => { $("#rp_" + id).value = ""; });
+  $("#rpLogOn").checked = false; rpLogText = ""; $("#rpLogMsg").textContent = ""; $("#rpLogDet").hidden = true;
+  $("#rpMsg").textContent = ""; $("#rpMsg").className = "form-msg"; $("#rpCopyBox").hidden = true; $("#rpPreview").textContent = ""; rpLast = null;
+  nav("issue");
+  rpSetCat(cat);
+  $("#rp_view").value = VIEW_NAMES[issueFrom] || "";
+  $("#rp_error").value = err || lastErr || "";
+  try{
+    const c = await api.invoke("report_context");
+    $("#rp_app_version").value = c.version; $("#rp_os").value = c.os; $("#rp_ai").value = c.ai; $("#rp_voice").value = c.voice;
+  }catch(e){}
+  rpSchedule(0);
+}
+function rpCollect(){
+  return {category: rpCat, fields: RP_IDS[rpCat].map(id => ({id, value: $("#rp_" + id).value}))};
+}
+function rpSchedule(ms = 300){
+  clearTimeout(rpTimer); rpBusy = true; $("#rpOpen").disabled = true;
+  rpTimer = setTimeout(rpRefresh, ms);
+}
+async function rpRefresh(){
+  const seq = ++rpSeq;
+  try{
+    const r = await api.invoke("report_preview", {input: rpCollect()});
+    if (seq !== rpSeq) return;
+    rpLast = r; rpBusy = false;
+    $("#rpPreview").textContent = r.text;
+    $("#rpFlags").innerHTML = r.flags.map(f => `<li>This looks like text from your resume or a transcript: <q>${esc(f.line)}</q>. It is sent unless you edit it.</li>`).join("");
+    $("#rpLevel").textContent = r.level === "shortened" ? "The link is long, so some text is cut in the link. The full report is copied for you to paste into the form."
+      : r.level === "blank" ? "Too long for a link. The full report is copied and the blank form opens. Paste it in." : "";
+    $("#rpOpen").disabled = !!r.missing;
+    $("#rpMsg").className = "form-msg" + (r.missing ? " err" : ""); $("#rpMsg").textContent = r.missing ? `Fill in "${r.missing}".` : "";
+  }catch(e){ if (seq === rpSeq){ rpBusy = false; $("#rpMsg").className = "form-msg err"; $("#rpMsg").textContent = errText(e); } }
+}
+/* Clipboard: must run inside the click, before the browser opens and takes focus. */
+async function rpCopyText(text){
+  try{ await navigator.clipboard.writeText(text); return true; }catch(e){}
+  try{
+    const ta = $("#rpCopyBox"); ta.hidden = false; ta.value = text; ta.select();
+    if (document.execCommand("copy")) { ta.hidden = true; return true; }
+  }catch(e){}
+  const ta = $("#rpCopyBox"); ta.hidden = false; ta.value = text; ta.focus(); ta.select();
+  return false;
+}
+async function rpLogToggle(){
+  if (!$("#rpLogOn").checked){ rpLogText = ""; $("#rpLogMsg").textContent = ""; $("#rpLogDet").hidden = true; return; }
+  $("#rpLogMsg").textContent = "Reading the log...";
+  try{
+    rpLogText = await api.invoke("report_log");
+    const n = rpLogText ? rpLogText.split("\n").length : 0;
+    $("#rpLogMsg").textContent = n ? `${n} lines ready, keys and paths removed. They are copied when you press Open on GitHub. Paste them into the Log lines box.` : "The log is empty.";
+    $("#rpLogText").textContent = rpLogText; $("#rpLogDet").hidden = !n;
+  }catch(e){ rpLogText = ""; $("#rpLogMsg").textContent = errText(e); }
+}
+function rpClipboardText(){
+  const parts = [];
+  if (rpLast && rpLast.level !== "full") parts.push(rpLast.text);
+  if (rpCat === "bug" && $("#rpLogOn").checked && rpLogText) parts.push(rpLast && rpLast.level !== "full" ? "### Log lines\n\n" + rpLogText : rpLogText);
+  return parts.join("\n\n");
+}
+$("#rpOpen").onclick = async () => {
+  if (rpBusy || !rpLast) return;
+  const msg = $("#rpMsg"); msg.className = "form-msg"; msg.textContent = "";
+  const clip = rpClipboardText();
+  let copied = true;
+  if (clip) copied = await rpCopyText(clip);
+  $("#rpOpen").disabled = true;
+  try{
+    const r = await api.invoke("open_issue", {input: rpCollect()});
+    msg.className = "form-msg ok";
+    msg.textContent = !clip ? "GitHub opened in your browser. Check the page and press Submit."
+      : copied ? (r.level === "full" ? "GitHub opened. The log lines are copied: paste them into the Log lines box." : "GitHub opened. The full report is copied: paste it into the form.")
+      : "GitHub opened. Copy failed: select the text in the box below and copy it.";
+  }catch(e){ msg.className = "form-msg err"; msg.textContent = errText(e) + " Your report is still here. Use Copy report or Save as a text file."; }
+  finally{ $("#rpOpen").disabled = !!(rpLast && rpLast.missing); }
+};
+$("#rpCopy").onclick = async () => {
+  if (!rpLast) return;
+  const ok = await rpCopyText(rpLast.text);
+  $("#rpMsg").className = "form-msg" + (ok ? " ok" : ""); $("#rpMsg").textContent = ok ? "Copied." : "Copy failed. Select the text in the box below and copy it.";
+};
+$("#rpSave").onclick = async () => {
+  if (!rpLast) return;
+  try{ const p = await api.invoke("report_save", {text: rpLast.text}); $("#rpMsg").className = "form-msg ok"; $("#rpMsg").textContent = `Saved to ${p}`; }
+  catch(e){ $("#rpMsg").className = "form-msg err"; $("#rpMsg").textContent = errText(e); }
+};
+$("#rpLogOn").onchange = rpLogToggle;
+$("#rpCat").onclick = e => { const b = e.target.closest("button[data-cat]"); if (b) rpSetCat(b.dataset.cat); };
+$("#view-issue").addEventListener("input", e => { if (e.target.id && e.target.id.startsWith("rp_")) rpSchedule(); });
+$("#view-issue").addEventListener("change", e => { if (e.target.id && e.target.id.startsWith("rp_")) rpSchedule(); });
+$("#view-issue").addEventListener("click", e => {
+  const b = e.target.closest("[data-clear]"); if (!b) return;
+  const el = $("#" + b.dataset.clear); el.value = ""; rpSchedule();
+});
+$("#sideReport").onclick = () => openIssue("bug");
+$("#rpFromSurvey").onclick = () => openIssue("bug");
+$("#abReport").onclick = () => openIssue("bug");
 
 /* ---- appearance ---- */
 /* Swatches are the themes' own palette colors (bg, panel, accent, text), as in themes.css. */

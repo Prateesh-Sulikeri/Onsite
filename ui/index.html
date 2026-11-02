@@ -28,6 +28,7 @@
     <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
     <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20M8 7h4M8 11h4M8 15h4"/></symbol>
     <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.7 13.3a15 15 0 0 1-3-4.1l1.9-1.9a1 1 0 0 0 .2-1.1L8.6 3.6A1 1 0 0 0 7.6 3H4a1 1 0 0 0-1 1.1A18 18 0 0 0 7 14M14 17a15 15 0 0 0 5.9 1.9 1 1 0 0 0 1.1-1v-3.6a1 1 0 0 0-.6-.9l-2.6-1.2a1 1 0 0 0-1.1.2l-1.5 1.5M2 2l20 20"/></symbol>
+    <symbol id="i-bug" viewBox="0 0 24 24"><path d="M8 8a4 4 0 0 1 8 0v7a4 4 0 0 1-8 0zM12 8v11M8 12H3M16 12h5M8 16l-3 2M16 16l3 2M9 5 7 3M15 5l2-2"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
     <symbol id="i-code" viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></symbol>
     <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
@@ -74,6 +75,7 @@
       <button class="sys" id="sysClaude" data-nav="settings" data-sec="models" title="AI model"><i class="dot"></i><span id="sysClaudeName">AI model</span></button>
       <button class="sys" id="sysVoice" data-nav="settings" data-sec="voice" title="VoiceStudio"><i class="dot"></i><span>VoiceStudio</span></button>
       <button class="sys" id="helpTour" title="A short tour of the app"><svg><use href="#i-bulb"/></svg><span>Take the tour</span></button>
+      <button class="sys" id="sideReport" title="Report a bug or suggest an idea on GitHub"><svg><use href="#i-bug"/></svg><span>Report a bug</span></button>
       <button class="sys" data-nav="settings" data-sec="share" title="Send feedback"><svg><use href="#i-send"/></svg><span>Send feedback</span></button>
     </div>
   </aside>
@@ -443,6 +445,58 @@
       <div id="repBody"></div>
     </section>
 
+    <!-- ============ REPORT A BUG OR IDEA (GitHub issue, see report.rs) ============ -->
+    <section class="view" id="view-issue" hidden>
+      <header class="page-head">
+        <div><button class="crumb link" data-nav="dashboard"><svg><use href="#i-back"/></svg>Back</button><h1>Report a <em class="hl">bug</em></h1>
+          <p class="lede">You see the whole report first. Nothing leaves Onsite until you press Submit on GitHub.</p></div>
+      </header>
+      <div class="panel rp-form">
+        <div class="seg" id="rpCat" role="radiogroup" aria-label="What are you sending">
+          <button type="button" role="radio" aria-checked="true" data-cat="bug">Bug</button>
+          <button type="button" role="radio" aria-checked="false" data-cat="idea">Idea</button>
+        </div>
+        <p class="hint">Search first, it may already be reported: <button type="button" class="linkbtn" data-link="issues_search">Open issues</button>. Have a question? <button type="button" class="linkbtn" data-link="discussions">Ask in Discussions</button>.</p>
+        <p class="hint warn">Do not write API keys, your resume or interview text here. A security problem goes through the private route in <button type="button" class="linkbtn" data-link="security">SECURITY.md</button>, not here.</p>
+        <div class="form-grid" id="rpBugFields">
+          <label class="field span-2"><span>What happened</span><textarea id="rp_what" rows="2" maxlength="2000" placeholder="A short summary, in plain words."></textarea></label>
+          <label class="field span-2"><span>Steps to reproduce</span><textarea id="rp_steps" rows="3" maxlength="2000" placeholder="What you clicked or said, in order."></textarea></label>
+          <label class="field"><span>What you expected</span><textarea id="rp_expected" rows="2" maxlength="2000"></textarea></label>
+          <label class="field"><span>What happened instead</span><textarea id="rp_actual" rows="2" maxlength="2000"></textarea></label>
+          <div class="span-2 rp-auto-head"><b>Added by Onsite</b><span class="muted small">Edit or remove any line.</span></div>
+          <div class="field"><span><label for="rp_app_version">Version</label> <button type="button" class="linkbtn rp-x" data-clear="rp_app_version" aria-label="Remove version">Remove</button></span><input type="text" id="rp_app_version" spellcheck="false"></div>
+          <div class="field"><span><label for="rp_os">System</label> <button type="button" class="linkbtn rp-x" data-clear="rp_os" aria-label="Remove system">Remove</button></span><select id="rp_os"></select></div>
+          <div class="field"><span><label for="rp_ai">AI provider</label> <button type="button" class="linkbtn rp-x" data-clear="rp_ai" aria-label="Remove AI provider">Remove</button></span><select id="rp_ai"></select></div>
+          <div class="field"><span><label for="rp_voice">How you ran the round</label> <button type="button" class="linkbtn rp-x" data-clear="rp_voice" aria-label="Remove how you ran the round">Remove</button></span><select id="rp_voice"></select></div>
+          <div class="field"><span><label for="rp_view">Screen</label> <button type="button" class="linkbtn rp-x" data-clear="rp_view" aria-label="Remove screen">Remove</button></span><input type="text" id="rp_view" spellcheck="false"></div>
+          <div class="field span-2"><span><label for="rp_error">Last error</label> <button type="button" class="linkbtn rp-x" data-clear="rp_error" aria-label="Remove last error">Remove</button></span><textarea id="rp_error" rows="2" maxlength="2000"></textarea></div>
+        </div>
+        <div class="form-grid" id="rpIdeaFields" hidden>
+          <label class="field span-2"><span>What would help</span><textarea id="rp_problem" rows="3" maxlength="2000" placeholder="What you are trying to practise or do, and what gets in the way."></textarea></label>
+          <label class="field span-2"><span>Your idea <small>(optional)</small></span><textarea id="rp_idea" rows="3" maxlength="2000" placeholder="How it could work. Rough is fine."></textarea></label>
+          <label class="field span-2"><span>What you do today instead <small>(optional)</small></span><textarea id="rp_alternatives" rows="2" maxlength="2000"></textarea></label>
+        </div>
+        <div id="rpLogBox">
+          <label class="check"><input type="checkbox" id="rpLogOn"><span>Copy recent log lines, then paste them on GitHub</span></label>
+          <p class="hint" id="rpLogMsg"></p>
+          <details id="rpLogDet" hidden><summary class="hint">See the log lines</summary><pre class="rp-pre" id="rpLogText"></pre></details>
+        </div>
+        <h3 class="rp-h">This is what opens on GitHub</h3>
+        <ul class="rp-flags" id="rpFlags" role="status"></ul>
+        <pre class="rp-pre" id="rpPreview" aria-label="The report that opens on GitHub"></pre>
+        <p class="hint" id="rpLevel" role="status"></p>
+        <p class="hint">You need a free GitHub account. You review the page there and press Submit. Anything you submit is public. Onsite sends nothing itself. I aim to reply within a week.</p>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="rpOpen"><svg><use href="#i-send"/></svg>Open on GitHub</button>
+          <button type="button" class="btn" id="rpCopy">Copy report</button>
+          <button type="button" class="btn ghost" id="rpSave">Save as a text file</button>
+          <button type="button" class="btn ghost" data-nav="dashboard">Cancel</button>
+        </div>
+        <textarea id="rpCopyBox" class="rp-copybox" rows="6" readonly hidden aria-label="Report text to copy"></textarea>
+        <p class="form-msg" id="rpMsg" role="status"></p>
+      </div>
+    </section>
+
     <!-- ============ SETTINGS ============ -->
     <section class="view" id="view-settings" hidden>
       <header class="page-head"><div><div class="crumb">Settings</div><h1>Your <em class="hl">setup</em></h1>
@@ -615,20 +669,21 @@
                 <li>Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite’s database in your app data folder.</li>
                 <li>Your voice. The built-in voice engine, VoiceStudio and Whisper all run on this computer; audio is never uploaded by Onsite.</li>
                 <li>API keys, stored in the same local database. They are not encrypted, so anyone with access to your Windows account can read them. Remove a key in AI model when you stop using it.</li>
-                <li>The log file, which holds errors and timings, not transcripts or keys.</li>
+                <li>The log file, which holds errors and timings, not transcripts, speech text, your resume, job descriptions or keys.</li>
               </ul>
               <h3>What leaves this computer</h3>
               <ul>
                 <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI, Gemini or Groq): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
                 <li><b>Research jobs</b> ask that provider to search the web. The company, role and job description you enter are part of the request.</li>
                 <li><b>Voice models</b> (built-in engine) download once from github.com when you press Download in Settings. GitHub sees your IP address. Speech itself never leaves this computer.</li>
-                <li><b>Feedback</b> you write in Send feedback goes to the developer’s Google Form, only when you press Send. It holds what you typed and picked, the app details if you leave that box ticked, and your email only if you enter it. Google sees your IP address.</li>
+                <li><b>Bug reports and ideas</b>: Onsite shows you the full report and opens a GitHub page with it filled in. You submit it there. Onsite itself sends nothing. The report adds your app version, system, AI provider name, how you ran the round, the screen you were on and the last error, and you can remove any of them. Keys, your home folder and file paths are removed. Recent log lines are never put in the link: if you tick the box they go to your clipboard and you paste them yourself. Anything you submit on GitHub is public and tied to your GitHub account.</li>
+                <li><b>Feedback survey</b> you write in Send feedback goes to the developer’s Google Form, only when you press Send. It holds what you typed and picked, and your email only if you enter it. Google sees your IP address.</li>
                 <li><b>Update checks</b> ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
               </ul>
               <h3>What Onsite never does</h3>
               <ul>
                 <li>No accounts, analytics, telemetry, ads or tracking.</li>
-                <li>Nothing is sent to the Onsite developer except feedback you choose to send.</li>
+                <li>Nothing is sent to the Onsite developer except feedback or a report you choose to send.</li>
                 <li>The interviewer gets no tools: it can’t browse, run commands or read your files.</li>
                 <li>Model replies and dossiers are shown and saved as text, never run as code.</li>
               </ul>
@@ -683,6 +738,7 @@
             </div>
           </section>
           <section class="set-sec" data-sec="share" aria-label="Send feedback" hidden>
+            <p class="hint" style="margin:0 0 12px">Something broke? Use <button type="button" class="linkbtn" id="rpFromSurvey">Report a bug</button> in the sidebar instead. This survey is for general feedback.</p>
             <form class="panel fb-form" id="fbForm" novalidate>
               <div class="panel-head"><h2>Send feedback</h2><span class="muted small">About 2 minutes</span></div>
               <p class="hint" style="margin-top:0">Tell the developer what worked, what didn’t, and anything that broke. Your answers go to a Google Form when you press Send. Nothing else is attached: no transcripts, resume, keys or logs.</p>
@@ -700,7 +756,6 @@
                 <label class="field span-2"><span>Tell us about your experience</span><textarea id="fbExperience" rows="4" maxlength="4000" placeholder="What did you like? What felt off? What would make you use it again?"></textarea></label>
                 <label class="field span-2"><span>What was missing? <small>(optional)</small></span><textarea id="fbMissing" rows="2" maxlength="4000" placeholder="Anything you expected to find, or wished Onsite could do."></textarea></label>
                 <label class="field span-2"><span>Did anything go wrong? <small>(optional)</small></span><textarea id="fbWrong" rows="3" maxlength="4000" placeholder="Bugs, crashes, voice or mic problems. Which screen, what you did, any error you saw."></textarea></label>
-                <label class="check span-2"><input type="checkbox" id="fbDetails" checked><span id="fbDetailsText">Add app details to the bug report</span></label>
                 <label class="field span-2"><span>Email <small>(optional, only if you’re OK with a reply)</small></span><input type="text" id="fbEmail" inputmode="email" autocomplete="email" spellcheck="false" placeholder="you@example.com"></label>
               </div>
               <div class="btn-row">
@@ -729,7 +784,7 @@
               </ul>
               <p class="hint"><button type="button" class="linkbtn" data-link="notices">Full notices</button></p>
               <h3>Feedback and roadmap</h3>
-              <p class="hint" style="margin-top:0">Found a bug or want something added? <button type="button" class="linkbtn" data-nav="settings" data-sec="share">Send feedback</button>. Still to do: macOS and Linux builds have not been run by a person yet, releases are unsigned until code signing is approved, and the Claude API, OpenAI and Gemini connections have not been checked with a live key.</p>
+              <p class="hint" style="margin-top:0">Found a bug? <button type="button" class="linkbtn" id="abReport">Report a bug</button>. Want something added? <button type="button" class="linkbtn" data-nav="settings" data-sec="share">Send feedback</button>. Still to do: macOS and Linux builds have not been run by a person yet, releases are unsigned until code signing is approved, and the Claude API, OpenAI and Gemini connections have not been checked with a live key.</p>
             </div>
           </section>
           <p class="form-msg save-msg" id="saveMsg" role="status">Changes save automatically.</p>

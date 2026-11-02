@@ -20,7 +20,8 @@ Get the file for your system from the **[latest release](https://github.com/Prat
 | Debian / Ubuntu | `Onsite_x.y.z_amd64.deb` |
 
 Windows is what Onsite is built and tested on. The macOS and Linux builds are new and less tested.
-If something breaks there, please [open an issue](https://github.com/Prateesh-Sulikeri/Onsite/issues).
+If something breaks there, please use the **Report a bug** button in the sidebar in the app (it fills in the
+details), or [open an issue](https://github.com/Prateesh-Sulikeri/Onsite/issues). Questions: [Discussions](https://github.com/Prateesh-Sulikeri/Onsite/discussions).
 
 ## System requirements
 Typed rounds run on almost anything. Spoken rounds run the voice on your CPU (no GPU needed), so the CPU matters

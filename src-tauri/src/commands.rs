@@ -18,8 +18,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 #[tauri::command]
 pub fn ui_log(level: String, message: String) {
     match level.as_str() {
-        "error" => tracing::error!(target: "ui", "{message}"),
-        _ => tracing::info!(target: "ui", "{message}"),
+        "error" => tracing::error!(target: "ui", "{}", crate::error::log_clip(&message)),
+        _ => tracing::info!(target: "ui", "{}", crate::error::log_clip(&message)),
     }
 }
 
@@ -661,6 +661,8 @@ pub fn open_link(which: String) -> Result<()> {
         "guides" => "https://prateesh-sulikeri.github.io/Onsite/guides.html".to_string(),
         "repo" => REPO.to_string(),
         "issues" => format!("{REPO}/issues/new/choose"),
+        "issues_search" => format!("{REPO}/issues"),
+        "discussions" => format!("{REPO}/discussions"),
         "releases" => format!("{REPO}/releases"),
         "license" => format!("{REPO}/blob/main/LICENSE"),
         "privacy" => format!("{REPO}/blob/main/PRIVACY.md"),
@@ -676,6 +678,80 @@ pub fn open_link(which: String) -> Result<()> {
         _ => return Err(AppError::Invalid("Unknown link.".into())),
     };
     crate::storage::open_url(&url)
+}
+
+// ---------- Report a bug (GitHub issue, see report.rs) ----------
+
+#[derive(Serialize)]
+pub struct ReportPreview {
+    title: String,
+    /// Exactly the redacted report: what opens on GitHub (or is copied when the link is too long).
+    text: String,
+    flags: Vec<crate::report::Flag>,
+    level: crate::report::Level,
+    missing: Option<&'static str>,
+}
+
+#[tauri::command]
+pub async fn report_context(app: AppHandle) -> crate::report::ReportContext {
+    let state = app.state::<AppState>();
+    crate::report::context(&state, app.package_info().version.to_string()).await
+}
+
+#[tauri::command]
+pub async fn report_preview(app: AppHandle, input: crate::report::ReportInput) -> Result<ReportPreview> {
+    let state = app.state::<AppState>();
+    let ctx = crate::report::redaction_ctx(&state).await;
+    let p = crate::report::prepare(&input, &ctx)?;
+    let built = crate::report::build_url(&p)?;
+    Ok(ReportPreview {
+        title: p.title.clone().unwrap_or_default(),
+        text: crate::report::report_text(&p),
+        flags: p.flags.clone(),
+        level: built.level,
+        missing: crate::report::missing_required(&p),
+    })
+}
+
+#[derive(Serialize)]
+pub struct IssueOpened {
+    level: crate::report::Level,
+    /// The full redacted report, for the clipboard when the link was too long.
+    text: String,
+}
+
+/// Opens the GitHub new-issue page with the redacted report in the link. The fields are redacted again here,
+/// so the link never holds text the preview did not show.
+#[tauri::command]
+pub async fn open_issue(app: AppHandle, input: crate::report::ReportInput) -> Result<IssueOpened> {
+    let state = app.state::<AppState>();
+    let ctx = crate::report::redaction_ctx(&state).await;
+    let p = crate::report::prepare(&input, &ctx)?;
+    if let Some(label) = crate::report::missing_required(&p) {
+        return Err(AppError::Invalid(format!("Fill in \"{label}\" first.")));
+    }
+    let built = crate::report::build_url(&p)?;
+    crate::storage::open_url(&built.url)?;
+    tracing::info!(category = ?p.category, level = ?built.level, bytes = built.url.len(), "issue page opened");
+    Ok(IssueOpened { level: built.level, text: crate::report::report_text(&p) })
+}
+
+/// The last log lines, redacted. Only ever copied to the clipboard by the user's choice.
+#[tauri::command]
+pub async fn report_log(app: AppHandle) -> Result<String> {
+    let state = app.state::<AppState>();
+    let ctx = crate::report::redaction_ctx(&state).await;
+    let raw = std::fs::read(crate::storage::log_path()).unwrap_or_default();
+    Ok(crate::report::log_tail(&raw, &ctx))
+}
+
+/// Saves the report text into Downloads, for when the browser or clipboard fails. Returns the path.
+#[tauri::command]
+pub fn report_save(app: AppHandle, text: String) -> Result<String> {
+    let dir = app.path().download_dir().map_err(|_| AppError::NotFound("No Downloads folder found.".into()))?;
+    let path = dir.join("onsite-report.txt");
+    std::fs::write(&path, text.chars().take(100_000).collect::<String>())?;
+    Ok(path.display().to_string())
 }
 
 #[tauri::command]
