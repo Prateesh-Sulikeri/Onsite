@@ -1,4 +1,4 @@
-# RESUME-CHECK — `src/ats/`
+# RESUME-CHECK: `src/ats/`
 
 Reads a resume like an ATS parser, scores six ATS profiles, matches a posting, optional AI screen. Deterministic except
 two AI calls. Ported: checks + match score from Resume-Matcher (Apache-2.0, `services/ats.py`, `ats_parse/`); profiles
@@ -19,10 +19,10 @@ from ats-screener (MIT). See `THIRD_PARTY_NOTICES.md`.
 ## Pipeline
 
 `extract` → `Facts` + `checks::run` → `parse_score` (Extraction+Layout; 0 if no text layer) / `content_score` (Content)
-→ `term_hits(job)` → `match_score` → `ats_scores` → `tips`. AI: posting-only keywords (interviewer model, ~4–7 s);
-screen on **extracted** text + posting (report model, ~15–22 s), auto-run after the rule check when a posting exists.
+→ `term_hits(job)` → `match_score` → `ats_scores` → `tips`. AI: posting-only keywords (interviewer model, ~4-7 s);
+screen on **extracted** text + posting (report model, ~15-22 s), auto-run after the rule check when a posting exists.
 
-Checks by category — Extraction: `text_layer garbled_glyphs text_coverage`; Layout: `multi_column tables text_boxes
+Checks by category. Extraction: `text_layer garbled_glyphs text_coverage`; Layout: `multi_column tables text_boxes
 header_footer images page_count`; Content: `contact_info section_headings dates`.
 Extractability: none (no text layer) / partial (garbled, low coverage, truncated) / full.
 
@@ -44,7 +44,7 @@ Profile issues e.g. Workday: >2 pages, contact only in header, two columns; Tale
 
 ## Rules
 
-- AI never sees the resume when reading the posting. Screen grades: A 85+, B 70–84, C 50–69, D < 50; quote resume only;
+- AI never sees the resume when reading the posting. Screen grades: A 85+, B 70-84, C 50-69, D < 50; quote resume only;
   **never infer gender/age/nationality from the name** (`ats_screen.md`).
 - Bump `CACHE_VERSION` when `ats_job.md` or `JobKeywords` changes.
 - Loop start runs the check; no/unreadable resume blocks the loop; result shown on Get ready.
@@ -54,7 +54,7 @@ Profile issues e.g. Workday: >2 pages, contact only in header, two columns; Tale
 
 Fixtures `src-tauri/tests/fixtures/ats/` (clean/messy docx, one/two-column + scan pdf, rtf, html sources);
 `tests/ats_files.rs`; `analyze` is pure → unit tests. CLI: `cargo run --example ats_check -- resume.pdf [job.json] [--json]`
-(app running locks the exe → `--target-dir target/ats-test`).
+(app running locks the exe → `--target-dir D:\cargo-target\onsite-test`).
 
 ## Requirements
 

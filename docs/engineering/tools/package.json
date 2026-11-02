@@ -2,11 +2,12 @@
   "name": "onsite-engineering-docs",
   "private": true,
   "license": "MIT",
-  "description": "Builds docs/engineering/*.md into PDFs (npm run build) and retakes the UI screenshots in docs/engineering/img/ (npm run shots).",
+  "description": "Builds docs/engineering/*.md into PDFs (npm run build), retakes the UI screenshots in docs/engineering/img/ (npm run shots) and the website guide screenshots in site/src/img/guides/ (npm run guide-shots).",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "shots": "node shots.mjs"
+    "shots": "node shots.mjs",
+    "guide-shots": "node guide-shots.mjs"
   },
   "dependencies": {
     "marked": "14.1.4",

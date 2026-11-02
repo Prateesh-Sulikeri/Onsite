@@ -9,3 +9,6 @@ contact_links:
   - name: Guides
     url: https://prateesh-sulikeri.github.io/Onsite/guides.html
     about: Setup help for Claude Code, API keys, voice and updates.
+  - name: Code of conduct
+    url: https://github.com/Prateesh-Sulikeri/Onsite/blob/main/CODE_OF_CONDUCT.md
+    about: How we treat each other in issues and pull requests.

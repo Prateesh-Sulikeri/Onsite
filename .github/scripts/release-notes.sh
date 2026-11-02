@@ -12,10 +12,22 @@ cat <<'EOF2' | sed -e "s|{V}|${tag#v}|g" -e "s|{REPO}|$GITHUB_REPOSITORY|g" \
 | --- | --- |
 | **Windows 10/11** (x64) | [Installer (.exe)]({DL}/Onsite_{V}_x64-setup.exe) |
 | **macOS 11+** (Apple Silicon and Intel) | [Disk image (.dmg)]({DL}/Onsite_{V}_universal.dmg) |
-| **Linux** (x86-64, any distro) | [AppImage]({DL}/Onsite_{V}_amd64.AppImage) |
+| **Linux** (x86-64, glibc 2.35+, e.g. Ubuntu 22.04+) | [AppImage]({DL}/Onsite_{V}_amd64.AppImage) |
 | **Linux** (Debian, Ubuntu) | [.deb package]({DL}/Onsite_{V}_amd64.deb) |
 
 Already installed? Settings → Updates → Check for updates.
+
+## System requirements
+
+Spoken rounds run the voice on your CPU (no GPU needed). On a slow CPU the interviewer pauses between phrases; pick **Listen** or **Typed** then.
+
+| System | Minimum (spoken rounds) | Recommended |
+| --- | --- | --- |
+| Windows | Windows 10 64-bit · 4-core CPU from 2019+ (Core i5 10th gen, Ryzen 5 4500U) · 8 GB RAM | Windows 11 · 6+ core CPU from 2021+ (Core 12th gen, Ryzen 5 5600U) · 16 GB RAM |
+| macOS | macOS 11 · Apple M1, or a quad-core Intel Mac from 2018+ · 8 GB RAM | Any Apple Silicon Mac · 16 GB RAM |
+| Linux | x86-64 · glibc 2.35+ (Ubuntu 22.04+) · 4-core CPU from 2019+ · 8 GB RAM | 6+ core CPU from 2021+ · 16 GB RAM |
+
+Voice models need about 1.6 GB free to download (830 MB kept). Typed rounds run on any 64-bit computer with 4 GB RAM.
 
 ## First run
 

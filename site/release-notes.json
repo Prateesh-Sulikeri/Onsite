@@ -1,0 +1,4 @@
+{
+  "_about": "Hand-written changelog lines per release tag. A tag listed here replaces the commit subjects on the website. 'Area: text' shows Area as a label. Releases with no lines anywhere are hidden.",
+  "_example": ["Voice: the interviewer's name follows its voice", "Faster first reply on Groq"]
+}

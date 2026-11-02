@@ -499,7 +499,7 @@ house-robber-ii,House Robber II,Medium,ng;sde1,dynamic-programming;array,amazon;
             return nums[0]
         return max(line(nums[1:]), line(nums[:-1]))","def gen(rng):
     return [[rng.randint(0, 1000) for _ in range(100)]]",,
-decode-ways,Decode Ways,Medium,ng;sde1,dynamic-programming;string,meta;google;amazon,numDecodings,s: string,int,exact,Count ways to decode a digit string where 1–26 map to A–Z; strings with invalid leading zeros have no decoding.,"1 <= s.length <= 100
+decode-ways,Decode Ways,Medium,ng;sde1,dynamic-programming;string,meta;google;amazon,numDecodings,s: string,int,exact,Count ways to decode a digit string where 1-26 map to A-Z; strings with invalid leading zeros have no decoding.,"1 <= s.length <= 100
 s contains only digits and may contain leading zeros.
 The answer fits in a 32-bit integer.","[{""args"":[""12""],""expected"":2,""example"":true,""explanation"":""\""AB\"" (1 2) or \""L\"" (12).""},{""args"":[""226""],""expected"":3,""example"":true,""explanation"":""\""BZ\"" (2 26), \""VF\"" (22 6) or \""BBF\"" (2 2 6).""},{""args"":[""06""],""expected"":0,""example"":true,""explanation"":""\""06\"" is not a valid code for F.""},{""args"":[""0""],""expected"":0},{""args"":[""10""],""expected"":1},{""args"":[""27""],""expected"":1},{""args"":[""2101""],""expected"":1},{""args"":[""11106""],""expected"":2},{""args"":[""1111111111""],""expected"":89},{""args"":[""100""],""expected"":0},{""args"":[""230""],""expected"":0}]","At each position, add valid one-digit and two-digit decoding counts.",O(n),O(1),"The string may also contain '*', meaning any digit 1 to 9 (Decode Ways II).","class Solution:
     def numDecodings(self, s):

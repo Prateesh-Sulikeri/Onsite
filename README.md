@@ -5,6 +5,7 @@ Practise real software-engineering interview loops, out loud, on your own machin
 - **General loops:** pick any rounds (resume screen, project deep dive, fundamentals, DSA, code comprehension, LLD, system design, behavioral, hiring manager) and a company style.
 - **Company-specific loops:** Onsite researches recent candidate reports for a company and role, then runs that company's real loop with its reported questions and interviewer style.
 - **Spoken calls:** speech runs on your machine, with Onsite's built-in voice engine or VoiceStudio. Nothing leaves your machine except the model calls to the AI you connect.
+- **Practice projects:** the code comprehension round gives you a small multi-file project with planted bugs (Kafka consumer, Postgres outbox, Redis rate limiter, wallet transfers, search API, webhook receiver, and more). The AI writes one for your job description, or you pick one of 8 ready-made projects in Java, Python, JavaScript and Go.
 - **Honest feedback:** rubric scores with evidence, "fix this first", stronger answers for key moments, and a hiring-committee verdict after a full loop.
 - **Any of these AIs:** Claude Code (Claude Pro or Max login), or your own API key for Claude, OpenAI, Gemini or Groq (Gemini and Groq have free tiers).
 
@@ -15,11 +16,29 @@ Get the file for your system from the **[latest release](https://github.com/Prat
 |---|---|
 | Windows 10/11 | `Onsite_x.y.z_x64-setup.exe` |
 | macOS 11+ (Apple Silicon and Intel) | `Onsite_x.y.z_universal.dmg` |
-| Linux x86-64, any distro | `Onsite_x.y.z_amd64.AppImage` |
+| Linux x86-64 (glibc 2.35+, e.g. Ubuntu 22.04+) | `Onsite_x.y.z_amd64.AppImage` |
 | Debian / Ubuntu | `Onsite_x.y.z_amd64.deb` |
 
 Windows is what Onsite is built and tested on. The macOS and Linux builds are new and less tested.
-If something breaks there, please [open an issue](https://github.com/Prateesh-Sulikeri/Onsite/issues).
+If something breaks there, please use the **Report a bug** button in the sidebar in the app (it fills in the
+details), or [open an issue](https://github.com/Prateesh-Sulikeri/Onsite/issues). Questions: [Discussions](https://github.com/Prateesh-Sulikeri/Onsite/discussions).
+
+## System requirements
+Typed rounds run on almost anything. Spoken rounds run the voice on your CPU (no GPU needed), so the CPU matters
+most: on a slow one the interviewer pauses between phrases. If that happens, pick **Listen** or **Typed** on Get ready.
+
+| System | Minimum (spoken rounds) | Recommended |
+|---|---|---|
+| Windows | Windows 10 64-bit · 4-core CPU from 2019 or newer (Intel Core i5 10th gen, Ryzen 5 4500U) · 8 GB RAM | Windows 11 · 6+ core CPU from 2021 or newer (Intel Core 12th gen, Ryzen 5 5600U / 6000 series) · 16 GB RAM |
+| macOS | macOS 11 · Apple M1, or a quad-core Intel Mac from 2018 or newer · 8 GB RAM | Any Apple Silicon Mac · 16 GB RAM |
+| Linux | x86-64 · Ubuntu 22.04 or newer, or a distro with glibc 2.35+ · 4-core CPU from 2019 or newer · 8 GB RAM | 6+ core CPU from 2021 or newer · 16 GB RAM |
+
+On every system:
+- **Disk:** the voice models take 830 MB. Have about 1.6 GB free while they download.
+- **Microphone and speakers.** A headset works best.
+- **Internet** for the AI model you connect. Speech itself stays on your machine.
+- **Typed rounds only:** any 64-bit computer with 4 GB RAM.
+- **VoiceStudio engine (optional):** Windows with an NVIDIA GPU. Tested on an RTX 5050 laptop GPU (8 GB).
 
 ## Install
 1. Download Onsite for your system from the [latest release](https://github.com/Prateesh-Sulikeri/Onsite/releases/latest) and install it:
@@ -58,7 +77,7 @@ system from GitHub. Your interviews, dossiers and settings stay. Onsite only con
 
 ## Company-specific loops
 Open **Dossiers**, name a company, role and level, and start research. It takes a few minutes on an API key
-(10–40 on Claude Code). Then pick **Company-specific** on the interview screen. Dossiers can be exported to
+(10-40 on Claude Code). Then pick **Company-specific** on the interview screen. Dossiers can be exported to
 Downloads and imported on another machine.
 
 ## Building

@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "webhook-receiver-go",
+  "title": "Payment webhook receiver",
+  "language": "go",
+  "difficulty": "Medium",
+  "levels": ["sde2", "senior", "staff"],
+  "topics": ["webhooks", "security", "idempotency", "payments"],
+  "companies": ["fintech", "razorpay", "stripe", "general"],
+  "minutes": 40,
+  "brief": "Security review SEC-129 and ticket PAY-3004. A pen tester replayed a captured webhook a day later and it was accepted. Finance also saw one order marked paid twice when the provider retried during a slow deploy. Read the receiver and list what must change before it is safe.",
+  "files": [
+    {"path": "src/handler.go", "open": true},
+    {"path": "src/signature.go"},
+    {"path": "src/store.go"},
+    {"path": "test/signature_test.go", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "non-constant-compare",
+      "file": "src/signature.go",
+      "lines": [52, 54],
+      "category": "security",
+      "why": "The expected and received signatures are compared with !=. That stops at the first different byte, so response time leaks how much of a guess is right. An attacker can recover a valid signature one byte at a time.",
+      "good_fix": "Decode the hex and compare with hmac.Equal (or subtle.ConstantTimeCompare). Reject signatures of the wrong length without leaking which check failed."
+    },
+    {
+      "id": "no-replay-window",
+      "file": "src/signature.go",
+      "lines": [46, 56],
+      "category": "security",
+      "why": "The timestamp is part of the signed text but never checked against the clock. A captured request stays valid forever, so a replay a day later passes.",
+      "good_fix": "Parse the timestamp and reject it if it is more than a few minutes from now, in either direction. Keep the check after the signature check, or in the same error path."
+    },
+    {
+      "id": "duplicate-delivery",
+      "file": "src/handler.go",
+      "lines": [56, 73],
+      "category": "idempotency",
+      "why": "The handler checks Seen, runs the processor, then calls MarkSeen. Two deliveries of the same event that overlap both see 'not seen' and both process it. If MarkSeen fails after processing, the next retry processes it again.",
+      "good_fix": "Claim the event id atomically before processing (insert with a unique key, or SETNX). If processing fails, release the claim so the retry can run. Make the processor itself safe to repeat."
+    }
+  ],
+  "extension": "The provider sends events out of order (refund before capture). How would you make the processor safe for that, and what should the endpoint answer for an event it cannot apply yet?"
+}

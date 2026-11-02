@@ -72,6 +72,14 @@ impl Default for VoiceSettings {
     }
 }
 
+impl VoiceSettings {
+    /// Whether the voice for a round without a panel interviewer is a woman's. None when it isn't known
+    /// (typed rounds, or a VoiceStudio profile, which carries no gender).
+    pub fn voice_female(&self) -> Option<bool> {
+        (self.enabled && self.engine == VoiceEngine::Builtin).then(|| builtin::is_female(&self.builtin_voice))
+    }
+}
+
 /// Sent to the UI as the `voice` Tauri event.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -489,8 +497,10 @@ async fn speak_into(
     let mut rs = player.resampler_from(voice.rate());
     let started = Instant::now();
     let mut first_ms: Option<u64> = None;
+    let mut samples = 0usize;
     let res = voice
         .speak(text, settings.steps, settings.speed, |pcm| {
+            samples += pcm.len();
             if !alive.load(Ordering::SeqCst) || cut.load(Ordering::SeqCst) {
                 return;
             }
@@ -505,7 +515,10 @@ async fn speak_into(
             player.push(&mut rs, pcm);
         })
         .await;
-    tracing::info!(chars = text.chars().count(), first_ms, total_ms = started.elapsed().as_millis() as u64, "tts");
+    // rtf > 1 = speech is made slower than it plays: the reply will pause between parts.
+    let (total_ms, audio_ms) = (started.elapsed().as_millis() as u64, samples as u64 * 1000 / voice.rate().max(1) as u64);
+    let rtf = format!("{:.2}", total_ms as f32 / audio_ms.max(1) as f32);
+    tracing::info!(chars = text.chars().count(), first_ms, total_ms, audio_ms, rtf, "tts");
     if let Err(e) = res {
         tracing::warn!("tts failed: {e}");
         emit(VoiceEvent::Error { message: e.to_string() });

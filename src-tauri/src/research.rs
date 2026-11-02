@@ -204,7 +204,7 @@ async fn run(app: &AppHandle, id: i64, req: ResearchRequest) {
             j.log.push_str("Dossier saved.\n");
         }),
         Err((msg, raw)) => {
-            tracing::warn!(id, "research failed: {msg}");
+            tracing::warn!(id, "research failed: {}", crate::error::log_clip(&msg));
             update(app, id, |j| {
                 j.status = "failed".into();
                 j.raw_output = raw.or(j.raw_output.take());

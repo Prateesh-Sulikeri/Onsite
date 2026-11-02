@@ -1,4 +1,4 @@
-# docs/engineering — agent docs
+# docs/engineering: agent docs
 
 Docs for AI coding agents working on Onsite. Dense on purpose. Open only the file you need.
 Humans: read `pdf/` (snapshot of tag `docs-human-2026-10-30`).
@@ -17,6 +17,7 @@ Humans: read `pdf/` (snapshot of tag `docs-human-2026-10-30`).
 | [CODING.md](CODING.md) | `bank.rs`, `runner/`, `questions.csv`, workspace (editor/whiteboard/notes), Run/Submit |
 | [STORAGE.md](STORAGE.md) | `store/`, `storage.rs`, schema, settings keys, files on disk, retention, privacy flows |
 | [RELEASE.md](RELEASE.md) | CI release workflow, installers, `updates.rs`, code signing, platform quirks |
+| [REPORT.md](REPORT.md) | "Report a bug": `report.rs`, GitHub issue links, redaction, what the log may hold |
 | [UI.md](UI.md) | `ui/`: structure, conventions, tokens, themes, screens, adding a screen |
 
 `CLAUDE.md` (always loaded) holds verified external facts and measurements. These docs hold code structure and

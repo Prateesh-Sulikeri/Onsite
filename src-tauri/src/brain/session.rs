@@ -84,7 +84,7 @@ impl ClaudeSession {
         tokio::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                tracing::warn!(round_id, "claude stderr: {line}");
+                tracing::warn!(round_id, "claude stderr: {}", crate::error::log_clip(&line));
                 let mut tail = lock(&sh.stderr_tail);
                 tail.push(line);
                 if tail.len() > 20 {
@@ -187,7 +187,7 @@ async fn read_loop(
         let events = match parse_line(&line) {
             Ok(e) => e,
             Err(e) => {
-                tracing::debug!(round_id, "non-JSON stdout line ({e}): {line}");
+                tracing::debug!(round_id, chars = line.chars().count(), "non-JSON stdout line ({e})");
                 continue;
             }
         };
@@ -213,7 +213,7 @@ async fn read_loop(
         // Give the stderr reader a moment to catch the last line (e.g. a login error).
         tokio::time::sleep(Duration::from_millis(200)).await;
         let last = lock(&shared.stderr_tail).last().cloned();
-        tracing::warn!(round_id, ?last, "claude exited mid-round");
+        tracing::warn!(round_id, last = %crate::error::log_clip(last.as_deref().unwrap_or("")), "claude exited mid-round");
         let _ = tx.send(SessionEvent::Error { round_id, message: crash_message(last.as_deref()), recoverable: true });
     }
     let _ = tx.send(SessionEvent::Exited { round_id });

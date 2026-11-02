@@ -1,4 +1,4 @@
-# RESEARCH — research jobs, dossiers, company loops
+# RESEARCH: research jobs, dossiers, company loops
 
 Code: `src/research.rs`, `src/dossier.rs`, `prompts/research.md`, `prompts/dossier_block.md`, `docs/dossier.schema.json`,
 `dossiers/*.json`; UI: `ui/app.js` *dossiers and research*.
@@ -39,7 +39,7 @@ request, `preparedAt = now`, `save`, emit + `dossiers_changed`. Failure keeps `r
 |---|---|
 | missing company/role/summary/style/rounds | Err "It has no …" |
 | `type` not a round key | `round_kind` keywords on type+name: machine coding/low level/lld/ood → lld; system design/hld/architecture → sysdesign; dsa/coding/algorithm/problem solving → coding; code review/debug/comprehension → comprehension; behaviour/culture/values/leadership principle/bar raiser → behavioral; resume/screen/recruiter/introduct → resume; project/deep dive → project; fundamental/core cs/technical round/java/database → fundamentals; else hm |
-| minutes `"60 min"`/missing | first number, clamp 10–180, default 45 |
+| minutes `"60 min"`/missing | first number, clamp 10-180, default 45 |
 | string↔array mismatch | normalised |
 | sources as URL strings | `{title:"", url}`; objects without url dropped |
 
@@ -53,7 +53,7 @@ reported questions (or close variants, not all), never mention the dossier. Codi
 ## Prompt rules (`research.md`)
 
 Web search + fetch only · prefer 2024+, weight last 12 months · ≥ 8 first-hand reports if they exist · company values
-from own site · note disagreements · only reported questions, paraphrased, 4–10 per round · thin evidence → say so in
+from own site · note disagreements · only reported questions, paraphrased, 4-10 per round · thin evidence → say so in
 summary · final message = one JSON object. Placeholders: `company role level_name jd round_types today`.
 
 ## Requirements

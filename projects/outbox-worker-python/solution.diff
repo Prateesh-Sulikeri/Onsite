@@ -1,0 +1,66 @@
+--- a/src/outbox.py
++++ b/src/outbox.py
+@@ -1,6 +1,9 @@
+ """Postgres access for the outbox table."""
+ from dataclasses import dataclass
+ from typing import List
++
++
++MAX_ATTEMPTS = 8
+ 
+ 
+ @dataclass
+@@ -19,12 +22,17 @@
+     def fetch_pending(self, limit: int) -> List[Message]:
+         with self.pool.connection() as conn:
+             rows = conn.execute(
+-                "SELECT id, topic, key, payload, attempts FROM outbox "
+-                "WHERE status = 'pending' AND available_at <= now() "
+-                "ORDER BY id LIMIT %s",
++                "UPDATE outbox SET status = 'processing', "
++                "locked_until = now() + interval '60 seconds' "
++                "WHERE id IN ("
++                "  SELECT id FROM outbox "
++                "  WHERE ((status = 'pending' AND available_at <= now()) "
++                "     OR (status = 'processing' AND locked_until < now())) "
++                "  ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED"
++                ") RETURNING id, topic, key, payload, attempts",
+                 (limit,),
+             ).fetchall()
+-        return [Message(*row) for row in rows]
++        return [Message(*row) for row in sorted(rows)]
+ 
+     def mark_sent(self, msg_id: int) -> None:
+         with self.pool.connection() as conn:
+@@ -36,8 +44,12 @@
+     def mark_failed(self, msg_id: int, error: str) -> None:
+         with self.pool.connection() as conn:
+             conn.execute(
+-                "UPDATE outbox SET attempts = attempts + 1, last_error = %s WHERE id = %s",
+-                (error[:500], msg_id),
++                "UPDATE outbox SET attempts = attempts + 1, last_error = %s, "
++                "status = CASE WHEN attempts + 1 >= %s THEN 'dead' ELSE 'pending' END, "
++                "available_at = now() + least(power(2, attempts), 300) * interval '1 second', "
++                "locked_until = NULL "
++                "WHERE id = %s",
++                (error[:500], MAX_ATTEMPTS, msg_id),
+             )
+ 
+     def depth(self) -> int:
+--- a/src/worker.py
++++ b/src/worker.py
+@@ -19,12 +19,13 @@
+     def run_once(self) -> int:
+         messages = self.repo.fetch_pending(self.batch_size)
+         for msg in messages:
+-            self.repo.mark_sent(msg.id)
+             try:
+                 self.publisher.publish(msg.topic, msg.key, msg.payload)
+             except PublishError as exc:
+                 log.warning("message %s failed: %s", msg.id, exc)
+                 self.repo.mark_failed(msg.id, str(exc))
++            else:
++                self.repo.mark_sent(msg.id)
+         return len(messages)
+ 
+     def run_forever(self) -> None:

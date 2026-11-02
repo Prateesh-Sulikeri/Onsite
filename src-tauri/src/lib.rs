@@ -5,8 +5,12 @@ pub mod catalog;
 mod commands;
 pub mod dossier;
 pub mod error;
+pub mod feedback;
 pub mod interview;
 pub mod panels;
+pub mod projects;
+pub mod projgen;
+pub mod report;
 pub mod research;
 pub mod runner;
 pub mod storage;
@@ -63,6 +67,8 @@ pub struct AppState {
     pub research: Mutex<HashMap<i64, research::Running>>,
     pub rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>,
     pub bank: bank::Bank,
+    /// Multi-file projects for the comprehension round.
+    pub projects: projects::Projects,
     pub voice: voice::Voice,
     /// Built-in voice engine models, loaded on first use and kept.
     pub builtin: voice::builtin::Cache,
@@ -134,6 +140,15 @@ fn resource(app: &tauri::App, name: &str) -> PathBuf {
     app.path().resource_dir().map(|d| d.join(name)).unwrap_or(dev)
 }
 
+fn load_projects(dir: &std::path::Path) -> projects::Projects {
+    let p = projects::Projects::load(dir);
+    tracing::info!(count = p.list.len(), "comprehension projects");
+    for e in &p.errors {
+        tracing::warn!("project skipped: {e}");
+    }
+    p
+}
+
 /// Logs go to %LOCALAPPDATA%\Onsite\onsite.log (the app has no console window).
 fn init_logging() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "onsite=info,onsite_lib=info".into());
@@ -203,6 +218,11 @@ pub fn run() {
                 Ok(n) => tracing::info!(n, "deleted rounds with no answers"),
                 Err(e) => tracing::warn!("sweeping empty rounds: {e}"),
             }
+            // Nothing of this process is running yet, so old round/job scratch dirs are leftovers of a killed one.
+            match storage::sweep_stale_scratch(&std::env::temp_dir(), std::time::SystemTime::now(), std::time::Duration::from_secs(3600)) {
+                0 => {}
+                n => tracing::info!(n, "deleted stale round/job temp dirs"),
+            }
             if let Err(e) = store.fail_running_jobs() {
                 tracing::warn!("marking interrupted research jobs: {e}");
             }
@@ -211,6 +231,7 @@ pub fn run() {
                 catalog,
                 panels: panels::Panels::load(&prompts_dir),
                 bank: bank::Bank::load(&prompts_dir),
+                projects: load_projects(&resource(app, "projects")),
                 prompts_dir,
                 data_dir: data_dir.clone(),
                 research: Default::default(),
@@ -252,6 +273,13 @@ pub fn run() {
             commands::get_catalog,
             commands::get_panels,
             commands::ui_log,
+            commands::send_feedback,
+            commands::open_link,
+            commands::report_context,
+            commands::report_preview,
+            commands::open_issue,
+            commands::report_log,
+            commands::report_save,
             commands::get_settings,
             commands::save_settings,
             commands::detect_claude,
@@ -302,6 +330,7 @@ pub fn run() {
             commands::delete_round,
             commands::run_code,
             commands::set_round_lang,
+            commands::project_diff,
             commands::voice_status,
             commands::voice_launch,
             commands::voice_model_download,

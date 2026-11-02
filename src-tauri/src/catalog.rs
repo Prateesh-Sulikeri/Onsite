@@ -31,6 +31,9 @@ pub struct Catalog {
     pub levels: IndexMap<String, String>,
     pub level_bar: IndexMap<String, String>,
     pub names: Vec<String>,
+    /// The women's names in `names`, so a round's name can match its voice.
+    #[serde(default)]
+    pub female_names: Vec<String>,
     pub temper: IndexMap<String, String>,
 }
 
@@ -45,8 +48,12 @@ impl Catalog {
         self.rounds.keys().cloned().collect()
     }
 
-    pub fn persona(&self, round_index: usize) -> &str {
-        &self.names[(round_index * 5 + 3) % self.names.len()]
+    /// The interviewer's name for a round without a panel. `female` = the voice's gender, when known:
+    /// the name is then picked from that gender's names, so "Neha" never speaks in a man's voice.
+    pub fn persona(&self, round_index: usize, female: Option<bool>) -> &str {
+        let pool: Vec<&String> = self.names.iter().filter(|n| female.is_none_or(|f| self.female_names.contains(n) == f)).collect();
+        let pool = if pool.is_empty() { self.names.iter().collect() } else { pool };
+        pool[(round_index * 5 + 3) % pool.len()]
     }
 }
 
@@ -61,7 +68,8 @@ mod tests {
         assert_eq!(c.rounds.get_index(0).unwrap().0, "resume");
         assert_eq!(c.rounds["coding"].tab, "editor");
         assert!(c.levels.keys().eq(c.level_bar.keys()));
-        assert!(!c.persona(0).is_empty());
+        assert!(!c.persona(0, None).is_empty());
+        assert!(c.female_names.iter().all(|n| c.names.contains(n)), "FEMALE_NAMES must be in NAMES");
         assert!(c.rounds["comprehension"].openers.len() > 10);
     }
 }

@@ -27,7 +27,7 @@ speech models and downloads them once, the first time someone turns voice on. Vo
 |---|---|---|
 | Interviewer speaks | `POST :3900/v1/audio/speech`, OmniVoice cloning a persona profile | Server, model, profiles |
 | Live captions | WebSocket `:3900/v1/audio/transcriptions/stream`, Parakeet TDT v2 partials | Server, model |
-| Where an answer is cut | Onsite's own VAD in `stt.rs` (pause rules, 400 ms pre-roll, 3–20 s segments) | None |
+| Where an answer is cut | Onsite's own VAD in `stt.rs` (pause rules, 400 ms pre-roll, 3-20 s segments) | None |
 | Accurate transcript | `sidecar/whisper_server.py`, Whisper large-v3 on GPU | Its Python runtime and downloaded weights |
 | Persona voices | `vs.rs::persona_voice` designs, scores and saves clone profiles | Profiles API, voice design |
 | Run/Submit in Python | `runner::python()` falls back to VoiceStudio's Python | Its Python runtime (separate decision) |
@@ -66,18 +66,18 @@ flowchart LR
 
 | Job | Engine (to confirm in Phase 0) | CPU baseline | GPU (optional) |
 |---|---|---|---|
-| Live captions | Option A: Parakeet v2, re-run on the open segment every ~0.5 s. Option B: a small true-streaming model (sherpa-onnx streaming zipformer) | Required | — |
-| Final text per segment | Parakeet TDT 0.6B v2 int8 via `sherpa-onnx` | Required | — |
+| Live captions | Option A: Parakeet v2, re-run on the open segment every ~0.5 s. Option B: a small true-streaming model (sherpa-onnx streaming zipformer) | Required | - |
+| Final text per segment | Parakeet TDT 0.6B v2 int8 via `sherpa-onnx` | Required | - |
 | Accurate transcript | Whisper large-v3-turbo, quantized, via `whisper-rs` (whisper.cpp) | Off (too slow on CPU) | Optional download |
 | Interviewer voice | ZipVoice (zero-shot cloning) via `sherpa-onnx` | Required, must meet the CPU target | Faster |
-| Persona identity | 10 reference clips (~10.5 s each) + their exact transcript | Shipped in the installer | — |
+| Persona identity | 10 reference clips (~10.5 s each) + their exact transcript | Shipped in the installer | - |
 
 Why captions need their own design: as far as we know, sherpa-onnx runs Parakeet TDT as an **offline** model. It
 transcribes a finished clip and doesn't stream partial words. VoiceStudio's live stream probably fakes partials by
 re-decoding the audio so far. Onsite already decides where segments start and end, so captions only need partial
 text for the open segment. Option A reuses one model; option B is closer to real streaming. Phase 0 picks one.
 
-**Footprint: provisional.** We estimate 1–2 GB, but none of it is measured yet. Phase 0 measures the exact pinned
+**Footprint: provisional.** We estimate 1-2 GB, but none of it is measured yet. Phase 0 measures the exact pinned
 files and splits them into:
 
 | Group | Contents | Needed for |
@@ -98,11 +98,11 @@ The report goes to `docs/plans/voice-spike-results.md`.
 
 Earlier accuracy numbers came from 8 recordings that weren't saved, so there is nothing to compare against yet.
 
-- **The owner records 12–15 spoken answers** on the real mic, at 16 kHz mono WAV:
+- **The owner records 12-15 spoken answers** on the real mic, at 16 kHz mono WAV:
   - tech terms (Kafka, PostgreSQL, Redis, idempotency key, Big-O)
   - numbers and units
   - names
-  - short answers (~5 s) and long ones (60–90 s, with pauses)
+  - short answers (~5 s) and long ones (60-90 s, with pauses)
   - one answer with the owner thinking out loud
 - **Ground truth:** the owner writes out the exact text of each answer.
 - **TTS set:** 25 lines covering:
@@ -240,7 +240,7 @@ Settings › Voice:
 ### Engine choice for existing users
 
 - **New installs:** Built-in by default (from Phase 2).
-- **Existing installs:** keep their current engine during Phases 1–2. If VoiceStudio is configured and was used,
+- **Existing installs:** keep their current engine during Phases 1-2. If VoiceStudio is configured and was used,
   it stays selected. Settings shows a one-time note: "A built-in voice engine is available. Try it in
   Settings › Voice."
 
@@ -326,19 +326,19 @@ Pick one in Phase 0 if the licence check goes the wrong way.
 | File | Phase 1 | Phase 3 |
 |---|---|---|
 | `voice/engine.rs` | new: `Tts`, `StreamingStt`, `FinalStt` | VoiceStudio implementations removed |
-| `voice/builtin/{tts,stt,whisper}.rs`, `voice/models.rs` | new | — |
-| `voice/mod.rs` | speaks through `Tts` | — |
+| `voice/builtin/{tts,stt,whisper}.rs`, `voice/models.rs` | new | - |
+| `voice/mod.rs` | speaks through `Tts` | - |
 | `voice/stt.rs` | segments go to `StreamingStt` / `FinalStt`; VAD and cleanup stay | WebSocket + model-choice code removed |
 | `voice/vs.rs` | moved behind the traits | deleted |
 | `voice/whisper.rs`, `sidecar/` | whisper.cpp added | Python sidecar deleted |
 | `panels.rs`, `prompts/panels.json`, `prompts/voices/` | clip per persona | voice-design fields removed |
 | `interview/live.rs` | new loader steps | VoiceStudio health check removed |
 | `commands.rs`, `lib.rs` | model status/download/cancel/delete/reload commands | VoiceStudio warm-up, persona prebuild, `voice_launch` removed |
-| `updates.rs`, `storage.rs` | — | VoiceStudio rows removed; voice models added |
+| `updates.rs`, `storage.rs` | - | VoiceStudio rows removed; voice models added |
 | `ui/app.js`, `ui/index.html` | engine choice, models card, loader steps, voice list, delivery | VoiceStudio UI removed |
 | `Cargo.toml` | `sherpa-onnx`, `whisper-rs` | `tokio-tungstenite` dropped if unused |
-| `.github/workflows/release.yml` | build deps per OS | — |
-| `src-tauri/tests/fixtures/voice/` | test set from Phase 0 | — |
+| `.github/workflows/release.yml` | build deps per OS | - |
+| `src-tauri/tests/fixtures/voice/` | test set from Phase 0 | - |
 
 ## Risks
 

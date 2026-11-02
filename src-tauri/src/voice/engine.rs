@@ -98,7 +98,16 @@ impl Tts {
             Self::Builtin { tts, clip } => {
                 let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
                 let (tts, clip, text) = (tts.clone(), *clip, text.to_string());
-                let job = tokio::task::spawn_blocking(move || tts.speak(&text, clip, speed, tx));
+                // One call per clause-sized piece, so the first audio and every later gap stay short on a slow CPU.
+                let job = tokio::task::spawn_blocking(move || -> Result<()> {
+                    for piece in builtin::pieces(&text) {
+                        if tx.is_closed() {
+                            break;
+                        }
+                        tts.speak(&piece, clip, speed, tx.clone())?;
+                    }
+                    Ok(())
+                });
                 // Dropping this future (a cut-in) drops `rx`, which makes the generator stop at its next sentence.
                 while let Some(pcm) = rx.recv().await {
                     on_pcm(&pcm);

@@ -1,4 +1,4 @@
-# AI — `src/brain/`
+# AI: `src/brain/`
 
 Hides which AI is used. Two entry points: a live `Session` per round, and `run_once` for one-shot jobs. Both work on
 Claude Code CLI and four HTTP APIs. Verified CLI facts and measured latencies: CLAUDE.md → *brain/*.
@@ -42,7 +42,7 @@ history (next answer joins it). One-shot: `chat` with `Effort::Medium`, or `rese
 | | Claude API | OpenAI | Gemini | Groq |
 |---|---|---|---|---|
 | endpoint | `POST /v1/messages` SSE | `POST /v1/responses` | `models/{m}:streamGenerateContent?alt=sse` | `api.groq.com/openai/v1/chat/completions` |
-| effort | `low` live / `medium` jobs, Claude 5 & 4.6+ (`claude_has_effort`) | `reasoning.effort` gpt-5/6/o* | — | `reasoning_effort` + `include_reasoning:false` on gpt-oss |
+| effort | `low` live / `medium` jobs, Claude 5 & 4.6+ (`claude_has_effort`) | `reasoning.effort` gpt-5/6/o* | - | `reasoning_effort` + `include_reasoning:false` on gpt-oss |
 | extras | `fallbacks:"default"` + beta header on current models; 400 naming fallbacks → resend without | `store:false` | skip `thought` parts | `stop` on `[Elapsed:`, `[Workspace]`, `[The candidate`; strip `【…†L…】` citations |
 | research | `web_search`/`web_fetch` (`_20260209` on 4.6+ else older); not streamed; `pause_turn` → resend ≤ 8× | `web_search` | `google_search`; count from `groundingMetadata.webSearchQueries` | `browser_search`, `tool_choice:"auto"`, not streamed, ≤ 3 tries on 500/"Parsing failed"/tool validation; model = report model if gpt-oss else `openai/gpt-oss-120b` |
 

@@ -161,6 +161,32 @@ pub fn clear_temp() -> Result<u64> {
     Ok(freed)
 }
 
+/// Startup sweep: round and job scratch dirs left behind by a killed process (the round ones hold the
+/// hidden project issues). Only exact `onsite-round-*` / `onsite-job-*` dirs older than `max_age` go.
+/// Called before any round or job of this process exists. Best effort: never fails.
+pub fn sweep_stale_scratch(base: &Path, now: std::time::SystemTime, max_age: std::time::Duration) -> usize {
+    let Ok(rd) = std::fs::read_dir(base) else { return 0 };
+    let mut n = 0;
+    for e in rd.filter_map(|e| e.ok()) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        if !(name.starts_with("onsite-round-") || name.starts_with("onsite-job-")) {
+            continue;
+        }
+        let Ok(meta) = e.metadata() else { continue };
+        if !meta.is_dir() {
+            continue;
+        }
+        let old = meta.modified().ok().and_then(|m| now.duration_since(m).ok()).is_some_and(|age| age >= max_age);
+        if old {
+            match std::fs::remove_dir_all(e.path()) {
+                Ok(()) => n += 1,
+                Err(err) => tracing::warn!("stale temp dir {name}: {err}"),
+            }
+        }
+    }
+    n
+}
+
 pub fn open_folder(path: &Path) -> Result<()> {
     if !path.exists() {
         return Err(AppError::NotFound("That folder doesn't exist yet.".into()));
@@ -174,6 +200,49 @@ pub fn open_folder(path: &Path) -> Result<()> {
     };
     std::process::Command::new(opener).arg(path).spawn()?;
     Ok(())
+}
+
+/// Opens an https URL in the default browser. Callers pass fixed URLs only.
+pub fn open_url(url: &str) -> Result<()> {
+    if !url.starts_with("https://") {
+        return Err(AppError::Invalid("Only https links open.".into()));
+    }
+    #[cfg(windows)]
+    if shell_open(url) {
+        return Ok(());
+    }
+    let mut cmd = if cfg!(windows) {
+        // Fallback only. Not `cmd /c start`: cmd would read `&` in the URL as a command separator.
+        let mut c = std::process::Command::new("rundll32.exe");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    } else if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    cmd.arg(url).spawn()?;
+    Ok(())
+}
+
+/// Windows: ShellExecuteW from this process, so the default browser is handed the URL by the foreground app
+/// (a child rundll32 has no foreground rights, and a browser that is already running can show the new tab behind).
+/// No command line is built, so `&` in the URL is safe. Returns false when Windows refuses; the caller then falls back.
+#[cfg(windows)]
+fn shell_open(url: &str) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "shell32")]
+    extern "system" {
+        fn ShellExecuteW(hwnd: isize, op: *const u16, file: *const u16, params: *const u16, dir: *const u16, show: i32) -> isize;
+    }
+    let wide = |s: &str| -> Vec<u16> { std::ffi::OsStr::new(s).encode_wide().chain(Some(0)).collect() };
+    let (op, file) = (wide("open"), wide(url));
+    // SAFETY: both strings are NUL-terminated and outlive the call; the other pointers are allowed to be null.
+    let r = unsafe { ShellExecuteW(0, op.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), 1) };
+    if r <= 32 {
+        tracing::warn!(code = r, "ShellExecute refused the link; using rundll32");
+    }
+    r > 32
 }
 
 // ---------- background image ----------
@@ -238,6 +307,30 @@ mod tests {
         assert_eq!(image_ext(b"RIFF\0\0\0\0WEBPVP8 "), Some("webp"));
         assert_eq!(image_ext(b"<svg"), None);
         assert_eq!(image_ext(b""), None);
+    }
+
+    #[test]
+    fn sweep_removes_only_old_scratch_dirs() {
+        use std::time::{Duration, SystemTime};
+        let base = tempfile::tempdir().unwrap();
+        for d in ["onsite-round-abc", "onsite-job-xyz", "onsite-roundabc", "other", "onsite-update"] {
+            std::fs::create_dir(base.path().join(d)).unwrap();
+        }
+        std::fs::write(base.path().join("onsite-round-file"), b"x").unwrap();
+        std::fs::write(base.path().join("onsite-round-abc/.system-prompt.md"), b"x").unwrap();
+        let hour = Duration::from_secs(3600);
+        // Fresh dirs stay.
+        assert_eq!(sweep_stale_scratch(base.path(), SystemTime::now(), hour), 0);
+        assert!(base.path().join("onsite-round-abc").exists());
+        // Two hours later they are stale; look-alikes and files stay.
+        let later = SystemTime::now() + hour * 2;
+        assert_eq!(sweep_stale_scratch(base.path(), later, hour), 2);
+        assert!(!base.path().join("onsite-round-abc").exists());
+        assert!(!base.path().join("onsite-job-xyz").exists());
+        for keep in ["onsite-roundabc", "other", "onsite-update", "onsite-round-file"] {
+            assert!(base.path().join(keep).exists(), "{keep}");
+        }
+        assert_eq!(sweep_stale_scratch(&base.path().join("missing"), later, hour), 0);
     }
 
     #[test]

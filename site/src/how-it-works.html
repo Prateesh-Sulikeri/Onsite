@@ -18,6 +18,7 @@
     <div class="nav-links">
       <a href="./#features">Features</a>
       <a href="./#engines">Engines</a>
+      <a href="guides.html">Guides</a>
       <a href="how-it-works.html" aria-current="page">How it works</a>
       <a href="changelog.html">Changelog</a>
       <a href="{{gh}}">GitHub</a>
@@ -36,6 +37,7 @@
       <li><a href="#interviewer">The interviewer</a></li>
       <li><a href="#voice">Voice</a></li>
       <li><a href="#coding">Coding rounds</a></li>
+      <li><a href="#projects">Comprehension projects</a></li>
       <li><a href="#research">Research and dossiers</a></li>
       <li><a href="#feedback">Feedback</a></li>
       <li><a href="#resume">Resume check</a></li>
@@ -169,7 +171,7 @@ class Solution { ... }
         <li><strong>Coding:</strong> a problem from the bank, with the optimal complexity, hints to give one at a time, and follow-ups.</li>
         <li><strong>Variety:</strong> Claude Code has no temperature setting, so each round gets a different opener, plus the openings of recent rounds marked "don't reuse".</li>
       </ul>
-      <p>The prompt asks for 1–4 spoken sentences and one question per turn, no feedback during the round, and pacing by the <code>[Elapsed]</code> tag. When the round is over, the interviewer writes <code>[[END]]</code>. The splitter removes it, and the UI offers "Get my feedback".</p>
+      <p>The prompt asks for 1-4 spoken sentences and one question per turn, no feedback during the round, and pacing by the <code>[Elapsed]</code> tag. When the round is over, the interviewer writes <code>[[END]]</code>. The splitter removes it, and the UI offers "Get my feedback".</p>
     </section>
 
     <section id="voice">
@@ -205,12 +207,37 @@ class Solution { ... }
       <p><strong>Run</strong> uses the example tests. <strong>Submit</strong> adds the hidden tests and random stress cases checked against the reference. The result goes to the interviewer with your next answer, so it can react to a failing test like a real interviewer would. Lists, trees, graphs, design classes and encode/decode round-trips are all supported.</p>
     </section>
 
+    <section id="projects">
+      <h2>Comprehension projects</h2>
+      <p>The code comprehension round uses a small multi-file project instead of one problem. You read it in a file tree, edit what you want, and talk through what is wrong. Nothing runs. Your edits go to the interviewer as unified diffs against the original files, so it sees exactly what you changed.</p>
+      <ul>
+        <li><strong>Written for you:</strong> the AI writes a project from the job posting, the company dossier and your resume. It is checked (2-5 files, safe paths, size limits, 2-4 planted issues with real line numbers, no comments that give a bug away) and sent back once if it fails. Generated code is not compiled or run, so a planted bug can be wrong. Onsite tells you this before the round.</li>
+        <li><strong>Ready-made:</strong> eight bundled projects, used when the AI fails twice or you choose them. Each has a ticket-style brief, hidden issues and a reference fix.</li>
+        <li><strong>Graded:</strong> the report marks each hidden issue as found, fixed, fixed badly or missed.</li>
+      </ul>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Project</th><th>Language</th><th>What it is about</th></tr></thead>
+          <tbody>
+            <tr><td>Checkout with retries</td><td>Java</td><td>Double charges on retry: idempotency, check-then-act</td></tr>
+            <tr><td>Profile cache</td><td>Python</td><td>A TTL cache that evicts the newest entries, stale reads, stampede</td></tr>
+            <tr><td>Payment events consumer</td><td>Java</td><td>Kafka offsets, at-least-once delivery, a poison message</td></tr>
+            <tr><td>Outbox worker</td><td>Python</td><td>Postgres outbox with three workers: duplicates, lost events, retry loops</td></tr>
+            <tr><td>Redis token bucket</td><td>Python</td><td>Rate limiter race, client clock, keys that never expire</td></tr>
+            <tr><td>Wallet transfers</td><td>Java</td><td>Money as floats, lost updates, lock-order deadlock</td></tr>
+            <tr><td>Product search API</td><td>JavaScript</td><td>SQL injection, N+1 queries, a dropped last page</td></tr>
+            <tr><td>Payment webhook receiver</td><td>Go</td><td>Signature compare, replay window, duplicate delivery</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section id="research">
       <h2>Research and dossiers</h2>
       <p>A research job is the only call that gets tools: web search and web fetch. It runs <code>prompts/research.md</code> as a background task, reads recent candidate reports, and returns a dossier: the rounds, their style, the reported questions, values, pitfalls and sources.</p>
       <ul>
         <li>Progress is never faked. Search and page counts come from real tool calls in the stream, and stages from <code>PROGRESS</code> lines the model prints.</li>
-        <li>The result is checked against <code>docs/dossier.schema.json</code> and tidied: round names are mapped to round types, and minutes are clamped to 10–180.</li>
+        <li>The result is checked against <code>docs/dossier.schema.json</code> and tidied: round names are mapped to round types, and minutes are clamped to 10-180.</li>
         <li>Dossiers are saved to SQLite and as JSON files, and can be exported and imported.</li>
       </ul>
     </section>
@@ -233,6 +260,7 @@ class Solution { ... }
       <ul>
         <li>API keys live in the <code>settings</code> table. They're never sent back to the UI (it only learns whether a key is set) and never logged.</li>
         <li>No accounts, analytics or telemetry. The network is used only for the AI you picked, research searches, voice model downloads and update checks, the last two only when you ask.</li>
+        <li>Settings has an About page: why Onsite exists, the MIT licence, the author and credits. Its links open fixed pages only (the UI cannot pass a URL to the opener).</li>
         <li>Storage limits (rounds to keep, days, log size) are enforced at startup. Uninstalling removes the models, log and temp files, and your data too if you choose.</li>
       </ul>
     </section>
@@ -278,6 +306,7 @@ cargo test                      # add -- --ignored to run every reference soluti
     <a class="brand" href="./"><img src="assets/logo.png" alt="" width="24" height="24">Onsite</a>
     <nav>
       <a href="{{gh}}">GitHub</a>
+      <a href="guides.html">Guides</a>
       <a href="changelog.html">Changelog</a>
       <a href="{{gh}}/issues">Report a bug</a>
       <a href="{{gh}}/blob/main/LICENSE">MIT licence</a>

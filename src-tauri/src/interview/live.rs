@@ -6,6 +6,7 @@ use crate::bank::{Question, Test};
 use crate::brain::{prompts, run_once, Session, SessionConfig, SessionEvent, Tools};
 use crate::runner::{self, Kind, Lang};
 use crate::error::{AppError, Result};
+use crate::projects::Project;
 use crate::store::Turn;
 use crate::AppState;
 use serde::Serialize;
@@ -23,6 +24,8 @@ pub struct ActiveRound {
     session: Session,
     /// The DSA problem for a coding round, from the local bank.
     question: Option<Question>,
+    /// Comprehension round: the multi-file project on the candidate's screen.
+    project: Option<Project>,
     /// Full-size tests for Submit, built once per round.
     stress: Option<Vec<Test>>,
     /// Latest Run/Submit result, sent with the candidate's next message.
@@ -33,6 +36,13 @@ pub struct ActiveRound {
     lang: String,
     last_ws: Workspace,
     log: Arc<RoundLog>,
+}
+
+impl ActiveRound {
+    /// Texts a bug report must not repeat (the transcript so far). Used by `report.rs` to flag or drop private lines.
+    pub fn private_texts(&self) -> Vec<String> {
+        self.log.turns.lock().unwrap().iter().map(|t| t.text.clone()).collect()
+    }
 }
 
 struct RoundLog {
@@ -71,6 +81,8 @@ pub struct RoundInfo {
     pub voice: bool,
     /// Coding rounds: the problem as the candidate sees it.
     pub problem: Option<Value>,
+    /// Comprehension rounds: the project's brief and files, as the candidate sees them.
+    pub project: Option<Value>,
 }
 
 /// Problem difficulty for a level, until there is a picker.
@@ -334,9 +346,15 @@ fn load_setup(state: &AppState, loop_id: i64) -> Result<LoopSetup> {
     Ok(serde_json::from_value(config)?)
 }
 
-pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<RoundInfo> {
+/// `ready_made`: the candidate's answer to "write the code project with AI?" for this start. None = the loop's own setting.
+pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize, ready_made: Option<bool>) -> Result<RoundInfo> {
     let state = app.state::<AppState>();
-    let setup = load_setup(&state, loop_id)?;
+    let mut setup = load_setup(&state, loop_id)?;
+    let mut settings = state.settings();
+    setup.voice_female = settings.voice.voice_female();
+    if let Some(r) = ready_made {
+        setup.ready_made_project = r;
+    }
     if index >= setup.rounds.len() {
         return Err(AppError::Invalid("No such round in this loop.".into()));
     }
@@ -382,21 +400,27 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         }
         pick
     };
+    // A newer start (or cancel_start) bumps this; the project writer and the loader below then give up.
+    let me = state.prep_gen.fetch_add(1, Ordering::SeqCst) + 1;
+    // A comprehension round gets a code base: written by the AI for this job, else a ready-made one,
+    // else (none in this language) the interviewer writes one file.
+    let project = if plan.key == "comprehension" { choose_project(app, &setup, index, &plan, opener.as_deref().unwrap_or(""), me).await? } else { None };
+    if let Some(p) = &project {
+        system_prompt.push_str(&p.interviewer_block());
+    }
     // A coding round's problem comes from the bank, so only its wording needs to vary.
-    let earlier: Vec<String> = match question {
-        Some(_) => Vec::new(),
-        None => state.store.lock().unwrap().recent_transcripts(&plan.key, 4).unwrap_or_default().iter().filter_map(|t| opening_excerpt(t)).collect(),
+    let earlier: Vec<String> = match (&question, &project) {
+        (Some(_), _) | (_, Some(_)) => Vec::new(),
+        (None, None) => state.store.lock().unwrap().recent_transcripts(&plan.key, 4).unwrap_or_default().iter().filter_map(|t| opening_excerpt(t)).collect(),
     };
     tracing::info!(?opener, earlier = earlier.len(), "round variety");
-    system_prompt.push_str(&session_block(opener.as_deref(), &earlier));
-    let mut settings = state.settings();
+    // A project already sets the scenario, so the scenario starting point is dropped for it.
+    system_prompt.push_str(&session_block(if project.is_some() { None } else { opener.as_deref() }, &earlier));
     // A panel interviewer always speaks in their own voice, at their own pace.
     if let Some(p) = state.panels.persona(&setup.panel, &plan.key) {
         settings.voice.speed *= p.speed_factor;
         settings.voice.persona = Some(crate::voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states, clip: p.clip });
     }
-    // A newer start (or cancel_start) bumps this; the loader below then gives up.
-    let me = state.prep_gen.fetch_add(1, Ordering::SeqCst) + 1;
     prep(app, "claude", "run", "Connecting to the AI model");
     let backend = match state.backend().await {
         Ok(l) => l,
@@ -489,6 +513,7 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         ActiveRound {
             session,
             question: question.clone(),
+            project: project.clone(),
             stress: None,
             pending_run: None,
             cfg_prompt: system_prompt,
@@ -498,7 +523,7 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
             // The editor opens with the starter code; it is not worth sending until they change it.
             last_ws: Workspace {
                 code: question.as_ref().zip(Lang::from_name(&setup.lang)).map(|(q, l)| runner::starter(q, l)).unwrap_or_default(),
-                notes: String::new(),
+                ..Default::default()
             },
             log,
         },
@@ -511,10 +536,89 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize) -> Result<
         company: setup.company_name(cat),
         level: cat.levels[&setup.level].clone(),
         problem: question.as_ref().map(|q| problem_view(q, &setup.lang)),
+        project: project.as_ref().map(Project::view),
         lang: setup.lang,
         plan,
         voice,
     })
+}
+
+/// The code base for a comprehension round. Writes one with the AI from the job description, the company
+/// dossier and the resume (unless the candidate chose a ready-made one); falls back to a bundled project.
+/// `None` = no project, the interviewer writes a file. Err only when the start was cancelled.
+async fn choose_project(app: &AppHandle, setup: &LoopSetup, index: usize, plan: &PlannedRound, hint: &str, me: u64) -> Result<Option<Project>> {
+    let state = app.state::<AppState>();
+    let cat = &state.catalog;
+    let titles: Vec<String> = state.store.lock().unwrap().get_setting(crate::projgen::RECENT_KEY).ok().flatten().unwrap_or_default();
+    if !setup.ready_made_project {
+        prep(app, "project", "run", "Writing a code project for this job");
+        match prompts::load(&state.prompts_dir, "project.md") {
+            Ok(template) => {
+                let level = cat.levels.get(&setup.level).cloned().unwrap_or_default();
+                let bar = cat.level_bar.get(&setup.level).cloned().unwrap_or_default();
+                let company = setup.company_name(cat);
+                let input = crate::projgen::GenInput {
+                    lang: &setup.lang,
+                    level_name: &level,
+                    level_bar: &bar,
+                    minutes: plan.minutes,
+                    company: &company,
+                    dossier: setup.dossier.as_ref().map(|d| (d, index)),
+                    jd: &setup.jd,
+                    resume: &setup.resume,
+                    scenario_hint: hint,
+                    avoid: &titles,
+                };
+                let cancelled = async {
+                    while state.prep_gen.load(Ordering::SeqCst) == me {
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                    }
+                };
+                let written = tokio::select! {
+                    r = crate::projgen::generate(&state, &template, &input) => r,
+                    () = cancelled => return Err(AppError::Invalid("Cancelled.".into())),
+                };
+                match written {
+                    Ok(p) => {
+                        let mut recent = titles;
+                        recent.insert(0, p.title.clone());
+                        recent.truncate(crate::projgen::RECENT);
+                        if let Err(e) = state.store.lock().unwrap().set_setting(crate::projgen::RECENT_KEY, &recent) {
+                            tracing::warn!("saving recent project titles: {e}");
+                        }
+                        prep(app, "project", "ok", &p.title);
+                        return Ok(Some(p));
+                    }
+                    Err(e) => {
+                        tracing::warn!("writing a project failed: {e}");
+                        prep(app, "project", "warn", &format!("Couldn't write one. {e} Using a ready-made project."));
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("project prompt: {e}");
+                prep(app, "project", "warn", "Using a ready-made project.");
+            }
+        }
+    }
+    let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos() as u64);
+    let key = "projects:recent";
+    let store = state.store.lock().unwrap();
+    let mut recent: Vec<String> = store.get_setting(key).ok().flatten().unwrap_or_default();
+    let Some(p) = state.projects.pick(&setup.lang, &setup.level, &setup.company, &recent, seed).cloned() else {
+        prep(app, "project", "off", &format!("No ready-made project in {}. The interviewer writes one file.", setup.lang));
+        return Ok(None);
+    };
+    recent.retain(|r| *r != p.id);
+    recent.insert(0, p.id.clone());
+    recent.truncate((state.projects.list.len() / 2).max(1));
+    if let Err(e) = store.set_setting(key, &recent) {
+        tracing::warn!("saving recent projects: {e}");
+    }
+    if setup.ready_made_project {
+        prep(app, "project", "ok", &p.title);
+    }
+    Ok(Some(p))
 }
 
 /// Tells the loader when Claude is up (its model) and when the first sentence of its reply is in.
@@ -592,16 +696,25 @@ async fn spawn_session(app: &AppHandle, round_id: i64, cfg: SessionConfig, log: 
 
 /// Sends the candidate's turn. Restarts Claude with `--resume` if it died.
 /// Rejected while the interviewer is still replying, so turns never pile up.
-pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, ws: Workspace, force: bool) -> Result<Option<Turn>> {
+pub async fn send_answer(app: &AppHandle, round_id: i64, text: String, mut ws: Workspace, force: bool) -> Result<Option<Turn>> {
     let state = app.state::<AppState>();
     let mut rounds = state.rounds.lock().await;
     let r = rounds.get_mut(&round_id).ok_or_else(|| AppError::NotFound("This round is not running.".into()))?;
     if r.session.busy(REPLY_STALE) {
         return Err(AppError::Invalid(BUSY.into()));
     }
-    *r.log.workspace.lock().unwrap() = ws.clone();
-    let elapsed = r.log.elapsed_min();
     let prev_ws = r.last_ws.clone();
+    if let Some(p) = &r.project {
+        // The snapshot keeps the whole diff; the message carries only what changed since the last send.
+        let since = r.last_ws.files.clone();
+        let full = p.diffs(&ws.files, &Default::default(), true);
+        let new = p.diffs(&ws.files, &since, force);
+        *r.log.workspace.lock().unwrap() = Workspace { diff: full, issues: p.issues_text(), ..ws.clone() };
+        ws.diff = new;
+    } else {
+        *r.log.workspace.lock().unwrap() = ws.clone();
+    }
+    let elapsed = r.log.elapsed_min();
     let Some((mut content, shared)) = candidate_message(&text, &ws, &mut r.last_ws, force, &r.lang, elapsed, r.minutes) else {
         return Ok(None);
     };
@@ -689,6 +802,13 @@ pub async fn run_code(app: &AppHandle, round_id: i64, code: String, submit: bool
 
 /// The candidate switched editor language mid-round. Returns that language's starter code
 /// ("" when the round has no problem) and whether Run works in it.
+pub async fn project_diff(app: &AppHandle, round_id: i64, files: &std::collections::BTreeMap<String, String>) -> Result<String> {
+    let state = app.state::<AppState>();
+    let rounds = state.rounds.lock().await;
+    let r = rounds.get(&round_id).ok_or_else(|| AppError::NotFound("This round is not running.".into()))?;
+    Ok(r.project.as_ref().map(|p| p.diffs(files, &Default::default(), true)).unwrap_or_default())
+}
+
 pub async fn set_round_lang(app: &AppHandle, round_id: i64, lang: String) -> Result<Value> {
     let state = app.state::<AppState>();
     let mut rounds = state.rounds.lock().await;
@@ -729,7 +849,10 @@ pub async fn end_round(app: &AppHandle, round_id: i64, ws: Workspace) -> Result<
     state.voice.end();
     let active = state.rounds.lock().await.remove(&round_id);
     if let Some(r) = active {
-        *r.log.workspace.lock().unwrap() = ws;
+        *r.log.workspace.lock().unwrap() = match &r.project {
+            Some(p) => Workspace { diff: p.diffs(&ws.files, &Default::default(), true), issues: p.issues_text(), ..ws },
+            None => ws,
+        };
         r.log.persist(&state, r.session.session_id().as_deref());
         r.session.shutdown().await;
     }
@@ -788,7 +911,7 @@ pub async fn generate_report(app: &AppHandle, round_id: i64) -> Result<Value> {
         if !matches!(store.report(round_id), Ok(Some((Some(_), _)))) {
             let _ = store.save_report(round_id, None, &out.text);
         }
-        tracing::warn!(round_id, raw = %out.text.chars().take(500).collect::<String>(), "report JSON did not parse");
+        tracing::warn!(round_id, chars = out.text.chars().count(), "report JSON did not parse");
         AppError::Ai("The report came back in the wrong format. Try again.".into())
     })?;
     report["metrics"] = serde_json::to_value(&m)?;
@@ -902,7 +1025,7 @@ pub async fn loop_feedback(app: &AppHandle, loop_id: i64) -> Result<LoopFeedback
         done += 1;
         progress(done, "rounds");
         if let Err(e) = res {
-            tracing::warn!(round_id = id, "interview feedback: round report failed: {e}");
+            tracing::warn!(round_id = id, "interview feedback: round report failed: {}", crate::error::log_clip(&e.to_string()));
             failed.push((id, e.to_string()));
         }
     }
@@ -912,7 +1035,7 @@ pub async fn loop_feedback(app: &AppHandle, loop_id: i64) -> Result<LoopFeedback
     if reviewed >= 2 && (done > failed.len() || saved.verdict.is_none()) {
         progress(done, "verdict");
         if let Err(e) = loop_verdict(app, loop_id).await {
-            tracing::warn!(loop_id, "interview feedback: verdict failed: {e}");
+            tracing::warn!(loop_id, "interview feedback: verdict failed: {}", crate::error::log_clip(&e.to_string()));
         }
     }
     let mut out = loop_feedback_saved(&state, loop_id)?;

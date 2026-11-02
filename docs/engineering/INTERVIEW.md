@@ -1,4 +1,4 @@
-# INTERVIEW — loops, rounds, reports
+# INTERVIEW: loops, rounds, reports
 
 Code: `src/interview/{mod,live,report}.rs`, `src/catalog.rs`, `src/panels.rs`, `prompts/{catalog.json,panels.json,interviewer.md,persona_block.md,dossier_block.md,report.md,verdict.md}`; UI: `ui/app.js` sections *setup*, *call room*, *preparing*, *feedback + report*, *interview feedback*, *dashboard*.
 
@@ -26,10 +26,10 @@ Rounds (key · name · min · default tab · rubric):
 `sysdesign` 60 notes [Requirements and scoping, Architecture, Deep dive, Scale and reliability, Trade-offs, Driving the discussion] ·
 `behavioral` 45 notes [Specificity, Ownership, Self-awareness, Collaboration and conflict, Values alignment] ·
 `hm` Hiring manager 45 notes [Scope and impact, Judgment, Team fit, Motivation, Quality of their questions].
-Each round also has `blurb`, `guide` (sent to interviewer), `openers` (7–19; none for coding).
+Each round also has `blurb`, `guide` (sent to interviewer), `openers` (7-19; none for coding).
 Companies: `auto` (infer from JD) google amazon meta microsoft apple netflix uber stripe atlassian flipkart inpay bank startup.
 Levels: ng sde1 sde2 senior staff (+`LEVEL_BAR` text). Temper: supportive realistic barraiser.
-Panels (`panels.json`): `indian_techies`, `international_techies`; 5 interviewers each with traits, strictness 1–5,
+Panels (`panels.json`): `indian_techies`, `international_techies`; 5 interviewers each with traits, strictness 1-5,
 backstory, owned round types, speed factor, voice design. Temperament overrides persona strictness for hinting/warmth.
 
 ## Prompt assembly (`interviewer_prompt` + `start_round`)
@@ -45,7 +45,7 @@ skipped for coding. Block is marked private ("never mention").
 Company loop: `create_loop` freezes a dossier copy with only chosen rounds; `rounds[i] = process[i].kind`; `plan` takes
 name/minutes from the dossier round; `dossier_block` per round (RESEARCH.md).
 
-## `start_round(loop_id, index)` — returns when the room is ready
+## `start_round(loop_id, index)`: returns when the room is ready
 
 1. load + `validate` setup; `plan`; build prompt; coding → `bank.match_reported(dossier questions)` else
    `bank.pick(difficulty_for(level), [], company, {}, seed)`; opener.
@@ -96,15 +96,15 @@ Whiteboard:
 
 Report JSON: `{overall 0-100, decision: Strong hire|Hire|Lean hire|Lean no hire|No hire, level_signal, headline,
 dimensions[{name, score 1-4|null, evidence}], went_well[], held_back[], fix_first, moments[{question, said, better}],
-practice_next[], metrics}` (2–4 items per list).
-Verdict JSON: `{decision: Hire|No hire|Hire at lower level|Borderline — more data needed, rationale, strongest_signal,
+practice_next[], metrics}` (2-4 items per list).
+Verdict JSON: `{decision: Hire|No hire|Hire at lower level|Borderline, more data needed, rationale, strongest_signal,
 biggest_risk, plan[]}`.
 
 ## Requirements (stable ids)
 
 | Id | Rule |
 |---|---|
-| LOOP-R1 | Interviewer speaks 1–4 sentences, one question, no markdown in speech (prompt) |
+| LOOP-R1 | Interviewer speaks 1-4 sentences, one question, no markdown in speech (prompt) |
 | LOOP-R2 | Paces by `[Elapsed]`; wrap-up at ~85%; leaves time for candidate questions (prompt) |
 | LOOP-R3 | Interviewer closes with `[[END]]` → UI "Get my feedback" |
 | LOOP-R4 | No feedback/praise during round (prompt) |
@@ -136,4 +136,4 @@ No placeholder numbers; empty states only.
 
 - Coding problem pick passes empty `used` set → problems repeat across rounds.
 - Difficulty is level-mapped (ng Easy, senior/staff Hard, else Medium); no picker.
-- Comprehension round: interviewer writes the code to review; redesign pending.
+- Comprehension round: a multi-file project the AI writes for the loop's JD/company/resume (`projgen.rs`), else a bundled one from `projects/`, else the interviewer writes one file (see CODING.md, Projects).

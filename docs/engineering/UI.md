@@ -1,4 +1,4 @@
-# UI — `ui/`
+# UI: `ui/`
 
 Plain HTML/CSS/JS in the system WebView. No framework, no build step (except vendored bundles). Tauri serves only `ui/`.
 CSP: `default-src 'self'`, no inline script, no network except IPC.
@@ -48,7 +48,7 @@ Sampled from `assets/twilight.webp`. OKLCH. Navy neutrals hue 266, violet accent
 
 Themes: families `onsite nord rosepine gruvbox` × `light dark`, mode `system|light|dark`; default Onsite dark (= app.css
 `:root` unchanged). Other themes set ~25 base tokens; derived ones come from `themes.css` shared block. Backdrop
-`--backdrop`: theme image, user image (dim veil 0–85%, default 35%), or none (`plain`); never in the call room.
+`--backdrop`: theme image, user image (dim veil 0-85%, default 35%), or none (`plain`); never in the call room.
 Whiteboard is always dark.
 
 ## Rules for new UI
@@ -75,7 +75,7 @@ Whiteboard is always dark.
 | View id | Purpose / key parts |
 |---|---|
 | `dashboard` | start / review last round, weekly goal, this week ring, skill performance, score trend (bar 70), practise next, calendar + streak, highlights, recent |
-| `interviews` | mode cards (general/company) · steps 1–5: context (company style or dossier, temperament, panel, level, language) · round tiles · resume + JD drops · notes · round length → Start; right: loop timeline, what to expect |
+| `interviews` | mode cards (general/company) · steps 1-5: context (company style or dossier, temperament, panel, level, language) · round tiles · resume + JD drops · notes · round length → Start; right: loop timeline, what to expect |
 | `ready` | mic/speaker pickers, live meter, Test speaker/mic, resume-check result, Join; "Check before every round" (`onsite.readyEvery`; else next rounds skip to loader) |
 | `prep` | checklist from `prep` events (`PREP_STEPS`: AI model, First question, VoiceStudio, Interviewer's voice, Live captions, Accurate transcript, Speaker, Microphone; Waiting/Ready/Fallback/Failed/Off); Cancel; Start typed on voice failure |
 | `room` | header (company, round, level, minutes, round x/n, interviewer, mic picker, countdown timer, Context, Terminate) · left: problem panel + split + transcript + closed banner + composer · controls: Mute, orb (phases: thinking, speaking "tap to cut in", listening, hearing, transcribing, muted, closed, idle), End · right: Editor/Whiteboard/Notes/From interviewer · rail: context chips, round plan (`PLANS`), tips. Typed round hides orb/mic controls |
@@ -83,7 +83,7 @@ Whiteboard is always dark.
 | `feedback` | history grouped by loop, scores by band, delete round |
 | `resume` | file drop + posting → score rings, ATS rows, keywords, checks, extracted preview, tips, AI screen card |
 | `dossiers` | list + Import; research form; job cards (6 stages, %, log, searches/pages); dossier detail (use/export/delete) |
-| `settings` | sections: appearance · models (provider cards, path/key, health check, two model pickers) · voice (status, start, devices, voice, quality, speed, pause, tests, interviewer cards + Play voice) · updates · privacy · storage |
+| `settings` | sections: appearance · models (provider cards, path/key, health check, two model pickers) · voice (status, start, devices, voice, quality, speed, pause, tests, interviewer cards + Play voice) · updates · privacy · storage · share (Send feedback) · about (why, MIT licence, live version via `app_version`, author, credits, roadmap; links are `data-link` buttons that call `open_link`) |
 
 Flow: dashboard → interviews → (resume check) → ready → prep → room → report → next round (ready/prep) … → loop feedback.
 
@@ -101,6 +101,15 @@ Flow: dashboard → interviews → (resume check) → ready → prep → room �
 - Room: `#voiceChip` in `.room-meta` and `#voiceWarn` banner under `.room-head`, both drawn by `renderVoiceChip()` (called from `applyVoiceUi`, so it follows `s.voiceOn` after `start_round`). Banner shows when `s.wanted && !s.voiceOn`; reason = first warn/fail `prep` detail for voicestudio/voice/speaker/mic (`s.voiceWhy`); dismiss sets `s.warnOff`. Not shown when voice is off in Settings.
 - Setup: `syncPanels()` (run at end of `refreshStatus`) disables blocked `<option>`s, relabels them, moves a blocked selection to the first allowed panel or Mixed (`panelNote`), shows `#panelWarn`.
 - Get ready: `#readyMode` line and `#readyPanelWarn` (loop already made with a blocked panel; does not block). Loader subtitle includes `modeLine`. Persona cards in Settings show the built-in voice, or "VoiceStudio only", when engine is builtin.
+
+## Send feedback (Settings › Send feedback, `data-sec="share"`)
+- Also linked from the sidebar foot. `renderFeedbackForm()` builds the choices from `FB` (app.js); `send_feedback` →
+  `feedback.rs` posts them to the owner's Google Form (`formResponse`, `entry.<id>` fields, no sign-in).
+- `FB` labels, `feedback.rs` constants and the live form must match exactly (em dashes included). If the owner edits the
+  form, re-read ids/labels from `FB_PUBLIC_LOAD_DATA_` in the viewform HTML. Google answers 400 to unknown labels.
+- The survey attaches nothing but the answers. Bugs and ideas use the report view below, not the survey.
+- Report view `#view-issue` (`openIssue(cat, err)`; not `openReport`, which is the round report. In a round it asks "Leave the call?" first (`leaveCall`, shared with `data-nav`); reopening keeps the typed text. Entry points: sidebar "Report a bug" (`#sideReport`), About "Report a bug", error toast "Report this", a link atop the survey): Bug|Idea, editable fields, "Added by Onsite" fields with Remove, a live preview from `report_preview` (debounced 300 ms), then `open_issue`. `lastErr` (set by `toast`) and `issueFrom` (set by `nav`) fill the error and screen fields. Clipboard is written inside the click, before the browser opens. Backend and rules: `REPORT.md`.
+- `open_link(which)` opens fixed https links (form, site, guides, repo, issues, issues_search, discussions, releases, license, privacy, security, notices, author, resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw) in the browser; the UI never passes a URL.
 
 ## Gaps
 

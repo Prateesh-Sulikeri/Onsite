@@ -28,6 +28,7 @@
     <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
     <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20M8 7h4M8 11h4M8 15h4"/></symbol>
     <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.7 13.3a15 15 0 0 1-3-4.1l1.9-1.9a1 1 0 0 0 .2-1.1L8.6 3.6A1 1 0 0 0 7.6 3H4a1 1 0 0 0-1 1.1A18 18 0 0 0 7 14M14 17a15 15 0 0 0 5.9 1.9 1 1 0 0 0 1.1-1v-3.6a1 1 0 0 0-.6-.9l-2.6-1.2a1 1 0 0 0-1.1.2l-1.5 1.5M2 2l20 20"/></symbol>
+    <symbol id="i-bug" viewBox="0 0 24 24"><path d="M8 8a4 4 0 0 1 8 0v7a4 4 0 0 1-8 0zM12 8v11M8 12H3M16 12h5M8 16l-3 2M16 16l3 2M9 5 7 3M15 5l2-2"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
     <symbol id="i-code" viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></symbol>
     <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
@@ -63,16 +64,19 @@
       <span class="logo-word">Onsite</span>
     </div>
     <nav class="nav">
-      <button class="nav-item" data-nav="dashboard"><svg><use href="#i-home"/></svg><span>Dashboard</span></button>
-      <button class="nav-item" data-nav="interviews"><svg><use href="#i-chat"/></svg><span>Interviews</span></button>
-      <button class="nav-item" data-nav="resume"><svg><use href="#i-doc-check"/></svg><span>Resume check</span></button>
-      <button class="nav-item" data-nav="dossiers"><svg><use href="#i-folder"/></svg><span>Dossiers</span></button>
-      <button class="nav-item" data-nav="feedback"><svg><use href="#i-chart"/></svg><span>Feedback</span></button>
-      <button class="nav-item" data-nav="settings"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
+      <button class="nav-item" data-nav="dashboard" title="Your progress and goals"><svg><use href="#i-home"/></svg><span>Dashboard</span></button>
+      <button class="nav-item" data-nav="interviews" title="Start a practice interview"><svg><use href="#i-chat"/></svg><span>Interviews</span></button>
+      <button class="nav-item" data-nav="resume" title="See how an ATS reads your resume"><svg><use href="#i-doc-check"/></svg><span>Resume check</span></button>
+      <button class="nav-item" data-nav="dossiers" title="Research how a company interviews"><svg><use href="#i-folder"/></svg><span>Company research</span></button>
+      <button class="nav-item" data-nav="feedback" title="Reports from your finished rounds"><svg><use href="#i-chart"/></svg><span>Past rounds</span></button>
+      <button class="nav-item" data-nav="settings" title="AI model, voice, look and data"><svg><use href="#i-gear"/></svg><span>Settings</span></button>
     </nav>
     <div class="side-foot">
       <button class="sys" id="sysClaude" data-nav="settings" data-sec="models" title="AI model"><i class="dot"></i><span id="sysClaudeName">AI model</span></button>
       <button class="sys" id="sysVoice" data-nav="settings" data-sec="voice" title="VoiceStudio"><i class="dot"></i><span>VoiceStudio</span></button>
+      <button class="sys" id="helpTour" title="A short tour of the app"><svg><use href="#i-bulb"/></svg><span>Take the tour</span></button>
+      <button class="sys" id="sideReport" title="Report a bug or suggest an idea on GitHub"><svg><use href="#i-bug"/></svg><span>Report a bug</span></button>
+      <button class="sys" data-nav="settings" data-sec="share" title="Send feedback"><svg><use href="#i-send"/></svg><span>Send feedback</span></button>
     </div>
   </aside>
 
@@ -86,6 +90,7 @@
           <p class="lede">Every score here comes from your own rounds and their written feedback.</p>
         </div>
       </header>
+      <div class="panel start-card" id="dashStart" hidden></div>
       <div class="dash">
         <div class="stack">
           <div class="dash-actions">
@@ -149,109 +154,138 @@
 
       <div class="setup-grid">
         <div class="stack">
-          <div class="modes" role="radiogroup" aria-label="Mode">
-            <button class="mode" role="radio" aria-checked="true" id="modeGeneral">
-              <span class="mode-ic"><svg><use href="#i-wand"/></svg></span>
-              <span class="mode-tx"><b>General practice</b><small>Pick any rounds and a company style. Starts right away.</small></span>
-              <span class="mode-check"><svg><use href="#i-check"/></svg></span>
+          <ol class="stepper" id="stepper" aria-label="Setup steps"></ol>
+
+          <!-- Stage 1: experience -->
+          <div class="stage" data-stage="1">
+            <button class="action lead quick" id="quickStart" type="button">
+              <span class="action-ic"><svg><use href="#i-play"/></svg></span>
+              <span class="action-tx"><b>Quick start: one 10-minute coding round</b><small>Short and simple. You only need to add your resume.</small></span>
+              <svg class="action-go"><use href="#i-arrow"/></svg>
             </button>
-            <button class="mode" role="radio" aria-checked="false" id="modeCompany">
-              <span class="mode-ic"><svg><use href="#i-building"/></svg></span>
-              <span class="mode-tx"><b>Company-specific</b><small>Runs a company’s real loop, from recent candidate reports.</small></span>
-              <span class="mode-check"><svg><use href="#i-check"/></svg></span>
-            </button>
-          </div>
-
-          <section class="panel step">
-            <span class="step-n">1</span>
-            <div class="step-body">
-              <header class="step-head"><h2>Set your context</h2><p>Tell us what you want. The panel tailors every round to it.</p></header>
-              <div class="form-grid">
-                <label class="field" id="companyField"><span>Company style</span>
-                  <span class="sel"><svg><use href="#i-building"/></svg><select id="company"></select></span>
-                  <small class="hint">Sets tone, question style and how you’re scored.</small></label>
-                <label class="field" id="dossierField" hidden><span>Company dossier</span>
-                  <span class="sel"><svg><use href="#i-building"/></svg><select id="dossier"></select></span>
-                  <small class="hint" id="dossierHint"></small></label>
-                <label class="field"><span>Interviewer style</span>
-                  <span class="sel"><svg><use href="#i-user"/></svg>
-                  <select id="temper">
-                    <option value="supportive">Supportive — gives hints</option>
-                    <option value="realistic">Realistic — like a real panel</option>
-                    <option value="barraiser">Bar-raiser — hard, rarely hints</option>
-                  </select></span>
-                  <small class="hint">Real follow-ups and interruptions, at the level you pick.</small></label>
-                <label class="field span-2"><span>Interviewers</span>
-                  <span class="sel"><svg><use href="#i-users"/></svg><select id="panel"><option value="">Mixed — a different interviewer each round</option></select></span>
-                  <small class="hint" id="panelPeople"></small>
-                  <small class="hint warn" id="panelWarn" hidden></small>
-                </label>
-                <label class="field"><span>Level</span><span class="sel"><svg><use href="#i-chart"/></svg><select id="level"></select></span></label>
-                <label class="field"><span>Coding language</span>
-                  <span class="sel"><svg><use href="#i-code"/></svg>
-                  <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select></span>
-                </label>
-              </div>
+            <div class="modes" role="radiogroup" aria-label="Mode">
+              <button class="mode" role="radio" aria-checked="true" id="modeGeneral">
+                <span class="mode-ic"><svg><use href="#i-wand"/></svg></span>
+                <span class="mode-tx"><b>General practice</b><small>Pick any rounds and a company style.</small></span>
+                <span class="mode-check"><svg><use href="#i-check"/></svg></span>
+              </button>
+              <button class="mode" role="radio" aria-checked="false" id="modeCompany">
+                <span class="mode-ic"><svg><use href="#i-building"/></svg></span>
+                <span class="mode-tx"><b>Company-specific</b><small>Runs a company’s real loop, from recent candidate reports.</small></span>
+                <span class="mode-check"><svg><use href="#i-check"/></svg></span>
+              </button>
             </div>
-          </section>
-
-          <section class="panel step">
-            <span class="step-n">2</span>
-            <div class="step-body">
-              <header class="step-head"><h2><span id="roundsTitle">Choose your rounds</span> <small id="roundCount"></small></h2><p id="roundsLede">Pick the rounds you want to practise. They run in this order.</p></header>
-              <div class="tiles" id="roundList" role="group" aria-label="Rounds"></div>
-            </div>
-          </section>
-
-          <section class="panel step">
-            <span class="step-n">3</span>
-            <div class="step-body">
-              <header class="step-head"><h2>Add your resume</h2><p>Every loop starts with a resume check. The job description is optional.</p></header>
-              <div class="drops">
-                <div class="drop" id="dropResume">
-                  <span class="drop-ic"><svg><use href="#i-upload"/></svg></span>
-                  <div class="drop-tx"><b>Resume</b><span id="resumeMsg">Drop a PDF, Word or text file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
-                  <input type="file" id="resumeFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
+            <section class="panel step">
+              <span class="step-n">1</span>
+              <div class="step-body">
+                <header class="step-head"><h2>Your experience</h2><p>Your level sets how hard the questions are and what a good answer looks like.</p></header>
+                <div class="form-grid">
+                  <label class="field"><span>Level</span><span class="sel"><svg><use href="#i-chart"/></svg><select id="level"></select></span></label>
+                  <label class="field"><span>Coding language</span>
+                    <span class="sel"><svg><use href="#i-code"/></svg>
+                    <select id="lang"><option>Java</option><option>Python</option><option>C++</option><option>JavaScript</option><option>TypeScript</option><option>Go</option></select></span>
+                  </label>
+                  <label class="field" id="companyField"><span>Company style</span>
+                    <span class="sel"><svg><use href="#i-building"/></svg><select id="company"></select></span>
+                    <small class="hint">Sets tone, question style and how you’re scored.</small></label>
+                  <label class="field" id="dossierField" hidden><span>Company dossier</span>
+                    <span class="sel"><svg><use href="#i-building"/></svg><select id="dossier"></select></span>
+                    <small class="hint" id="dossierHint"></small></label>
                 </div>
-                <div class="drop" id="dropJd">
-                  <span class="drop-ic"><svg><use href="#i-doc-check"/></svg></span>
-                  <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <button type="button" class="linkbtn" data-choose>Choose a file</button> or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
-                  <input type="file" id="jdFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
-                </div>
-              </div>
-              <textarea id="resume" class="paste" rows="6" placeholder="Resume text" aria-label="Resume text" hidden></textarea>
-              <textarea id="jd" class="paste" rows="5" placeholder="Job description text" aria-label="Job description text" hidden></textarea>
-            </div>
-          </section>
-
-          <section class="panel step step-inline">
-            <span class="step-n">4</span>
-            <label class="step-body" for="extra">
-              <header class="step-head"><h2>Additional details <small>(optional)</small></h2></header>
-            </label>
-            <span class="sel note-field"><textarea id="extra" rows="1" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea><svg><use href="#i-pen"/></svg></span>
-          </section>
-
-          <div class="launch">
-            <section class="panel step step-inline">
-              <span class="step-n">5</span>
-              <div class="step-body"><header class="step-head"><h2>Interview settings</h2></header></div>
-              <div class="launch-fields">
-                <label class="field"><span>Round length</span>
-                  <span class="sel"><svg><use href="#i-clock"/></svg>
-                  <select id="roundLen">
-                    <option value="">Real length (per round)</option>
-                    <option value="10">10 minutes each</option>
-                    <option value="20">20 minutes each</option>
-                    <option value="30">30 minutes each</option>
-                  </select></span>
-                </label>
-                <div class="field"><span>Total duration</span><div class="readout"><svg><use href="#i-hourglass"/></svg><span id="duration">—</span></div></div>
+                <details class="more" id="moreOpts">
+                  <summary>Interviewer <small></small></summary>
+                  <div class="form-grid">
+                    <label class="field"><span>Interviewer style</span>
+                      <span class="sel"><svg><use href="#i-user"/></svg>
+                      <select id="temper">
+                        <option value="supportive">Supportive: gives hints</option>
+                        <option value="realistic">Realistic: like a real panel</option>
+                        <option value="barraiser">Bar-raiser: hard, rarely hints</option>
+                      </select></span>
+                      <small class="hint">Real follow-ups and interruptions, at the level you pick.</small></label>
+                    <label class="field span-2"><span>Interviewers</span>
+                      <span class="sel"><svg><use href="#i-users"/></svg><select id="panel"><option value="">Mixed: a different interviewer each round</option></select></span>
+                      <small class="hint" id="panelPeople"></small>
+                      <small class="hint warn" id="panelWarn" hidden></small>
+                    </label>
+                  </div>
+                </details>
               </div>
             </section>
-            <button class="btn primary xl" id="startBtn"><svg class="play"><use href="#i-play"/></svg>Start interview<svg><use href="#i-arrow"/></svg></button>
           </div>
-          <p class="form-msg" id="startMsg" role="status"></p>
+
+          <!-- Stage 2: rounds -->
+          <div class="stage" data-stage="2" hidden>
+            <section class="panel step">
+              <span class="step-n">2</span>
+              <div class="step-body">
+                <header class="step-head"><h2><span id="roundsTitle">Choose your rounds</span> <small id="roundCount"></small></h2><p id="roundsLede">Pick the rounds you want to practise. They run in this order.</p></header>
+                <div class="tiles" id="roundList" role="group" aria-label="Rounds"></div>
+                <p class="hint">Two or three rounds give sharper feedback than a whole loop.</p>
+                <div class="proj-note" id="projNote" role="note" hidden>
+                  <p><b>Code comprehension writes its code with AI.</b> When the room opens, the AI writes a small code project from the job description, the company and your resume. This can take 3 to 5 minutes and uses tokens. Nothing is run, so a planted bug may not behave exactly as described.</p>
+                  <label class="check"><input type="checkbox" id="readyMade"><span>Use a ready-made project instead (instant; Java or Python)</span></label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- Stage 3: resume and job description -->
+          <div class="stage" data-stage="3" hidden>
+            <section class="panel step">
+              <span class="step-n">3</span>
+              <div class="step-body">
+                <header class="step-head"><h2>Add your resume</h2><p>Every loop starts with a resume check. The job description is optional, but it makes the questions more specific.</p></header>
+                <div class="drops">
+                  <div class="drop" id="dropResume">
+                    <span class="drop-ic"><svg><use href="#i-upload"/></svg></span>
+                    <div class="drop-tx"><b>Resume</b><span id="resumeMsg">Drop a PDF, Word or text file, <button type="button" class="linkbtn" data-choose>choose a file</button>, or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
+                    <input type="file" id="resumeFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
+                  </div>
+                  <div class="drop" id="dropJd">
+                    <span class="drop-ic"><svg><use href="#i-doc-check"/></svg></span>
+                    <div class="drop-tx"><b>Job description <small>(optional)</small></b><span id="jdMsg">Helps tailor every round. <button type="button" class="linkbtn" data-choose>Choose a file</button> or <button type="button" class="linkbtn" data-paste>paste text</button></span></div>
+                    <input type="file" id="jdFile" accept=".pdf,.docx,.rtf,.txt,.md" hidden>
+                  </div>
+                </div>
+                <textarea id="resume" class="paste" rows="6" placeholder="Resume text" aria-label="Resume text" hidden></textarea>
+                <textarea id="jd" class="paste" rows="5" placeholder="Job description text" aria-label="Job description text" hidden></textarea>
+                <label class="field more-grid" for="extra"><span>Anything the interviewer should know <small class="muted">(optional)</small></span>
+                  <span class="sel note-field"><textarea id="extra" rows="2" placeholder="e.g. Want to be grilled on Kafka and idempotency. Weak at DP."></textarea><svg><use href="#i-pen"/></svg></span>
+                </label>
+              </div>
+            </section>
+          </div>
+
+          <!-- Stage 4: time -->
+          <div class="stage" data-stage="4" hidden>
+            <section class="panel step">
+              <span class="step-n">4</span>
+              <div class="step-body">
+                <header class="step-head"><h2>How long?</h2><p>Pick 10 minutes for a quick first try, or run each round at its real length.</p></header>
+                <div class="form-grid">
+                  <label class="field"><span>Round length</span>
+                    <span class="sel"><svg><use href="#i-clock"/></svg>
+                    <select id="roundLen">
+                      <option value="">Real length (per round)</option>
+                      <option value="10">10 minutes each</option>
+                      <option value="20">20 minutes each</option>
+                      <option value="30">30 minutes each</option>
+                    </select></span>
+                  </label>
+                  <div class="field"><span>Total duration</span><div class="readout"><svg><use href="#i-hourglass"/></svg><span id="duration">-</span></div></div>
+                </div>
+                <p class="hint">Next you check your mic and speaker, then the interview room opens.</p>
+              </div>
+            </section>
+          </div>
+
+          <div class="stage-nav">
+            <button type="button" class="btn ghost" id="stageBack"><svg><use href="#i-back"/></svg>Back</button>
+            <p class="form-msg" id="startMsg" role="status"></p>
+            <button type="button" class="btn primary" id="stageNext">Next<svg><use href="#i-arrow"/></svg></button>
+            <button class="btn primary xl" id="startBtn" hidden><svg class="play"><use href="#i-play"/></svg>Continue to mic check<svg><use href="#i-arrow"/></svg></button>
+          </div>
         </div>
 
         <aside class="stack loop-card">
@@ -270,7 +304,7 @@
           </div>
           <div class="panel tip">
             <span class="tip-ic"><svg><use href="#i-bulb"/></svg></span>
-            <div><b>Tip</b><p>Start with 2–3 rounds. You get sharper feedback than doing the whole loop at once.</p></div>
+            <div><b>Tip</b><p>Start with 2-3 rounds. You get sharper feedback than doing the whole loop at once.</p></div>
           </div>
         </aside>
       </div>
@@ -285,6 +319,7 @@
           <p class="lede" id="readySub"></p>
         </div>
       </header>
+      <ol class="stepper" id="readyStepper" aria-label="Setup steps"></ol>
       <div class="ready-grid">
         <div class="panel" id="audioCheck">
           <div class="panel-head"><h2 id="acTitle">Check your mic and speaker</h2><span class="pill" id="acPill">Checking…</span></div>
@@ -364,7 +399,7 @@
 
     <!-- ============ DOSSIERS ============ -->
     <section class="view" id="view-dossiers" hidden>
-      <header class="page-head"><div><div class="crumb">Dossiers</div><h1>Company <em class="hl">dossiers</em></h1>
+      <header class="page-head"><div><div class="crumb">Company research</div><h1>Company <em class="hl">dossiers</em></h1>
         <p class="lede">How a company interviews right now, from recent candidate reports. Pick one in Company-specific mode to run that loop.</p></div></header>
       <div class="dossier-grid">
         <div class="stack">
@@ -387,7 +422,7 @@
             </div>
             <div class="btn-row"><button class="btn primary" id="rqStart" type="submit"><svg><use href="#i-search"/></svg>Start research</button></div>
             <p class="form-msg" id="rqMsg" role="status"></p>
-            <p class="hint">Uses the AI model from Settings, with web search. It reads first-hand reports, pulls out each round and its questions, and saves a dossier. A few minutes on an API key; 10–40 minutes on Claude Code. Keep Onsite open while it runs.</p>
+            <p class="hint">Uses the AI model from Settings, with web search. It reads first-hand reports, pulls out each round and its questions, and saves a dossier. A few minutes on an API key; 10-40 minutes on Claude Code. Keep Onsite open while it runs.</p>
           </form>
           <div class="stack" id="jobList"></div>
         </div>
@@ -396,7 +431,7 @@
 
     <!-- ============ FEEDBACK ============ -->
     <section class="view" id="view-feedback" hidden>
-      <header class="page-head"><div><div class="crumb">Feedback</div><h1>Your <em class="hl">rounds</em></h1>
+      <header class="page-head"><div><div class="crumb">Past rounds</div><h1>Your <em class="hl">rounds</em></h1>
         <p class="lede">Every finished round, with its written feedback.</p></div></header>
       <div class="panel"><div class="rows" id="history"></div></div>
     </section>
@@ -408,6 +443,58 @@
         <button class="btn ghost danger sm" id="repDelete" hidden><svg><use href="#i-trash"/></svg>Delete</button>
       </header>
       <div id="repBody"></div>
+    </section>
+
+    <!-- ============ REPORT A BUG OR IDEA (GitHub issue, see report.rs) ============ -->
+    <section class="view" id="view-issue" hidden>
+      <header class="page-head">
+        <div><button class="crumb link" data-nav="dashboard"><svg><use href="#i-back"/></svg>Back</button><h1>Report a <em class="hl">bug</em></h1>
+          <p class="lede">You see the whole report first. Nothing leaves Onsite until you press Submit on GitHub.</p></div>
+      </header>
+      <div class="panel rp-form">
+        <div class="seg" id="rpCat" role="radiogroup" aria-label="What are you sending">
+          <button type="button" role="radio" aria-checked="true" data-cat="bug">Bug</button>
+          <button type="button" role="radio" aria-checked="false" data-cat="idea">Idea</button>
+        </div>
+        <p class="hint">Search first, it may already be reported: <button type="button" class="linkbtn" data-link="issues_search">Open issues</button>. Have a question? <button type="button" class="linkbtn" data-link="discussions">Ask in Discussions</button>.</p>
+        <p class="hint warn">Do not write API keys, your resume or interview text here. A security problem goes through the private route in <button type="button" class="linkbtn" data-link="security">SECURITY.md</button>, not here.</p>
+        <div class="form-grid" id="rpBugFields">
+          <label class="field span-2"><span>What happened</span><textarea id="rp_what" rows="2" maxlength="2000" placeholder="A short summary, in plain words."></textarea></label>
+          <label class="field span-2"><span>Steps to reproduce</span><textarea id="rp_steps" rows="3" maxlength="2000" placeholder="What you clicked or said, in order."></textarea></label>
+          <label class="field"><span>What you expected</span><textarea id="rp_expected" rows="2" maxlength="2000"></textarea></label>
+          <label class="field"><span>What happened instead</span><textarea id="rp_actual" rows="2" maxlength="2000"></textarea></label>
+          <div class="span-2 rp-auto-head"><b>Added by Onsite</b><span class="muted small">Edit or remove any line.</span></div>
+          <div class="field"><span><label for="rp_app_version">Version</label> <button type="button" class="linkbtn rp-x" data-clear="rp_app_version" aria-label="Remove version">Remove</button></span><input type="text" id="rp_app_version" spellcheck="false"></div>
+          <div class="field"><span><label for="rp_os">System</label> <button type="button" class="linkbtn rp-x" data-clear="rp_os" aria-label="Remove system">Remove</button></span><select id="rp_os"></select></div>
+          <div class="field"><span><label for="rp_ai">AI provider</label> <button type="button" class="linkbtn rp-x" data-clear="rp_ai" aria-label="Remove AI provider">Remove</button></span><select id="rp_ai"></select></div>
+          <div class="field"><span><label for="rp_voice">How you ran the round</label> <button type="button" class="linkbtn rp-x" data-clear="rp_voice" aria-label="Remove how you ran the round">Remove</button></span><select id="rp_voice"></select></div>
+          <div class="field"><span><label for="rp_view">Screen</label> <button type="button" class="linkbtn rp-x" data-clear="rp_view" aria-label="Remove screen">Remove</button></span><input type="text" id="rp_view" spellcheck="false"></div>
+          <div class="field span-2"><span><label for="rp_error">Last error</label> <button type="button" class="linkbtn rp-x" data-clear="rp_error" aria-label="Remove last error">Remove</button></span><textarea id="rp_error" rows="2" maxlength="2000"></textarea></div>
+        </div>
+        <div class="form-grid" id="rpIdeaFields" hidden>
+          <label class="field span-2"><span>What would help</span><textarea id="rp_problem" rows="3" maxlength="2000" placeholder="What you are trying to practise or do, and what gets in the way."></textarea></label>
+          <label class="field span-2"><span>Your idea <small>(optional)</small></span><textarea id="rp_idea" rows="3" maxlength="2000" placeholder="How it could work. Rough is fine."></textarea></label>
+          <label class="field span-2"><span>What you do today instead <small>(optional)</small></span><textarea id="rp_alternatives" rows="2" maxlength="2000"></textarea></label>
+        </div>
+        <div id="rpLogBox">
+          <label class="check"><input type="checkbox" id="rpLogOn"><span>Copy recent log lines, then paste them on GitHub</span></label>
+          <p class="hint" id="rpLogMsg"></p>
+          <details id="rpLogDet" hidden><summary class="hint">See the log lines</summary><pre class="rp-pre" id="rpLogText"></pre></details>
+        </div>
+        <h3 class="rp-h">This is what opens on GitHub</h3>
+        <ul class="rp-flags" id="rpFlags" role="status"></ul>
+        <pre class="rp-pre" id="rpPreview" aria-label="The report that opens on GitHub"></pre>
+        <p class="hint" id="rpLevel" role="status"></p>
+        <p class="hint">You need a free GitHub account. You review the page there and press Submit. Anything you submit is public. Onsite sends nothing itself. I aim to reply within a week.</p>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="rpOpen"><svg><use href="#i-send"/></svg>Open on GitHub</button>
+          <button type="button" class="btn" id="rpCopy">Copy report</button>
+          <button type="button" class="btn ghost" id="rpSave">Save as a text file</button>
+          <button type="button" class="btn ghost" data-nav="dashboard">Cancel</button>
+        </div>
+        <textarea id="rpCopyBox" class="rp-copybox" rows="6" readonly hidden aria-label="Report text to copy"></textarea>
+        <p class="form-msg" id="rpMsg" role="status"></p>
+      </div>
     </section>
 
     <!-- ============ SETTINGS ============ -->
@@ -422,6 +509,8 @@
           <button data-sec="updates"><svg><use href="#i-download"/></svg>Updates</button>
           <button data-sec="privacy"><svg><use href="#i-shield"/></svg>Privacy</button>
           <button data-sec="storage"><svg><use href="#i-folder"/></svg>Storage</button>
+          <button data-sec="share"><svg><use href="#i-send"/></svg>Send feedback</button>
+          <button data-sec="about"><svg><use href="#i-user"/></svg>About</button>
         </nav>
         <div class="set-body">
           <section class="set-sec" data-sec="appearance" aria-label="Appearance">
@@ -498,7 +587,7 @@
               <div class="panel-head"><h2>Voice engine</h2><span class="pill" id="vsPill">Checking…</span></div>
               <div class="form-grid">
                 <label class="field"><span>Engine</span>
-                  <select id="vEngine"><option value="builtin">Built-in — runs inside Onsite</option><option value="voicestudio">VoiceStudio — separate app</option></select></label>
+                  <select id="vEngine"><option value="builtin">Built-in: runs inside Onsite</option><option value="voicestudio">VoiceStudio: separate app</option></select></label>
               </div>
               <p class="muted" id="vEngineInfo"></p>
               <div id="biBlock">
@@ -508,7 +597,7 @@
                 <p class="form-msg" id="biMsg" role="status"></p>
               </div>
               <div id="vsBlock">
-                <dl class="kv"><dt>Version</dt><dd id="vsVer">—</dd></dl>
+                <dl class="kv"><dt>Version</dt><dd id="vsVer">-</dd></dl>
                 <p class="muted" id="vsInfo">VoiceStudio speaks for the interviewer and transcribes your answers, locally.</p>
                 <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
               </div>
@@ -526,11 +615,11 @@
                 <label class="field" id="vVoiceField"><span>Interviewer voice</span><select id="vVoice"></select></label>
                 <label class="field" id="vBiVoiceField"><span>Interviewer voice</span><select id="vBiVoice"></select></label>
                 <label class="field" id="vStepsField"><span>Voice quality</span>
-                  <select id="vSteps"><option value="8">Fast — about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best — slow</option></select></label>
+                  <select id="vSteps"><option value="8">Fast: about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best: slow</option></select></label>
                 <label class="field"><span>Speaking speed</span>
                   <select id="vSpeed"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select></label>
                 <label class="field"><span>Send my answer after I stop talking for</span>
-                  <select id="vPause"><option value="1800">1.8 seconds</option><option value="3000">3 seconds</option><option value="5000">5 seconds</option><option value="0">Never — I tap the mic</option></select></label>
+                  <select id="vPause"><option value="1800">1.8 seconds</option><option value="3000">3 seconds</option><option value="5000">5 seconds</option><option value="0">Never: I tap the mic</option></select></label>
               </div>
               <div id="biVoices" class="rows"></div>
               <div class="btn-row">
@@ -543,7 +632,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><h2>Interviewers</h2><span class="muted small">Same people, same voices, every session</span></div>
-              <p class="hint">Pick a panel on the interview screen to meet these people. With the built-in engine, women use Charlotte and everyone else uses Ethan. With VoiceStudio, a voice is built the first time you play it (5–15 s).</p>
+              <p class="hint">Pick a panel on the interview screen to meet these people. With the built-in engine, women use Charlotte and everyone else uses Ethan. With VoiceStudio, a voice is built the first time you play it (5-15 s).</p>
               <div id="personaGrid"></div>
             </div>
           </section>
@@ -551,7 +640,7 @@
           <section class="set-sec" data-sec="updates" aria-label="Updates" hidden>
             <div class="panel">
               <div class="panel-head"><h2>Onsite</h2><span class="pill" id="upPill">Not checked</span></div>
-              <dl class="kv"><dt>This version</dt><dd id="upCurrent">—</dd><dt>Newest</dt><dd id="upLatest">—</dd></dl>
+              <dl class="kv"><dt>This version</dt><dd id="upCurrent">-</dd><dt>Newest</dt><dd id="upLatest">-</dd></dl>
               <label class="field"><span>Channel</span>
                 <span class="sel"><svg><use href="#i-refresh"/></svg><select id="upChannel"><option value="stable">Stable</option><option value="experimental">Experimental</option></select></span></label>
               <p class="hint">Experimental builds come from the m1 branch. They get new features first and may break.</p>
@@ -567,7 +656,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><h2>VoiceStudio</h2><span class="pill" id="vsUpPill">Not checked</span></div>
-              <dl class="kv"><dt>Installed</dt><dd id="vsInstalled">—</dd><dt>Newest</dt><dd id="vsLatest">—</dd></dl>
+              <dl class="kv"><dt>Installed</dt><dd id="vsInstalled">-</dd><dt>Newest</dt><dd id="vsLatest">-</dd></dl>
               <p class="hint" id="vsUpNote">Onsite doesn’t update VoiceStudio. When there’s a new version, update it from VoiceStudio itself.</p>
             </div>
           </section>
@@ -580,19 +669,21 @@
                 <li>Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite’s database in your app data folder.</li>
                 <li>Your voice. The built-in voice engine, VoiceStudio and Whisper all run on this computer; audio is never uploaded by Onsite.</li>
                 <li>API keys, stored in the same local database. They are not encrypted, so anyone with access to your Windows account can read them. Remove a key in AI model when you stop using it.</li>
-                <li>The log file, which holds errors and timings, not transcripts or keys.</li>
+                <li>The log file, which holds errors and timings, not transcripts, speech text, your resume, job descriptions or keys.</li>
               </ul>
               <h3>What leaves this computer</h3>
               <ul>
                 <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI, Gemini or Groq): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
                 <li><b>Research jobs</b> ask that provider to search the web. The company, role and job description you enter are part of the request.</li>
                 <li><b>Voice models</b> (built-in engine) download once from github.com when you press Download in Settings. GitHub sees your IP address. Speech itself never leaves this computer.</li>
+                <li><b>Bug reports and ideas</b>: Onsite shows you the full report and opens a GitHub page with it filled in. You submit it there. Onsite itself sends nothing. The report adds your app version, system, AI provider name, how you ran the round, the screen you were on and the last error, and you can remove any of them. Keys, your home folder and file paths are removed. Recent log lines are never put in the link: if you tick the box they go to your clipboard and you paste them yourself. Anything you submit on GitHub is public and tied to your GitHub account.</li>
+                <li><b>Feedback survey</b> you write in Send feedback goes to the developer’s Google Form, only when you press Send. It holds what you typed and picked, and your email only if you enter it. Google sees your IP address.</li>
                 <li><b>Update checks</b> ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
               </ul>
               <h3>What Onsite never does</h3>
               <ul>
                 <li>No accounts, analytics, telemetry, ads or tracking.</li>
-                <li>No data is sent to the Onsite developer.</li>
+                <li>Nothing is sent to the Onsite developer except feedback or a report you choose to send.</li>
                 <li>The interviewer gets no tools: it can’t browse, run commands or read your files.</li>
                 <li>Model replies and dossiers are shown and saved as text, never run as code.</li>
               </ul>
@@ -607,7 +698,7 @@
 
           <section class="set-sec" data-sec="storage" aria-label="Storage" hidden>
             <div class="panel">
-              <div class="panel-head"><h2>On this computer</h2><span class="pill" id="stTotal">—</span></div>
+              <div class="panel-head"><h2>On this computer</h2><span class="pill" id="stTotal">-</span></div>
               <div class="st-counts" id="stCounts"></div>
               <div class="rows" id="stItems"><p class="muted small">Measuring…</p></div>
               <div class="btn-row">
@@ -646,10 +737,80 @@
               <p class="form-msg" id="unMsg" role="status"></p>
             </div>
           </section>
+          <section class="set-sec" data-sec="share" aria-label="Send feedback" hidden>
+            <p class="hint" style="margin:0 0 12px">Something broke? Use <button type="button" class="linkbtn" id="rpFromSurvey">Report a bug</button> in the sidebar instead. This survey is for general feedback.</p>
+            <form class="panel fb-form" id="fbForm" novalidate>
+              <div class="panel-head"><h2>Send feedback</h2><span class="muted small">About 2 minutes</span></div>
+              <p class="hint" style="margin-top:0">Tell the developer what worked, what didn’t, and anything that broke. Your answers go to a Google Form when you press Send. Nothing else is attached: no transcripts, resume, keys or logs.</p>
+              <div class="fb-scales">
+                <div class="fb-scale" data-name="overall"><span class="fb-q">Overall, how was your experience?</span><div class="seg" role="radiogroup" aria-label="Overall experience, 1 to 5"></div><span class="fb-ends"><span>Poor</span><span>Excellent</span></span></div>
+                <div class="fb-scale" data-name="realistic"><span class="fb-q">How realistic did the interview feel?</span><div class="seg" role="radiogroup" aria-label="How realistic, 1 to 5"></div><span class="fb-ends"><span>Not at all</span><span>Like the real thing</span></span></div>
+                <div class="fb-scale" data-name="setup"><span class="fb-q">How easy was setup (install, AI model, voice)?</span><div class="seg" role="radiogroup" aria-label="How easy setup was, 1 to 5"></div><span class="fb-ends"><span>Very hard</span><span>Very easy</span></span></div>
+              </div>
+              <div class="form-grid" style="margin-top:18px">
+                <label class="field"><span>Which computer?</span><select id="fbOs"></select></label>
+                <label class="field"><span>How did you mostly run rounds?</span><select id="fbMode"><option value="">Choose…</option></select></label>
+                <div class="field span-2"><span>What did you try? <small>(pick all that apply)</small></span><div class="fb-chips" id="fbTried"></div></div>
+                <label class="field"><span>Most useful feature <small>(optional)</small></span><select id="fbUseful"><option value="">Choose…</option></select></label>
+                <label class="field"><span>Interview in 2 days: would you use Onsite to prepare?</span><select id="fbWould"><option value="">Choose…</option></select></label>
+                <label class="field span-2"><span>Tell us about your experience</span><textarea id="fbExperience" rows="4" maxlength="4000" placeholder="What did you like? What felt off? What would make you use it again?"></textarea></label>
+                <label class="field span-2"><span>What was missing? <small>(optional)</small></span><textarea id="fbMissing" rows="2" maxlength="4000" placeholder="Anything you expected to find, or wished Onsite could do."></textarea></label>
+                <label class="field span-2"><span>Did anything go wrong? <small>(optional)</small></span><textarea id="fbWrong" rows="3" maxlength="4000" placeholder="Bugs, crashes, voice or mic problems. Which screen, what you did, any error you saw."></textarea></label>
+                <label class="field span-2"><span>Email <small>(optional, only if you’re OK with a reply)</small></span><input type="text" id="fbEmail" inputmode="email" autocomplete="email" spellcheck="false" placeholder="you@example.com"></label>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn primary" id="fbSend"><svg><use href="#i-send"/></svg>Send</button>
+                <button type="button" class="btn ghost" id="fbBrowser">Open the form in your browser</button>
+              </div>
+              <p class="form-msg" id="fbMsg" role="status"></p>
+            </form>
+          </section>
+          <section class="set-sec" data-sec="about" aria-label="About" hidden>
+            <div class="panel prose">
+              <div class="panel-head"><h2>About Onsite</h2><span class="pill" id="abVersion">-</span></div>
+              <h3>Why it exists</h3>
+              <p class="hint" style="margin-top:0">Mock interviews cost money or need another person, and many tools send your answers to a server. Onsite runs spoken, realistic interview loops on your own machine, with your own AI: Claude Code, or your own API key for Claude, OpenAI, Gemini or Groq. Practice without a subscription or a privacy trade.</p>
+              <h3>Free and open source</h3>
+              <p class="hint" style="margin-top:0">Free to use. No account, no telemetry. Your data stays on this computer, see <button type="button" class="linkbtn" data-nav="settings" data-sec="privacy">Privacy</button>. Open source under the MIT License: <button type="button" class="linkbtn" data-link="license">LICENSE</button>, <button type="button" class="linkbtn" data-link="repo">source code</button>.</p>
+              <h3>Made by</h3>
+              <p class="hint" style="margin-top:0">Prateesh Sulikeri, backend engineer (Java, Kafka, PostgreSQL, Redis, payments). <button type="button" class="linkbtn" data-link="author">GitHub profile</button>, <button type="button" class="linkbtn" data-link="repo">Onsite on GitHub</button>.</p>
+              <h3>Credits</h3>
+              <ul>
+                <li><button type="button" class="linkbtn" data-link="resume_matcher">Resume-Matcher</button> (Apache-2.0) and <button type="button" class="linkbtn" data-link="ats_screener">ats-screener</button> (MIT): the resume check and match score.</li>
+                <li><button type="button" class="linkbtn" data-link="voicestudio">VoiceStudio</button>: the optional voice engine.</li>
+                <li><button type="button" class="linkbtn" data-link="sherpa_onnx">sherpa-onnx</button>: Pocket TTS and Parakeet, the built-in voice.</li>
+                <li><button type="button" class="linkbtn" data-link="codemirror">CodeMirror 6</button>: the code editor.</li>
+                <li><button type="button" class="linkbtn" data-link="excalidraw">Excalidraw</button>: the whiteboard.</li>
+              </ul>
+              <p class="hint"><button type="button" class="linkbtn" data-link="notices">Full notices</button></p>
+              <h3>Feedback and roadmap</h3>
+              <p class="hint" style="margin-top:0">Found a bug? <button type="button" class="linkbtn" id="abReport">Report a bug</button>. Want something added? <button type="button" class="linkbtn" data-nav="settings" data-sec="share">Send feedback</button>. Still to do: macOS and Linux builds have not been run by a person yet, releases are unsigned until code signing is approved, and the Claude API, OpenAI and Gemini connections have not been checked with a live key.</p>
+            </div>
+          </section>
           <p class="form-msg save-msg" id="saveMsg" role="status">Changes save automatically.</p>
         </div>
       </div>
     </section>
+
+    <dialog class="dlg" id="projDlg" aria-labelledby="projDlgTitle">
+      <form method="dialog">
+        <h2 id="projDlgTitle">AI writes the code for this round</h2>
+        <p class="muted" id="projDlgBody"></p>
+        <div class="btn-row">
+          <button class="btn primary" value="ai">Write it with AI</button>
+          <button class="btn" value="ready" id="projDlgReady">Use a ready-made project</button>
+          <button class="btn ghost" value="cancel">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="dlg kbd" id="kbdDlg" aria-labelledby="kbdTitle">
+      <form method="dialog">
+        <h2 id="kbdTitle">Keyboard shortcuts</h2>
+        <div id="kbdBody"></div>
+        <div class="btn-row"><button class="btn primary" value="ok">Close</button></div>
+      </form>
+    </dialog>
 
     <dialog class="dlg" id="askDlg" aria-labelledby="askTitle">
       <form method="dialog">
@@ -738,6 +899,8 @@
           <div class="turn-info" id="turnInfo"></div>
         </div>
 
+        <div class="split-v" id="colSplit" role="separator" aria-orientation="vertical" aria-label="Resize conversation and workspace" tabindex="0" title="Drag to resize. Double-click to reset."></div>
+
         <div class="work">
           <div class="tabs" role="tablist">
             <button class="tab" role="tab" data-tab="editor" aria-selected="true"><svg><use href="#i-code"/></svg>Editor</button>
@@ -747,9 +910,20 @@
           </div>
           <div class="pane" data-pane="editor">
             <div class="pane-bar"><select id="edLang" class="sm lang-pick" aria-label="Editor language"></select><span class="muted" id="edHint">The interviewer sees this when you send.</span>
+              <button class="btn ghost sm kbd-btn" id="kbdBtn" title="Keyboard shortcuts (F1)">Shortcuts</button>
+              <span class="proj-btns" id="projBtns" hidden><button class="btn ghost sm" id="fileNew">New file</button><button class="btn ghost sm" id="fileReset">Reset file</button><button class="btn ghost sm" id="fileChanges" aria-pressed="false">Changes</button></span>
               <span class="run-btns" id="runBtns" hidden><button class="btn sm" id="runBtn"><svg><use href="#i-play"/></svg>Run</button><button class="btn primary sm" id="submitBtn">Submit</button></span>
               <button class="btn ghost sm" id="sendWork">Share now</button></div>
-            <div class="editor" id="code"></div>
+            <div class="ws-split">
+              <nav class="file-tree" id="fileTree" aria-label="Project files" hidden></nav>
+              <div class="split-v" id="treeSplit" role="separator" aria-orientation="vertical" aria-label="Resize file tree" tabindex="0" title="Drag to resize. Double-click to reset."></div>
+              <div class="ws-col">
+                <div class="file-tabs" id="fileTabs" role="tablist" hidden></div>
+                <div class="editor" id="code"></div>
+                <div class="ed-empty" id="edEmpty" hidden>No file open. Pick one from the tree, or press Ctrl+P.</div>
+                <pre class="changes" id="changesView" hidden></pre>
+              </div>
+            </div>
             <div class="run-out" id="runOut" hidden></div>
           </div>
           <div class="pane" data-pane="board" hidden>
@@ -793,5 +967,6 @@
 <script src="ipc.js"></script>
 <script src="vendor/editor.js"></script>
 <script src="app.js"></script>
+<script src="tour.js"></script>
 </body>
 </html>

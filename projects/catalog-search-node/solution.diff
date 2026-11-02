@@ -1,0 +1,105 @@
+--- a/src/app.js
++++ b/src/app.js
+@@ -15,8 +15,9 @@
+       const total = await repo.count(filters);
+ 
+       const items = [];
++      const tagsById = await repo.tagsForMany(rows.map((row) => row.id));
+       for (const row of rows) {
+-        const tags = await repo.tagsFor(row.id);
++        const tags = tagsById.get(row.id) || [];
+         items.push({
+           id: row.id,
+           name: row.name,
+--- a/src/pagination.js
++++ b/src/pagination.js
+@@ -17,7 +17,7 @@
+ 
+ /** The paging block that goes into every list response. */
+ function buildMeta(total, page, limit) {
+-  const totalPages = Math.floor(total / limit);
++  const totalPages = Math.ceil(total / limit);
+   return {
+     page,
+     limit,
+--- a/src/productRepo.js
++++ b/src/productRepo.js
+@@ -1,4 +1,11 @@
+ 'use strict';
++
++const SORTS = {
++  newest: 'created_at DESC, id DESC',
++  price_asc: 'price_cents ASC, id ASC',
++  price_desc: 'price_cents DESC, id DESC',
++  name: 'name ASC, id ASC',
++};
+ 
+ class ProductRepo {
+   constructor(pool) {
+@@ -6,36 +13,52 @@
+   }
+ 
+   buildWhere({ q, category }) {
+-    let where = 'WHERE active = true';
++    const clauses = ['active = true'];
++    const values = [];
+     if (q) {
+-      where += ` AND name ILIKE '%${q}%'`;
++      values.push(`%${q}%`);
++      clauses.push(`name ILIKE $${values.length}`);
+     }
+     if (category) {
+-      where += ` AND category = '${category}'`;
++      values.push(category);
++      clauses.push(`category = $${values.length}`);
+     }
+-    return where;
++    return { where: `WHERE ${clauses.join(' AND ')}`, values };
+   }
+ 
+   async search({ q, category, sort, limit, offset }) {
+-    const order = sort || 'created_at DESC';
++    const order = Object.hasOwn(SORTS, sort) ? SORTS[sort] : SORTS.newest;
++    const { where, values } = this.buildWhere({ q, category });
++    values.push(limit, offset);
+     const sql =
+       'SELECT id, name, category, price_cents, created_at FROM products ' +
+-      `${this.buildWhere({ q, category })} ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}`;
+-    const { rows } = await this.pool.query(sql);
++      `${where} ORDER BY ${order} LIMIT $${values.length - 1} OFFSET $${values.length}`;
++    const { rows } = await this.pool.query(sql, values);
+     return rows;
+   }
+ 
+   async count({ q, category }) {
+-    const sql = `SELECT count(*)::int AS n FROM products ${this.buildWhere({ q, category })}`;
+-    const { rows } = await this.pool.query(sql);
++    const { where, values } = this.buildWhere({ q, category });
++    const { rows } = await this.pool.query(`SELECT count(*)::int AS n FROM products ${where}`, values);
+     return rows[0].n;
+   }
+ 
+-  async tagsFor(productId) {
+-    const { rows } = await this.pool.query('SELECT tag FROM product_tags WHERE product_id = $1 ORDER BY tag', [
+-      productId,
+-    ]);
+-    return rows.map((r) => r.tag);
++  async tagsForMany(productIds) {
++    const byId = new Map();
++    if (productIds.length === 0) {
++      return byId;
++    }
++    const { rows } = await this.pool.query(
++      'SELECT product_id, tag FROM product_tags WHERE product_id = ANY($1) ORDER BY tag',
++      [productIds],
++    );
++    for (const r of rows) {
++      if (!byId.has(r.product_id)) {
++        byId.set(r.product_id, []);
++      }
++      byId.get(r.product_id).push(r.tag);
++    }
++    return byId;
+   }
+ }
+ 

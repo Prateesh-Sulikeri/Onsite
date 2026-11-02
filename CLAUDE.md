@@ -1,4 +1,4 @@
-# Onsite — local AI mock-interview app
+# Onsite: local AI mock-interview app
 
 Onsite runs realistic, spoken software-engineering interview loops on the owner's own machine.
 It started as a claude.ai artifact (`ui/onsite-artifact-reference.html`). That version hit two walls:
@@ -34,7 +34,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
 
 ## Modules (src-tauri/src/)
 
-### brain/ — Claude Code driver
+### brain/: Claude Code driver
 - `ClaudeSession`: one long-lived child process per interview round:
   `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages
    --append-system-prompt <rendered prompts/interviewer.md> --model <setting>`
@@ -85,7 +85,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   send them to `tts`. Code fences go to the UI workspace, never to TTS. Strip `[[END]]`; when present,
   mark the round closed.
 
-### brain/api.rs, brain/chat.rs — provider APIs (no Claude Code needed)
+### brain/api.rs, brain/chat.rs: provider APIs (no Claude Code needed)
 - `Provider` (claude_code | anthropic | openai | gemini | groq) in `Settings.provider`; `AppState::backend()` gives
   `Backend::Cli(ClaudeLocation)` or `Backend::Api(ApiClient)`. `Session` wraps `ClaudeSession` or `ApiSession`
   (keeps the history in memory, one streamed request per turn, same `TurnState`/splitter/events as the CLI).
@@ -105,12 +105,12 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   `browser_search` (search) and `browser.open` (page read). gpt-oss citation marks `【1†L49-L53】` are stripped.
   `groq/compound*` models are hidden from the pickers: they run tools on their own.
 - **Groq tested live 2026-10-29 (free tier, `api_e2e` example + the real UI):** every model is 8K tokens/minute. A coding
-  turn sends ~5.4K, so back-to-back turns get 429 with `retry-after` 1–30 s; all providers now wait out a 429 (up to
+  turn sends ~5.4K, so back-to-back turns get 429 with `retry-after` 1-30 s; all providers now wait out a 429 (up to
   60 s per wait, 90 s total). gpt-oss-120b as interviewer ran on into the candidate's next turn in ~1 of 3 replies
   ("…index type?[Elapsed: 1 of 10 min]", or a made-up candidate answer that the report then credited); Qwen
-  (`qwen/qwen3.8-27b`) did not and asked better follow-ups, so it is the Groq interviewer default. TTFT ~0.4–0.5 s
-  (gpt-oss-120b, no rate wait). Report ~4–5 s, verdict ~1.2 s, ATS keywords ~3.7 s, AI screen ~15 s, research ~15 s
-  (3–7 searches, 3 sources; no PROGRESS lines since it isn't streamed).
+  (`qwen/qwen3.8-27b`) did not and asked better follow-ups, so it is the Groq interviewer default. TTFT ~0.4-0.5 s
+  (gpt-oss-120b, no rate wait). Report ~4-5 s, verdict ~1.2 s, ATS keywords ~3.7 s, AI screen ~15 s, research ~15 s
+  (3-7 searches, 3 sources; no PROGRESS lines since it isn't streamed).
 - Model ids change fast: Settings lists them live (`list_models` → each API's `/models`). Defaults:
   claude-sonnet-5-5 / claude-opus-5-5, gpt-5.5, gemini-flash-latest (free tier is Flash-only), qwen/qwen3.8-27b /
   openai/gpt-oss-120b (Groq).
@@ -125,12 +125,12 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
 - Health check command in Settings: run `claude -p "Reply with OK" --output-format json` and show the result,
   latency, and which path was used.
 
-### research.rs, dossier.rs — dossier jobs (built 2026-10-27)
+### research.rs, dossier.rs: dossier jobs (built 2026-10-27)
 - Render `prompts/research.md`, run with **web search + web fetch only**, `current_dir` = empty temp dir.
 - Real progress: count WebSearch/WebFetch tool-use events in the stream (sources read) and parse
   `PROGRESS stage=.. pct=.. note=..` lines from assistant text. Push both to the UI as events.
 - `Dossier::from_value` checks the result against the rules in `docs/dossier.schema.json` and tidies it
-  (round types mapped to catalog keys by keyword, minutes clamped 10–180, sources as strings or objects).
+  (round types mapped to catalog keys by keyword, minutes clamped 10-180, sources as strings or objects).
   Saved to SQLite and to `<app data>/dossiers/<id>.json`; id = slug(company, role, level).
   On failure the raw text stays in `research_jobs.raw_output` and the card offers Try again.
 - Jobs run as tokio tasks (cancel = abort). Live counters (stage, searches, pages read) are in memory and
@@ -142,7 +142,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   problem whose title matches a reported question (`Bank::match_reported`), else the usual pick.
 - Export writes `<Downloads>/<id>.json`; Import takes any such file.
 
-### stt/ — speech to text
+### stt/: speech to text
 - Primary: VoiceStudio live STT over `ws://127.0.0.1:3900/v1/audio/transcriptions/stream?pcm=1&sr=16000`.
   Send raw signed 16-bit mono PCM frames; finish with `{"type":"input_audio.end"}`; read
   `partial` and `final` JSON frames (`final_kind: "summary"` is authoritative).
@@ -156,7 +156,7 @@ Speech can also run inside Onsite (Pocket TTS + Parakeet TDT through the `sherpa
 github.com into `<app data>/models`), selected in Settings > Voice; VoiceStudio stays as the other engine. Details,
 files, pins and TODOs: `docs/engineering/VOICE.md`; plan: `docs/plans/voice-without-voicestudio.md`.
 
-### tts/ — text to speech
+### tts/: text to speech
 - Trait `Speaker { speak(text), stop(), is_busy() }` with a queue and barge-in support.
 - Primary: VoiceStudio streaming TTS over `ws://127.0.0.1:3900/ws/tts`:
   send JSON `{"text": "...", "voice": "<profile_id>", ...}`; receive binary PCM16 @ 24 kHz mono
@@ -192,7 +192,7 @@ files, pins and TODOs: `docs/engineering/VOICE.md`; plan: `docs/plans/voice-with
     Last-segment latency ~3.4 s on CPU Parakeet.
   - Parakeet v2 still mangles tech terms ("Postgres Creole", "reddish" for Redis, "identity case" for
     idempotency key). Measured 2026-10-26 on 8 accented tech answers: Whisper large-v3 int8 kept loaded
-    on the GPU is word-perfect at 1.1–1.5 s per answer (CPU int8: ~12 s). Onsite runs it as a sidecar
+    on the GPU is word-perfect at 1.1-1.5 s per answer (CPU int8: ~12 s). Onsite runs it as a sidecar
     with VoiceStudio's bundled Python (`%APPDATA%/VoiceStudio/runtime/project/.venv`, has faster-whisper
     + CUDA) and the weights VoiceStudio downloaded (`%LOCALAPPDATA%/OmniVoice/hf_cache`). It loads at
     app start (~10 s); each finished segment goes to it with the tech vocabulary as the prompt.
@@ -224,19 +224,19 @@ files, pins and TODOs: `docs/engineering/VOICE.md`; plan: `docs/plans/voice-with
 - Start runs the resume check (`ats_check`) first; no resume or an unreadable file blocks the loop. The result
   is shown on Get ready.
 
-### audio/ — mic and speaker
+### audio/: mic and speaker
 - cpal input at the device rate, resample to 16 kHz mono i16 for STT.
 - Turn-taking: after TTS finishes, open the mic; energy VAD marks speech start; end the utterance after
   the user's pause setting (1.8 s / 3 s / 5 s / manual). While TTS plays, either keep the mic closed
   or support barge-in (user speaks → stop TTS) once echo is handled. Start with mic closed during TTS.
 - "Push to talk" hotkey as an alternative mode.
 
-### store/ — SQLite
+### store/: SQLite
 Tables: `settings`, `dossiers`, `research_jobs` (status, progress, log, raw_output),
 `loops`, `rounds` (transcript JSON, workspace snapshots, claude session id), `reports`.
 Reports and transcripts must survive app restarts. Export/import dossiers as JSON files.
 
-### ats/ — resume check
+### ats/: resume check
 - Reads the resume file the way an ATS parser does, scores it, and simulates six ATS products. Nav: "Resume check".
 - File type comes from the bytes, not the name: PDF (`pdf-extract`/lopdf, layout boxes from a custom `OutputDev`),
   .docx (zip + quick-xml; tables, text boxes, `mc:Fallback` skipped, headers/footers kept apart), .rtf, UTF-8/16 text,
@@ -246,13 +246,13 @@ Reports and transcripts must survive app restarts. Export/import dossiers as JSO
 - Claude only reads the job description (`prompts/ats_job.md`, no tools, interviewer model, ~7 s), never the resume.
   Result cached in `settings` under `ats_job:<sha256>`; bump `CACHE_VERSION` in `ats/job.rs` when the prompt changes.
 - AI screen (`ats/screen.rs`, `prompts/ats_screen.md`): with a posting, Claude grades the *extracted* resume text
-  A–D like HiredScore/Role Fit (must-haves proven/claimed/missing, level, red flags). Report model, no tools,
-  ~17–22 s on opus (measured 2026-10-27). Runs automatically after the rule-based check; cached per resume+posting
+  A-D like HiredScore/Role Fit (must-haves proven/claimed/missing, level, red flags). Report model, no tools,
+  ~17-22 s on opus (measured 2026-10-27). Runs automatically after the rule-based check; cached per resume+posting
   under `ats_screen:<sha256>`. It notices scrambled two-column reading order on its own. Prompt forbids guessing
   gender or other traits from the name (opus said "she" before that rule).
 - The interview setup's resume/JD drops also take PDF/Word/RTF via `read_document`.
 - Offline CLI: `cargo run --example ats_check -- resume.pdf [job.json] [--json]`. Fixtures + sources: `tests/fixtures/ats/`.
-- If the app is running, `onsite.exe` is locked: test with `--target-dir target/ats-test`.
+- If the app is running, `onsite.exe` is locked: test with `--target-dir D:\cargo-target\onsite-test` (the one shared test folder, see Working rules).
 
 ### Question bank (prompts/questions.csv, bank.rs, runner/)
 - One LeetCode problem per row: 20 originals + the rest of Blind 75 (81 total). Expected values are data;
@@ -269,6 +269,12 @@ Reports and transcripts must survive app restarts. Export/import dossiers as JSO
 - New rows were built by a script that checked every reference against LeetCode's example answers and brute
   force. `cargo test -- --ignored` runs every reference and every starter in every language.
 
+### projects.rs: comprehension round projects (2026-11-01)
+Multi-file projects: written by the AI per loop (`projgen.rs`, `prompts/project.md`; JD, dossier, resume) with bundled `projects/<id>/` (project.json + files + hidden solution.diff) as the fallback. Eight are bundled: `checkout-retries-java`, `ttl-cache-python`,
+`orders-consumer-java` (Kafka consumer), `outbox-worker-python` (Postgres outbox), `rate-limiter-python` (Redis token bucket), `wallet-transfer-java` (money, locking),
+`catalog-search-node` (API, pagination, SQL) and `webhook-receiver-go` (signatures, replay). The candidate edits them in a file tree, nothing runs, and edits go to the
+interviewer as unified diffs against the originals. Details: `docs/engineering/CODING.md` (Projects). Plan: `docs/plans/comprehension-workspace.md`.
+
 ### mcp/ (phase 3)
 Expose a small MCP server (rmcp crate, stdio) so Claude Code in a terminal can:
 `list_dossiers`, `get_dossier`, `request_research(company, role, jd)`, `list_reports`, `get_report`.
@@ -282,7 +288,7 @@ editor / whiteboard / code from interviewer), report screen, loop verdict, histo
 Look: "night violet" (owner's mockup, 2026-10-27). The backdrop is `ui/assets/twilight.webp` (from the owner's
 `public/images/Twilight Mountains and Glowing Horizon.png`; Tauri serves only `ui/`), shown as the fixed background of `.main`.
 Every color token on `:root` in `app.css` is sampled from it: navy neutrals hue 266, violet accent hue 290,
-`--warm` (sun peach) and `--warm-2` (horizon magenta) used sparingly. Setup is numbered steps 1–5 with round tiles
+`--warm` (sun peach) and `--warm-2` (horizon magenta) used sparingly. Setup is numbered steps 1-5 with round tiles
 (icons in `ROUND_ICONS`, app.js). Keep new screens on these tokens; don't add colors outside them.
 Themes (2026-10-27): `themes.css` adds Onsite light, Nord (Polar Night/Snow Storm; replaced Catppuccin, too close to Onsite), Rosé Pine (Dawn/main) and Gruvbox
 (light/dark). `theme-boot.js` (in `<head>`; the CSP blocks inline script) sets `data-theme="<family>-<light|dark>"`
@@ -292,8 +298,10 @@ rest with `color-mix`. app.css has no color literals left except status glows: *
 `--accent-line`, `--sel-bg`, `--pane`, … on `:root`), or the new rule won't follow the theme. The page background is
 `--backdrop`; a custom image (Settings → Appearance) is shrunk to ≤2560×1600 JPEG in JS and saved by Rust as
 `<app data>/backdrop.{jpg,png,webp}` (type checked from bytes). The whiteboard's Excalidraw theme is compiled in as dark.
-Settings is one view with sections (Appearance, AI model, VoiceStudio, Updates, Privacy, Storage); `data-sec` on a
-`data-nav="settings"` link opens a section. Persona cards come from `get_panels` (traits, strictness, backstory,
+Settings is one view with sections (Appearance, AI model, VoiceStudio, Updates, Privacy, Storage, Send feedback, About); `data-sec` on a
+`data-nav="settings"` link opens a section. About (`setSection('about')` fills the live version from `app_version`): why Onsite exists, free + MIT, author, credits, roadmap.
+Its links are `data-link` buttons; `open_link` (commands.rs) takes only fixed keys, never a URL: feedback_form, site, guides, repo, issues, issues_search, discussions, releases, license, privacy, security, notices, author,
+resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw. Add a key there before adding a link. Persona cards come from `get_panels` (traits, strictness, backstory,
 voice, rounds); "Play voice" = `voice_persona_preview` (builds the profile once, then speaks one line).
 Updates (`updates.rs`): GitHub releases of Prateesh-Sulikeri/Onsite, only when the user presses Check. Install =
 download that tag's `*-setup.exe` (github.com URLs only) to %TEMP%\onsite-update, run it with `/UPDATE` (never runs the old
@@ -311,7 +319,7 @@ completion, parser syntax-error lint), loaded by index.html. `whiteboard/` = Exc
 `import()`ed the first time the Whiteboard tab opens; `OnsiteBoard.describe()` turns the drawing into text (shapes,
 containment, arrows with labels, loose text) that is sent inside the workspace `notes`. Editor colours: `--syn-*` tokens.
 Dashboard: computed in app.js from `history` (each row carries round_key, minutes and the report JSON). Skill scores are
-the reports' 1–4 rubric `dimensions` grouped by name; "Practise next" and highlights need a skill low/high in 2+ rounds.
+the reports' 1-4 rubric `dimensions` grouped by name; "Practise next" and highlights need a skill low/high in 2+ rounds.
 Weekly goal = settings `weekly_goal` (`get_goal`/`set_goal`, round key → rounds per week). No placeholder numbers.
 `build.rs` watches `icons/`: without it a new logo never reached the exe/taskbar until a clean build.
 Remove everything artifact-specific: `window.claude.*`, `sample`, `db`, `mcp` host bridge,
@@ -327,7 +335,7 @@ hard-coded in JS.
 
 ## Milestones (do them in order; each must be usable on its own)
 
-### M1 — Text loop over Claude Code
+### M1: Text loop over Claude Code
 - Tauri app boots, settings screen, Claude Code path detection + health check.
 - General mode: pick rounds, company style, level, language, temperament; paste resume/JD.
 - A full typed round with streaming interviewer replies, workspace sharing, timer, [[END]] handling.
@@ -335,17 +343,17 @@ hard-coded in JS.
 - Acceptance: a 10-minute typed DSA round completes end to end and the report renders.
   Measure and log time-to-first-token per turn; write the numbers into this file.
 
-### M2 — Research jobs
+### M2: Research jobs
 - Request research from the UI; background job with real progress; dossier saved and selectable;
   company-specific loop uses dossier rounds and question banks.
 - Acceptance: a new company dossier is produced without touching a chat window.
 
-### M3 — Voice
+### M3: Voice
 - VoiceStudio STT + TTS with fallbacks, VAD turn-taking, pause setting, voice picker, mic test screen.
 - Acceptance: a full spoken round with no typing; first audio of each reply < 2.5 s after the user stops
   talking on the owner's machine (measure; tune model choice and sentence chunking).
 
-### M4 — Polish
+### M4: Polish
 - MCP server, Windows installer via GitHub Actions (`tauri-action`) on tag push, README screenshots.
 - Release workflow `.github/workflows/release.yml` (tag `v*`; calls `build.yml`): tag must equal the version in tauri.conf.json and
   Cargo.toml → draft release → tests + build on windows-latest (nsis), macos-latest (universal dmg, ad-hoc signed,
@@ -369,12 +377,18 @@ hard-coded in JS.
   skips the `WindowsApps` Store stub). Java, g++ and Node must be installed to Run in those languages.
 
 ## Working rules for Claude Code in this repo
+- Build folders: the dev build uses `D:\cargo-target\onsite`. When the running app locks it, every agent and check uses the one shared
+  test folder `--target-dir D:\cargo-target\onsite-test`. Never make a new target dir per task: each is a full 8-15 GB debug build that
+  nothing cleans up (11 of them filled ~100 GB, cleaned 2026-11-02).
 - Small commits per step with clear messages. Run `cargo clippy -- -D warnings` and `cargo test` before
   committing Rust changes.
 - Do not add a provider SDK dependency. API keys come only from Settings (`api_keys`), never from env vars or files.
 - When a fact about an external tool (Claude Code flags, VoiceStudio endpoints) is uncertain, check it
   live (`claude --help`, `curl 127.0.0.1:3900/openapi.json`) and update this file.
 - Keep user-facing text short and plain.
+- Never use em or en dashes in code, docs, UI copy or prompts. Use a comma, colon or hyphen. If such a character is functionally required, write it as a `\u` escape
+  (`feedback.rs` MODES keeps a real em dash that way because it must match the Google Form options). UI option labels are `Name: description`; `app.js` splits them on `:`.
+  The verdict string is "Borderline, more data needed".
 - Agent docs live in `docs/engineering/*.md` (index: `docs/engineering/README.md`; one file per subsystem). Read the
   one for the area you touch; update it in the same commit as the code that makes it wrong; keep it terse.
   `docs/engineering/pdf/` is the frozen human version (sources at tag `docs-human-2026-10-30`); don't rebuild it

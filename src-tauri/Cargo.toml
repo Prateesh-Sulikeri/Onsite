@@ -1,6 +1,6 @@
 [package]
 name = "onsite"
-version = "0.1.4"
+version = "0.1.5"
 description = "Local AI mock-interview loops"
 license = "MIT"
 repository = "https://github.com/Prateesh-Sulikeri/Onsite"
@@ -29,7 +29,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 cpal = "0.18.2"
 futures-util = "0.3.34"
 tokio-tungstenite = "0.30.0"
-reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream", "multipart", "native-tls"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "stream", "multipart", "form", "native-tls"] }
 csv = "1"
 pdf-extract = "0.12.1"
 quick-xml = "0.42"
@@ -42,3 +42,4 @@ sherpa-onnx = "2.0.1"
 tar = "0.4"
 bzip2 = "0.6"
 fs4 = "1.1.0"
+similar = "2"

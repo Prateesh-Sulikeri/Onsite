@@ -4,11 +4,13 @@
 //   node site/build.mjs
 //
 // Env: GITHUB_REPOSITORY (default Prateesh-Sulikeri/Onsite), GITHUB_TOKEN (optional; else `gh auth token`, else
-// unauthenticated), SITE_RELEASES_FILE (a saved /releases JSON, for offline work).
+// unauthenticated), SITE_RELEASES_FILE (a saved /releases JSON, for offline work), SITE_BASE (path the 404 page
+// links from; default /<repo name>/, use / for a local server).
 // "What changed" = commit subjects between a release's tag and the one before it, so run it in a clone with tags
 // (CI: checkout with fetch-depth 0). Release bodies are not used: stable ones hold only the download tables.
 import { readFile, writeFile, mkdir, cp, rm, readdir } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -18,10 +20,23 @@ const src = path.join(here, "src");
 const out = path.join(here, "dist");
 const repo = process.env.GITHUB_REPOSITORY || "Prateesh-Sulikeri/Onsite";
 const gh = `https://github.com/${repo}`;
+// Where GitHub Pages serves the site. The 404 page needs absolute paths (it is served at any depth);
+// SITE_BASE=/ for a local server at the root.
+const [owner, name] = repo.split("/");
+const siteUrl = `https://${owner.toLowerCase()}.github.io/${name}/`;
+const base = process.env.SITE_BASE || `/${name}/`;
+
+// YouTube links for the video slots. Empty = not up yet: the slot is left out. SITE_VIDEO_<NAME> overrides one
+// (handy for a local preview). Templates mark slots with <!--video:name-->...<!--/video--> (shown when the video has
+// a link; {{video_name}} inside is the link) and <!--novideo:name-->...<!--/novideo--> (shown when it hasn't).
+const VIDEOS = { demo: "", setup: "", ai: "", voice: "" };
+for (const k of Object.keys(VIDEOS)) VIDEOS[k] = process.env[`SITE_VIDEO_${k.toUpperCase()}`] || VIDEOS[k];
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-exp\.(\d+))?$/;
 // Commit subjects that say nothing to someone downloading the app.
-const NOISE = [/^Release\b/i, /^Version \d/i, /^Merge\b/i, /^Docs?:/i, /^Engineering docs\b/i, /^CI:/i];
+const NOISE = [/^Release\b/i, /^Version \d/i, /^Merge\b/i, /^Docs?:/i, /^Engineering docs\b/i, /^CI:/i,
+  /^Experimental release\b/i, /^Website\b/i, /^Site:/i, /^Runner test\b/i, /^Remove dead code\b/i, /^Voice spike\b/i,
+  /^Keep LF line endings\b/i, /^Plans?:/i, /^Tests?:/i, /^Scaffold\b/i];
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -51,7 +66,21 @@ function previousTag(tag, allTags) {
   return older.find(t => isAncestor(t, tag)) || null;
 }
 
+// Hand-written notes (site/release-notes.json, {"v0.1.4": ["Area: what changed", ...]}) replace the commit subjects.
+let NOTES = {};
+async function loadNotes() {
+  const all = JSON.parse(await readFile(path.join(here, "release-notes.json"), "utf8"));
+  for (const [tag, lines] of Object.entries(all)) {
+    if (tag.startsWith("_")) continue; // _about and other comments
+    if (!TAG.test(tag)) throw new Error(`release-notes.json: ${tag} is not a release tag`);
+    if (!Array.isArray(lines) || !lines.every(l => typeof l === "string" && l.trim()))
+      throw new Error(`release-notes.json: ${tag} must be a list of lines`);
+    NOTES[tag] = lines.map(l => l.trim());
+  }
+}
+
 function changes(tag, allTags) {
+  if (NOTES[tag]) return NOTES[tag];
   if (!allTags.includes(tag)) return null; // tag not in this clone
   const prev = previousTag(tag, allTags);
   const log = git(["log", "--no-merges", "--format=%s", "-n", prev ? "40" : "10", prev ? `${prev}..${tag}` : tag]);
@@ -112,7 +141,7 @@ function downloadCards(a, rel) {
     const x = a[k];
     const href = x ? x.url : rel.html_url;
     const meta = x ? `${esc(f.kind)} · ${x.mb} MB` : "See the release page";
-    return `<a class="dl" href="${esc(href)}" data-os="${k}">
+    return `<a class="dl" href="${esc(href)}" data-os="${k}" data-sums="${esc(a.sums)}">
   <span class="dl-os">${esc(f.label)}</span>
   <span class="dl-kind">${meta}</span>
   <span class="dl-note">${esc(f.note)}</span>
@@ -135,7 +164,7 @@ function changelogEntry(rel, allTags, latestStable) {
   const exp = isExp(tag);
   const a = assets(rel);
   const files = Object.entries(FILES).filter(([k]) => a[k])
-    .map(([k, f]) => `<a href="${esc(a[k].url)}">${esc(f.label === "Debian / Ubuntu" ? ".deb" : f.label)}</a>`).join("");
+    .map(([k, f]) => `<a href="${esc(a[k].url)}" data-sums="${esc(a.sums)}">${esc(f.label === "Debian / Ubuntu" ? ".deb" : f.label)}</a>`).join("");
   const badges = (exp ? `<span class="badge warm">Experimental</span>` : `<span class="badge">Stable</span>`)
     + (tag === latestStable ? `<span class="badge ok">Latest</span>` : "");
   return `<article class="card entry" id="${esc(tag)}">
@@ -143,6 +172,30 @@ function changelogEntry(rel, allTags, latestStable) {
   ${changeList(changes(tag, allTags))}
   <footer>${files ? `<span class="files">${files}</span>` : ""}<a class="link" href="${esc(rel.html_url)}">Release on GitHub →</a></footer>
 </article>`;
+}
+
+// Copies each table's column headings onto its cells (data-label), so phones can show rows as labelled cards.
+function labelCells(html) {
+  return html.replace(/<table>[\s\S]*?<\/table>/g, table => {
+    const heads = [...table.matchAll(/<th>([\s\S]*?)<\/th>/g)].map(m => m[1].replace(/<[^>]+>/g, "").trim());
+    if (!heads.length) return table;
+    return table.replace(/<tr>([\s\S]*?)<\/tr>/g, (row, cells) => {
+      let i = 0;
+      return `<tr>${cells.replace(/<td>/g, () => `<td data-label="${heads[i++] || ""}">`)}</tr>`;
+    });
+  });
+}
+
+function videoSlots(html) {
+  const url = k => {
+    if (!(k in VIDEOS)) throw new Error(`Unknown video slot: ${k}`);
+    const u = VIDEOS[k];
+    if (u && !/^https:\/\/(www\.youtube\.com|youtu\.be)\//.test(u)) throw new Error(`Video ${k} is not a YouTube link: ${u}`);
+    return u;
+  };
+  return html
+    .replace(/<!--video:(\w+)-->([\s\S]*?)<!--\/video-->/g, (m, k, inner) => url(k) ? inner.replaceAll(`{{video_${k}}}`, esc(url(k))) : "")
+    .replace(/<!--novideo:(\w+)-->([\s\S]*?)<!--\/novideo-->/g, (m, k, inner) => url(k) ? "" : inner);
 }
 
 function fill(html, vars) {
@@ -153,6 +206,7 @@ function fill(html, vars) {
 }
 
 async function main() {
+  await loadNotes();
   const all = (await fetchReleases()).filter(r => !r.draft && TAG.test(r.tag_name)).sort((a, b) => cmp(b.tag_name, a.tag_name));
   const stable = all.find(r => !isExp(r.tag_name));
   if (!stable) throw new Error("No published stable release found");
@@ -174,16 +228,27 @@ async function main() {
     stable_changes: changeList(changes(stable.tag_name, tags), 8),
     exp_card: exp ? expCard(exp, tags) : "",
     news_cols: exp ? "two" : "one",
-    changelog: all.map(r => changelogEntry(r, tags, stable.tag_name)).join("\n"),
+    // Only releases with something to say, plus the latest stable (it carries the downloads).
+    changelog: all.filter(r => r === stable || (changes(r.tag_name, tags) || []).length)
+      .map(r => changelogEntry(r, tags, stable.tag_name)).join("\n"),
     gh: esc(gh),
+    site_url: esc(siteUrl),
+    base: esc(base),
     year: String(new Date().getUTCFullYear()),
   };
+  vars.download_dialog = fill(await readFile(path.join(here, "partials/download-dialog.html"), "utf8"), vars);
+
+  // Cache busting: pages ask for style.css?v=<hash>, so browsers never keep an old copy after a change.
+  const ver = {};
+  for (const f of ["style.css", "site.js"])
+    ver[f] = createHash("sha256").update(await readFile(path.join(src, f))).digest("hex").slice(0, 10);
+  const bust = html => html.replace(/(href|src)="(?:\{\{base\}\})?(style\.css|site\.js)"/g, (m, attr, f) => m.slice(0, -1) + `?v=${ver[f]}"`);
 
   await rm(out, { recursive: true, force: true });
   await mkdir(path.join(out, "assets"), { recursive: true });
   for (const name of await readdir(src)) {
     const from = path.join(src, name);
-    if (name.endsWith(".html")) await writeFile(path.join(out, name), fill(await readFile(from, "utf8"), vars));
+    if (name.endsWith(".html")) await writeFile(path.join(out, name), labelCells(fill(bust(videoSlots(await readFile(from, "utf8"))), vars)));
     else await cp(from, path.join(out, name), { recursive: true });
   }
   await cp(path.join(repoRoot, "ui/assets/logo.png"), path.join(out, "assets/logo.png"));

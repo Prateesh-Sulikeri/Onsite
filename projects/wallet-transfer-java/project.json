@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "wallet-transfer-java",
+  "title": "Wallet transfers",
+  "language": "java",
+  "difficulty": "Medium",
+  "levels": ["sde1", "sde2", "senior"],
+  "topics": ["money", "concurrency", "locking", "payments"],
+  "companies": ["fintech", "razorpay", "paytm", "stripe"],
+  "minutes": 45,
+  "brief": "Ticket WAL-77. Reconciliation shows wallet totals drifting by a few paise, and some top-ups that never show up. Last week the transfer endpoint also hung for a few minutes during a busy hour. Read the service and explain all three.",
+  "files": [
+    {"path": "src/TransferService.java", "open": true},
+    {"path": "src/Account.java"},
+    {"path": "src/AccountStore.java"},
+    {"path": "test/TransferServiceTest.java", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "float-money",
+      "file": "src/Account.java",
+      "lines": [10, 10],
+      "category": "money",
+      "why": "Balances are doubles. Values like 0.10 cannot be stored exactly, so every add and subtract can leave a tiny error. Over many transfers the totals drift and equality checks fail.",
+      "good_fix": "Store money as integer minor units (long paise) or BigDecimal with a fixed scale. Convert at the edges only. Change the amount parameters to match."
+    },
+    {
+      "id": "lost-top-up",
+      "file": "src/TransferService.java",
+      "lines": [43, 44],
+      "category": "concurrency",
+      "why": "topUp reads the balance and writes it back without taking the account lock. A transfer that changes the balance between the read and the write is overwritten, so money appears or disappears.",
+      "good_fix": "Take the account lock around the read and the write, or make the update atomic (AtomicLong, or a single UPDATE balance = balance + ? in the database)."
+    },
+    {
+      "id": "lock-order-deadlock",
+      "file": "src/TransferService.java",
+      "lines": [18, 35],
+      "category": "concurrency",
+      "why": "transfer locks the source first and then the target. Two opposite transfers (a to b and b to a) each hold one lock and wait for the other, so both threads hang for good.",
+      "good_fix": "Always lock in one global order, for example by account id, whichever is the source. Or use tryLock with a timeout and retry."
+    }
+  ],
+  "extension": "Add an idempotency key to transfer so a client retry after a timeout does not move the money twice. Where is the key stored, and does it need to be in the same transaction as the balance change?"
+}

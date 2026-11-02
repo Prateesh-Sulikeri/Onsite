@@ -1,4 +1,4 @@
-# RELEASE — CI, installers, updater, signing
+# RELEASE: CI, installers, updater, signing
 
 Code: `.github/workflows/release.yml` (tags), `build.yml` (shared build matrix + publish), `experimental.yml` (push to m1), `.github/scripts/release-notes.sh`, `src/updates.rs`, `src-tauri/tauri.conf.json`, `src-tauri/build.rs`, `src-tauri/Info.plist`.
 
@@ -17,7 +17,7 @@ Code: `.github/workflows/release.yml` (tags), `build.yml` (shared build matrix +
 - Cut stable: merge to `main`, set version `X.Y.Z` in both files → commit on main → push → `git tag vX.Y.Z && git push origin vX.Y.Z`.
 - Dry run: Actions → Release → Run workflow, any branch (builds only; no branch/tag checks, no release).
 
-## Release workflow (tag `v*`; steps 2–3 are build.yml)
+## Release workflow (tag `v*`; steps 2-3 are build.yml)
 
 1. `draft` (ubuntu): branch rule above; tag must equal version in `tauri.conf.json` **and** `Cargo.toml` → create draft release + notes
    (download table per OS, security-warnings table).
@@ -43,7 +43,7 @@ NSIS hooks: `src-tauri/windows/hooks.nsh` (uninstall clean-up, `/PURGE`; see STO
 - The manual path still works: commit `X.Y.Z-exp.N` in both files on m1, push the `vX.Y.Z-exp.N` tag → release.yml. Prefer the automatic flow; do not mix
   both for the same core version (the auto run number could be lower than a hand-picked N and sort below it).
 
-## Updater (`updates.rs`) — pull only (user presses Check)
+## Updater (`updates.rs`): pull only (user presses Check)
 
 - `ONSITE_RELEASES` = `api.github.com/repos/Prateesh-Sulikeri/Onsite/releases?per_page=30`; drafts skipped;
   `version_key` (pre-release < release, then by trailing number). `parse_releases` → `UpdateInfo` (current, newest, all, asset per package).
@@ -70,7 +70,7 @@ to `release.yml`, update `SECURITY.md` + release-notes warnings table. macOS: ad
 - macOS/Linux GUI launches get a bare PATH → `lib.rs::path_from_login_shell` (`$SHELL -ilc`, 3 s cap).
 - Windows children: `CREATE_NO_WINDOW` (no console flashes).
 - `build.rs` watches `icons/` (else new logos never reach the exe without a clean build).
-- Running app locks `onsite.exe` → test builds with `--target-dir target/<other>`.
+- Running app locks `onsite.exe` → test builds with `--target-dir D:\cargo-target\onsite-test` (one shared folder, never a new one).
 - macOS mic: `Info.plist` (prompt text) **and** `Entitlements.plist` (`com.apple.security.device.audio-input`). Tauri signs with the
   hardened runtime by default (`--options runtime`, even ad-hoc); without the entitlement the mic is silently blocked. sherpa-onnx is
   linked statically, so no library-validation entitlement is needed.
@@ -82,7 +82,7 @@ to `release.yml`, update `SECURITY.md` + release-notes warnings table. macOS: ad
 ## Status / gaps
 
 Windows used daily. Linux AppImage launched under WSLg 2026-10-31 (UI, DB, dossier import OK; no mic or round tested).
-macOS never run by a person — treat reports as first contact.
+macOS never run by a person. Treat reports as first contact.
 Known for later: a hand-run newer setup.exe over an install with these hooks offers "uninstall first"; that runs the old
 uninstaller without `/UPDATE`, so the voice models are deleted and download again (user data stays).
 

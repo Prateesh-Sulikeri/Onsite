@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "id": "ttl-cache-python",
+  "title": "Profile cache",
+  "language": "python",
+  "difficulty": "Medium",
+  "levels": ["ng", "sde1", "sde2"],
+  "topics": ["caching", "concurrency", "design"],
+  "companies": ["general"],
+  "minutes": 40,
+  "brief": "The profile page shows old display names for a long time after users change them, and under load the database gets hammered with the same query. The cache is supposed to keep the newest profiles and expire them after a minute. Read the code and find out why it does not behave that way.",
+  "files": [
+    {"path": "src/cache.py", "open": true},
+    {"path": "src/profiles.py"},
+    {"path": "test/test_cache.py", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "evicts-newest",
+      "file": "src/cache.py",
+      "lines": [39, 40],
+      "category": "correctness",
+      "why": "popitem(last=True) removes the most recently used entry. The cache throws away exactly what it should keep. The second test in test_cache.py would fail.",
+      "good_fix": "popitem(last=False) removes the least recently used entry, because get() and put() move keys to the end."
+    },
+    {
+      "id": "put-keeps-old-expiry",
+      "file": "src/cache.py",
+      "lines": [34, 38],
+      "category": "correctness",
+      "why": "Updating an existing key keeps the old expiry, so a value that is rewritten often can still expire early, and a refreshed value does not get a fresh minute.",
+      "good_fix": "Compute a new expires_at on every put, including updates."
+    },
+    {
+      "id": "stampede-and-race",
+      "file": "src/profiles.py",
+      "lines": [16, 22],
+      "category": "concurrency",
+      "why": "Many threads miss at once and all call the database for the same user (a stampede). OrderedDict is not safe for concurrent get/put/move_to_end, and the lock in update_display_name guards nothing the readers use.",
+      "good_fix": "Put one lock inside TTLCache around every operation. For the stampede, use a per-key lock or in-flight marker so one thread loads and the others wait for its result."
+    },
+    {
+      "id": "mutates-cached-object",
+      "file": "src/profiles.py",
+      "lines": [24, 29],
+      "category": "design smell",
+      "why": "update_display_name edits the cached dict in place. Readers that already hold the same dict see it change mid-use, and a profile that has expired is never refreshed.",
+      "good_fix": "Delete the cache entry after the database write (or store an immutable value and replace it), so the next read loads fresh data."
+    }
+  ],
+  "extension": "Add a get_or_load(key, loader) method to TTLCache that never runs the loader twice at the same time for the same key, and does not cache a loader failure."
+}

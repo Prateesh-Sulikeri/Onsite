@@ -1,0 +1,95 @@
+--- a/src/EventConsumer.java
++++ b/src/EventConsumer.java
+@@ -6,7 +6,6 @@
+ import org.apache.kafka.clients.consumer.ConsumerRecord;
+ import org.apache.kafka.clients.consumer.ConsumerRecords;
+ import org.apache.kafka.clients.consumer.KafkaConsumer;
+-import org.apache.kafka.common.TopicPartition;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+@@ -14,6 +13,7 @@
+ public class EventConsumer implements Runnable {
+     private static final Logger log = LoggerFactory.getLogger(EventConsumer.class);
+     private static final Duration POLL_TIMEOUT = Duration.ofMillis(500);
++    private static final int MAX_ATTEMPTS = 3;
+ 
+     private final KafkaConsumer<String, String> consumer;
+     private final EventHandler handler;
+@@ -38,30 +38,33 @@
+                 if (records.isEmpty()) {
+                     continue;
+                 }
+-                consumer.commitSync();
+                 for (ConsumerRecord<String, String> record : records) {
+-                    if (!process(record)) {
+-                        break;
+-                    }
++                    process(record);
+                 }
++                consumer.commitSync();
+             }
+         } finally {
+             consumer.close();
+         }
+     }
+ 
+-    private boolean process(ConsumerRecord<String, String> record) {
++    private void process(ConsumerRecord<String, String> record) {
+         if (record.key() == null) {
+             deadLetters.publish(record, "missing key");
+-            return true;
++            return;
+         }
+-        try {
+-            handler.handle(record.key(), record.value());
+-            return true;
+-        } catch (RuntimeException e) {
+-            log.error("failed to handle {}-{}@{}", record.topic(), record.partition(), record.offset(), e);
+-            consumer.seek(new TopicPartition(record.topic(), record.partition()), record.offset());
+-            return false;
++        for (int attempt = 1; ; attempt++) {
++            try {
++                handler.handle(record.key(), record.value());
++                return;
++            } catch (RuntimeException e) {
++                log.error("failed to handle {}-{}@{} (attempt {})", record.topic(), record.partition(),
++                        record.offset(), attempt, e);
++                if (attempt >= MAX_ATTEMPTS) {
++                    deadLetters.publish(record, "failed after " + attempt + " attempts");
++                    return;
++                }
++            }
+         }
+     }
+ 
+--- a/src/PaymentEventHandler.java
++++ b/src/PaymentEventHandler.java
+@@ -25,12 +25,17 @@
+             String orderId = body.get("order_id").asText();
+             long amountCents = body.get("amount_cents").asLong();
+ 
++            conn.setAutoCommit(false);
+             try (PreparedStatement insert = conn.prepareStatement(
+-                    "INSERT INTO payment_events (event_id, order_id, amount_cents) VALUES (?, ?, ?)")) {
++                    "INSERT INTO payment_events (event_id, order_id, amount_cents) VALUES (?, ?, ?) "
++                            + "ON CONFLICT (event_id) DO NOTHING")) {
+                 insert.setString(1, eventId);
+                 insert.setString(2, orderId);
+                 insert.setLong(3, amountCents);
+-                insert.executeUpdate();
++                if (insert.executeUpdate() == 0) {
++                    conn.rollback();
++                    return;
++                }
+             }
+             try (PreparedStatement update = conn.prepareStatement(
+                     "UPDATE orders SET paid_cents = paid_cents + ? WHERE id = ?")) {
+@@ -38,6 +43,7 @@
+                 update.setString(2, orderId);
+                 update.executeUpdate();
+             }
++            conn.commit();
+         } catch (SQLException | IOException e) {
+             throw new IllegalStateException("could not apply event " + eventId, e);
+         }

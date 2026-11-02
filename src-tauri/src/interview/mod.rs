@@ -45,6 +45,13 @@ pub struct LoopSetup {
     /// edits or deletes don't change it. `rounds[i]` is `process[i].kind`.
     #[serde(default)]
     pub dossier: Option<Dossier>,
+    /// Comprehension round: use a ready-made project instead of one the AI writes for this job.
+    #[serde(default)]
+    pub ready_made_project: bool,
+    /// Whether the round's voice is a woman's (None = unknown or typed). Set at round start from the
+    /// voice settings so a catalog name matches the voice that speaks it. Never saved.
+    #[serde(skip)]
+    pub voice_female: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -119,7 +126,7 @@ impl LoopSetup {
         PlannedRound {
             key: k.clone(),
             name: reported.map_or_else(|| r.name.clone(), |d| d.name.clone()),
-            persona: p.as_ref().map_or_else(|| cat.persona(idx).to_string(), |p| p.first_name.clone()),
+            persona: p.as_ref().map_or_else(|| cat.persona(idx, self.voice_female).to_string(), |p| p.first_name.clone()),
             persona_id: p.as_ref().map(|p| p.id.clone()),
             persona_role: p.map(|p| p.role),
             minutes: self.minutes.or(reported.map(|d| d.minutes)).unwrap_or(r.min),
@@ -185,8 +192,8 @@ pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, s
         ("temperament", cat.temper[&setup.temperament].clone()),
         ("lang", setup.lang.clone()),
         ("dossier_block", dossier_block),
-        ("resume", or_default(&setup.resume, RESUME_MAX, "(not provided — ask them to walk you through their background)")),
-        ("jd", or_default(&setup.jd, JD_MAX, "(none — use a typical role at this level)")),
+        ("resume", or_default(&setup.resume, RESUME_MAX, "(not provided, ask them to walk you through their background)")),
+        ("jd", or_default(&setup.jd, JD_MAX, "(none, use a typical role at this level)")),
         ("candidate_notes", or_default(&setup.notes, 4_000, "(none)")),
     ]
     .into();
@@ -266,6 +273,16 @@ pub struct Workspace {
     /// Whiteboard text; the UI sends "" while it still equals the starter template.
     #[serde(default)]
     pub notes: String,
+    /// Project rounds: the current text of every file the candidate has (path → text). From the UI.
+    #[serde(default)]
+    pub files: std::collections::BTreeMap<String, String>,
+    /// Filled by Rust, never the UI. In a message: unified diffs to send now. In the saved snapshot:
+    /// the final diff of the whole project.
+    #[serde(default)]
+    pub diff: String,
+    /// Saved snapshot only: the project's hidden issues, for the report.
+    #[serde(default)]
+    pub issues: String,
 }
 
 /// Builds the user turn. Only parts that changed since `last` are attached, unless `force`.
@@ -281,6 +298,12 @@ pub fn candidate_message(
     let mut parts = Vec::new();
     if !ws.code.trim().is_empty() && (force || ws.code != last.code) {
         parts.push(format!("Editor ({lang}):\n```\n{}\n```", clip(&ws.code, EDITOR_MAX)));
+    }
+    if !ws.diff.trim().is_empty() {
+        parts.push(format!("Changed files (unified diff against the original):
+```diff
+{}
+```", clip(&ws.diff, EDITOR_MAX)));
     }
     if !ws.notes.trim().is_empty() && (force || ws.notes != last.notes) {
         parts.push(format!("Whiteboard:\n{}", clip(&ws.notes, WHITEBOARD_MAX)));
@@ -323,6 +346,8 @@ mod tests {
             dossier_id: String::new(),
             dossier_rounds: Vec::new(),
             dossier: None,
+            ready_made_project: false,
+            voice_female: None,
         }
     }
 
@@ -373,6 +398,19 @@ mod tests {
     }
 
     #[test]
+    fn catalog_name_matches_the_voice() {
+        let (cat, _, panels) = fixtures();
+        let mut s = setup();
+        for female in [true, false] {
+            s.voice_female = Some(female);
+            for i in 0..2 {
+                let name = s.plan(&cat, &panels, i).persona;
+                assert_eq!(cat.female_names.contains(&name), female, "round {i}: {name}");
+            }
+        }
+    }
+
+    #[test]
     fn panel_round_uses_its_owner_persona() {
         let (cat, tpl, panels) = fixtures();
         let mut s = setup();
@@ -391,9 +429,24 @@ mod tests {
     }
 
     #[test]
+    fn project_diff_is_attached_as_a_diff_block() {
+        let ws = Workspace { diff: "--- a/A.java
++++ b/A.java
+@@ -1 +1 @@
+-a
++b
+".into(), ..Default::default() };
+        let mut last = Workspace::default();
+        let (m, shared) = candidate_message("fixed", &ws, &mut last, false, "Java", 5.0, 45).unwrap();
+        assert!(shared && m.contains("unified diff against the original") && m.contains("```diff") && m.contains("+b"), "{m}");
+        let (m, shared) = candidate_message("hmm", &Workspace::default(), &mut last, false, "Java", 6.0, 45).unwrap();
+        assert!(!shared && !m.contains("[Workspace]"));
+    }
+
+    #[test]
     fn workspace_attached_only_when_changed_or_forced() {
         let mut last = Workspace::default();
-        let ws = Workspace { code: "int f() {}".into(), notes: String::new() };
+        let ws = Workspace { code: "int f() {}".into(), ..Default::default() };
         let (m, shared) = candidate_message("here", &ws, &mut last, false, "Java", 3.4, 45).unwrap();
         assert!(shared);
         assert_eq!(m, "here\n\n[Workspace]\nEditor (Java):\n```\nint f() {}\n```\n[Elapsed: 3 of 45 min]");

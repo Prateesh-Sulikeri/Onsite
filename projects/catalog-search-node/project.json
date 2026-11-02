@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "catalog-search-node",
+  "title": "Product search API",
+  "language": "javascript",
+  "difficulty": "Medium",
+  "levels": ["ng", "sde1", "sde2"],
+  "topics": ["api design", "pagination", "sql", "performance"],
+  "companies": ["general", "flipkart", "amazon"],
+  "minutes": 40,
+  "brief": "Ticket SHOP-340. The product list is slow on busy pages. Mobile users say the last few products never load when they scroll to the end. A security scan also flagged the search box. Read the endpoint and find the cause of each.",
+  "files": [
+    {"path": "src/app.js", "open": true},
+    {"path": "src/productRepo.js"},
+    {"path": "src/pagination.js"},
+    {"path": "test/products.test.js", "readonly": true}
+  ],
+  "issues": [
+    {
+      "id": "sql-injection",
+      "file": "src/productRepo.js",
+      "lines": [8, 24],
+      "category": "security",
+      "why": "q, category and sort go straight into the SQL text. A value like ' OR 1=1 -- changes the query, and sort can carry a whole sub-select. Anyone can read or change other data.",
+      "good_fix": "Pass q and category as bind parameters ($1, $2) and build limit and offset as parameters too. Sort is an identifier, so check it against an allow-list of column names and directions."
+    },
+    {
+      "id": "n-plus-one",
+      "file": "src/app.js",
+      "lines": [18, 27],
+      "category": "performance",
+      "why": "For each product the handler runs another query for its tags. A page of 100 products sends 101 queries plus the count, so busy pages are slow and hold connections.",
+      "good_fix": "Fetch tags for all ids in one query (WHERE product_id = ANY($1)), group them in memory, or aggregate them in the main query with a join and array_agg."
+    },
+    {
+      "id": "last-page-dropped",
+      "file": "src/pagination.js",
+      "lines": [20, 20],
+      "category": "off-by-one",
+      "why": "totalPages uses Math.floor. With 45 products and 20 per page it says 2 pages, so hasNext is false on page 2 and the last 5 products are never shown. It is also 0 when there are fewer products than one page.",
+      "good_fix": "Use Math.ceil(total / limit). Decide what totalPages is for an empty result (0 or 1) and keep hasNext consistent."
+    }
+  ],
+  "extension": "Users report that when new products are added while they scroll, they see the same product twice or skip one. Why does offset paging do that, and how would you change the endpoint to use a cursor?"
+}

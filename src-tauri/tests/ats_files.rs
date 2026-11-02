@@ -104,7 +104,7 @@ fn clean_docx() {
     assert_eq!(r.parse_score, 100);
     assert_eq!(r.sections, ["summary", "experience", "education", "skills"]);
     // Tabs between title and dates survive as whitespace, and "&amp;" decodes.
-    assert!(r.preview.contains("PayFast\tJan 2021 – Present"));
+    assert!(r.preview.contains("PayFast\tJan 2021 \u{2013} Present"));
     assert!(r.preview.contains("Redis caching & idempotency"));
     assert_eq!(r.experience_years, Some(9.4));
 }
@@ -132,7 +132,7 @@ fn rtf_reads() {
     let r = check("clean.rtf", false);
     assert_eq!(r.file.kind, Kind::Rtf);
     assert_eq!(r.sections, ["experience", "education", "skills"]);
-    assert!(r.preview.contains("PayFast  Jan 2021 – Present"));
+    assert!(r.preview.contains("PayFast  Jan 2021 \u{2013} Present"));
     assert_eq!(status(&r, "contact_info"), Some(Status::Pass));
 }
 

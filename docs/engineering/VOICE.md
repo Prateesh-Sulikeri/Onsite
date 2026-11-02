@@ -1,4 +1,4 @@
-# VOICE — `src/voice/`, `sidecar/whisper_server.py`
+# VOICE: `src/voice/`, `sidecar/whisper_server.py`
 
 Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`), plus the Whisper large-v3 sidecar.
 - **builtin** (default for fresh installs): Pocket TTS + Parakeet TDT run inside Onsite via the `sherpa-onnx` crate. See *Built-in engine*.
@@ -20,14 +20,20 @@ Spoken rounds: local STT/TTS through one of two engines (`VoiceSettings.engine`)
   Installed = `<app data>/models/<id>/` with the files in `Pin.files`. Work dir `models/.partial/<id>/`, one rename at the end.
   Only github.com and `*.githubusercontent.com` (GitHub's release CDN redirect) over https; redirect policy enforces it.
   Disk check: (download + unpacked) x 1.1 free, else "Needs X GB free to install ...". Network error: "Couldn't reach GitHub. Check your connection and press Retry."
-- TTS: Pocket int8, CPU, 4 threads, `extra` `{max_reference_audio_len: 25.0, seed: 42}`, `speed` = persona pace x user speed. Reference
+- TTS: Pocket int8, CPU, threads = logical CPUs / 2 clamped 1-4 (`threads()`, also Parakeet; all cores starved the audio threads), `extra` `{max_reference_audio_len: 25.0, seed: 42}`, `speed` = persona pace x user speed. Reference
   clip per call. Output 24 kHz (read from the model). Two voices only: Ethan (`ethan_brooks`, American male), Charlotte (id `priya_shah`, shown as Charlotte, British
   female); clips `prompts/voices/<id>.wav` (~21 s). Panel persona -> `Persona.clip` via `voice.gender` ("f..." -> Charlotte, else Ethan);
-  other rounds use `VoiceSettings.builtin_voice` (default Ethan). Indian accents are out of scope (owner's call, see voice-spike-results.md).
+  other rounds use `VoiceSettings.builtin_voice` (default Ethan); their catalog name follows that voice's gender
+  (`VoiceSettings::voice_female` -> `LoopSetup.voice_female` -> `Catalog::persona` picks from `FEMALE_NAMES` or the rest; UI `catalogName`
+  mirrors it). VoiceStudio profiles carry no gender, so names there still rotate over all of `NAMES`.
+  Pocket calls back only per finished sentence, so `Tts::speak` sends `builtin::pieces(text)` one call each: sentences > 14 words cut at a
+  `, ; :` and the em dash character (U+2014) near the middle (parts >= 4 words), short ones packed to 14. Measured 2026-10-31 (Ryzen 7 250): long reply first audio
+  2.46 -> 1.84 s, no per-call overhead. A friend's no-GPU laptop ran RTF ~0.9-1.0 and whole sentences left 3-7 s gaps mid-reply. Indian accents are out of scope (owner's call, see voice-spike-results.md).
 - STT: Parakeet TDT v2 int8 (`nemo_transducer`, CPU, 4 threads), offline model. Same VAD/segment cuts as VoiceStudio. Finished segment
   -> `spawn_blocking` decode -> sent through the same channel as a VoiceStudio summary (`final_kind: summary`), so `Answer`,
   Whisper-first preference and `clean_transcript` are shared. Captions = re-decode of the open segment every 500 ms (`spawn_caption`;
-  skipped while one runs, while a final decode holds the recognizer, or when the audio hasn't grown); text is a `partial`. Whisper
+  skipped while one runs, while a final decode holds the recognizer, when the audio hasn't grown, or during a rest as long as the last
+  caption decode took (`CaptionGate`, <= 50% CPU; back-to-back decodes caused mic overruns on slow laptops)); text is a `partial`. Whisper
   sidecar is independent and still preferred when Ready.
 - Settings: `VoiceSettings.engine` (`"builtin"` | `"voicestudio"`; a saved blob without it deserializes as voicestudio, no blob = builtin),
   `builtin_voice`. Switching in Settings applies at the next round start, no restart.
@@ -68,9 +74,9 @@ pause_ms=3000 (1800/3000/5000/0=tap), input_device="", output_device=""`; `perso
 
 ## Listening (`stt::run`)
 
-- Mic at device rate → low-pass → 16 kHz mono i16; 20 ms frames → RMS → `Vad` (noise floor learned pre-speech, start >
+- Mic at device rate → (callback only copies samples; thread `onsite-mic-dsp` does the low-pass, never filter inside the cpal callback: overruns drop audio = missing words) → low-pass → 16 kHz mono i16; 20 ms frames → RMS → `Vad` (noise floor learned pre-speech, start >
   3× floor, hold > 2× floor, mins/caps; answer ends after `pause_ms` quiet). Pre-roll 400 ms sent with each segment.
-- Segment cut (decode while candidate talks): < 3 s never; 3–20 s at 700 ms pause; > 20 s at 300 ms.
+- Segment cut (decode while candidate talks): < 3 s never; 3-20 s at 700 ms pause; > 20 s at 300 ms.
 - Each segment: new WS `…/v1/audio/transcriptions/stream?pcm=1&sr=16000&model=…`, PCM frames, end with
   `{"type":"input_audio.end"}`; `final_kind:"summary"` marks done. On close, segment PCM → `whisper::transcribe`.
 - Segment text = Whisper ?? Parakeet summary ?? finals+partial. Answer = segments joined → `clean_transcript`.
@@ -131,8 +137,8 @@ voice · R11 typed fallback · R12 device switch + lost-mic message · R13 Engli
 
 ## Change recipes
 
-- Tune latency: `WAIT_IDLE/WAIT_BUSY/SHORT_*/MAX_BATCH_CHARS` (mod.rs), `SEG_*` (stt.rs), `steps`. Measure via
-  `voice latency` events in the log.
+- Tune latency: `WAIT_IDLE/WAIT_BUSY/SHORT_*/MAX_BATCH_CHARS` (mod.rs), `MAX_PIECE_WORDS` (builtin.rs), `SEG_*` (stt.rs), `steps`.
+  Measure via `voice latency` events and the `tts` log line (`audio_ms`, `rtf`; > 1 = pauses mid-reply). `builtin_check` compares whole vs pieces.
 - New persona voice: edit `panels.json` voice fields; profile rebuilds automatically (tag mismatch).
 - Any VoiceStudio API change: read `GET :3900/openapi.json` live first; update CLAUDE.md.
 

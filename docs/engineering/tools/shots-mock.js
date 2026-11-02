@@ -2,9 +2,16 @@
 (function(){
   const D = window.__MOCK__;
   const day = 864e5, now = Date.now();
+  const EV = {
+    "Problem solving": "Moved from brute force to a one-pass hash map without a hint.",
+    "Code quality": "Clear names and an early return; no dead code.",
+    "Testing and edge cases": "Walked through duplicates only after the interviewer asked.",
+    "Complexity analysis": "Gave O(n) time and space, and why sorting would cost O(n log n).",
+    "Communication": "Thought out loud and checked in before coding.",
+  };
   const rep = (o, dims) => ({overall:o, decision: o>=75?"Hire":o>=65?"Lean hire":"Lean no hire", level_signal:"Near SDE-2 bar",
     headline:"Clear approach and clean code; edge cases came late.",
-    dimensions: dims.map(([n,s]) => ({name:n, score:s, evidence:"Sample evidence."})),
+    dimensions: dims.map(([n,s]) => ({name:n, score:s, evidence:EV[n] || "Clear on the main idea; needed a prompt for the details."})),
     went_well:["Asked about input size first","Explained the hash map choice"], held_back:["Tested the empty array only when asked"],
     fix_first:"List three edge cases out loud before writing code.", moments:[{question:"What if the array is huge?",said:"Use a bigger map.",better:"Talk memory, streaming, sort + two pointers."}],
     practice_next:["Two pointers","Amortised complexity"], metrics:{answers:9,avg_words:48,longest:130,minutes:44,code_shares:4}});
@@ -26,7 +33,7 @@
     list_dossiers: [D.dossier], research_jobs: [], app_version: "0.1.2", get_backdrop: null, ats_last: null,
     audio_devices: {inputs:[{id:"",name:"Default microphone"}], outputs:[{id:"",name:"Default speaker"}]},
     storage_info: {items:[], total:0},
-    start_round: {round_id:7, loop_id:1, index:0, count:3, company:"Razorpay", level:"SDE-2 (2–5 yrs)", lang:"Java", voice:true,
+    start_round: {round_id:7, loop_id:1, index:0, count:3, company:"Razorpay", level:"SDE-2 (2-5 yrs)", lang:"Java", voice:true,
       plan:{key:"coding", name:"Problem solving (DSA)", persona:"Karthik", minutes:45, tab:"editor"},
       problem:{id:"two-sum", title:"Two Sum", difficulty:"Easy", topics:["array","hash-map"],
         statement:"Given an integer array `nums` and an integer `target`, return the **indices** of the two numbers that add up to `target`.\n\nYou may assume each input has exactly one solution, and you may not use the same element twice.",
@@ -34,8 +41,10 @@
         examples:[{input:"nums = [2,7,11,15], target = 9", output:[0,1], explanation:"nums[0] + nums[1] == 9"},{input:"nums = [3,3], target = 6", output:[0,1]}],
         hidden:12, runnable:true, starter:"class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        \n    }\n}"}}, list_models: ["sonnet","opus","fable"], voicestudio_version: {installed:"0.5.6", latest:"0.5.6"},
   };
+  // Per-shot answers (guide screenshots): {command: value}. A function value gets the call's args.
+  Object.assign(R, D.over || {});
   window.__TAURI__ = {
-    core: { invoke: async (cmd) => { if (cmd in R) return JSON.parse(JSON.stringify(R[cmd])); if (cmd === "ui_log") return null; return null; } },
+    core: { invoke: async (cmd, args) => { if (cmd in R) return typeof R[cmd] === "function" ? R[cmd](args) : JSON.parse(JSON.stringify(R[cmd])); if (cmd === "ui_log") return null; return null; } },
     event: { listen: async () => () => {} },
   };
 })();

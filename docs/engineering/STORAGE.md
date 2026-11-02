@@ -1,4 +1,4 @@
-# STORAGE — `src/store/`, `src/storage.rs`, privacy
+# STORAGE: `src/store/`, `src/storage.rs`, privacy
 
 All data local. One SQLite file + a few files. Shape lives in Rust types (JSON columns, `#[serde(default)]` so new fields
 need no migration).
@@ -41,7 +41,7 @@ delete_dossier` · `create_job update_job job jobs delete_job fail_running_jobs`
 | Key | Value |
 |---|---|
 | `app` | `Settings {provider, claude: ClaudeLocation?, interviewer_model (sonnet), report_model (opus), voice: VoiceSettings {engine, builtin_voice, ...}}` |
-| `api_keys` | `{provider_id: key}` — never to UI/logs |
+| `api_keys` | `{provider_id: key}`, never to UI/logs |
 | `storage_limits` | `{keep_rounds 0=all, keep_days 0=forever, log_max_mb 20}` |
 | `weekly_goal` | `{round_key: n}`, default `{coding:2, sysdesign:1, behavioral:1}`; `set_goal` drops unknown keys/zeros |
 | `openers:<round_key>` | recent openers |
@@ -55,7 +55,8 @@ localStorage: `onsite.theme {family, mode, image, plain, dim}` · `onsite.cfg` (
 
 Finished rounds over `keep_rounds` (newest kept) or older than `keep_days` → `delete_round`; empty loops older than 1 day
 deleted; log over `log_max_mb` → truncated in place. Live rounds (`ended_at IS NULL`) never touched. Startup also:
-`delete_unanswered_rounds`, `fail_running_jobs`. Clean-up commands: `clear_log`, `clear_temp` (onsite-update, onsite-stt;
+`delete_unanswered_rounds`, `fail_running_jobs`, `sweep_stale_scratch` (temp `onsite-round-*` / `onsite-job-*` dirs over 1 h old,
+left by a killed process; best effort, logged). Clean-up commands: `clear_log`, `clear_temp` (onsite-update, onsite-stt;
 in-use files skipped), `vacuum_db`, `open_folder`.
 Backdrop: UI shrinks to ≤ 2560×1600 JPEG → base64 → `set_backdrop` checks type from bytes (`image_ext`: jpg/png/webp),
 writes `backdrop.<ext>`, removes others.
@@ -87,8 +88,9 @@ lock → save.
 
 Local: resume/JD, transcripts, code, whiteboards, feedback, dossiers, settings, voice audio, API keys (unencrypted), log
 (errors/timings only). Outbound: chosen AI provider (prompt, resume, JD, answers, shared workspace; also feedback,
-resume check, research) · research web search by that provider · GitHub release lists on Check for updates. Never:
-accounts, analytics, telemetry, data to the developer.
+resume check, research) · research web search by that provider · GitHub release lists on Check for updates · the owner's
+Google Form on Settings → Send feedback (`feedback.rs`; only the form answers + optional app details/email). Never:
+accounts, analytics, telemetry, other data to the developer.
 **Rule:** a new outbound flow ships only with updated Privacy text + `PRIVACY.md`.
 
 ## Gaps

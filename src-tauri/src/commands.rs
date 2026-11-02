@@ -18,8 +18,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 #[tauri::command]
 pub fn ui_log(level: String, message: String) {
     match level.as_str() {
-        "error" => tracing::error!(target: "ui", "{message}"),
-        _ => tracing::info!(target: "ui", "{message}"),
+        "error" => tracing::error!(target: "ui", "{}", crate::error::log_clip(&message)),
+        _ => tracing::info!(target: "ui", "{}", crate::error::log_clip(&message)),
     }
 }
 
@@ -177,8 +177,8 @@ pub fn create_loop(state: State<AppState>, setup: LoopSetup) -> Result<i64> {
 }
 
 #[tauri::command]
-pub async fn start_round(app: AppHandle, loop_id: i64, index: usize) -> Result<RoundInfo> {
-    live::start_round(&app, loop_id, index).await
+pub async fn start_round(app: AppHandle, loop_id: i64, index: usize, ready_made: Option<bool>) -> Result<RoundInfo> {
+    live::start_round(&app, loop_id, index, ready_made).await
 }
 
 /// Stops a round that is still loading; its `start_round` returns an error.
@@ -228,6 +228,12 @@ pub fn get_loop_feedback(state: State<AppState>, loop_id: i64) -> Result<live::L
 #[tauri::command]
 pub async fn run_code(app: AppHandle, round_id: i64, code: String, submit: bool) -> Result<crate::runner::Report> {
     live::run_code(&app, round_id, code, submit).await
+}
+
+/// The candidate's edits to a comprehension project so far, as unified diffs ("" = no changes).
+#[tauri::command]
+pub async fn project_diff(app: AppHandle, round_id: i64, files: std::collections::BTreeMap<String, String>) -> Result<String> {
+    live::project_diff(&app, round_id, &files).await
 }
 
 /// The editor language picker in the call room.
@@ -637,6 +643,115 @@ pub fn open_folder(state: State<AppState>, which: String) -> Result<()> {
         _ => return Err(AppError::Invalid("Unknown folder.".into())),
     };
     crate::storage::open_folder(&path)
+}
+
+/// Sends the "Send feedback" answers to the owner's Google Form.
+#[tauri::command]
+pub async fn send_feedback(feedback: crate::feedback::Feedback) -> Result<()> {
+    crate::feedback::submit(&feedback).await
+}
+
+/// Opens one of Onsite's own pages in the default browser. Only fixed links: the UI can't pass a URL.
+#[tauri::command]
+pub fn open_link(which: String) -> Result<()> {
+    const REPO: &str = "https://github.com/Prateesh-Sulikeri/Onsite";
+    let url = match which.as_str() {
+        "feedback_form" => crate::feedback::FORM_VIEW.to_string(),
+        "site" => "https://prateesh-sulikeri.github.io/Onsite/".to_string(),
+        "guides" => "https://prateesh-sulikeri.github.io/Onsite/guides.html".to_string(),
+        "repo" => REPO.to_string(),
+        "issues" => format!("{REPO}/issues/new/choose"),
+        "issues_search" => format!("{REPO}/issues"),
+        "discussions" => format!("{REPO}/discussions"),
+        "releases" => format!("{REPO}/releases"),
+        "license" => format!("{REPO}/blob/main/LICENSE"),
+        "privacy" => format!("{REPO}/blob/main/PRIVACY.md"),
+        "security" => format!("{REPO}/blob/main/SECURITY.md"),
+        "notices" => format!("{REPO}/blob/main/THIRD_PARTY_NOTICES.md"),
+        "author" => "https://github.com/Prateesh-Sulikeri".to_string(),
+        "resume_matcher" => "https://github.com/srbhr/Resume-Matcher".to_string(),
+        "ats_screener" => "https://github.com/sunnypatell/ats-screener".to_string(),
+        "voicestudio" => "https://github.com/debpalash/VoiceStudio".to_string(),
+        "sherpa_onnx" => "https://github.com/k2-fsa/sherpa-onnx".to_string(),
+        "codemirror" => "https://codemirror.net/".to_string(),
+        "excalidraw" => "https://github.com/excalidraw/excalidraw".to_string(),
+        _ => return Err(AppError::Invalid("Unknown link.".into())),
+    };
+    crate::storage::open_url(&url)
+}
+
+// ---------- Report a bug (GitHub issue, see report.rs) ----------
+
+#[derive(Serialize)]
+pub struct ReportPreview {
+    title: String,
+    /// Exactly the redacted report: what opens on GitHub (or is copied when the link is too long).
+    text: String,
+    flags: Vec<crate::report::Flag>,
+    level: crate::report::Level,
+    missing: Option<&'static str>,
+}
+
+#[tauri::command]
+pub async fn report_context(app: AppHandle) -> crate::report::ReportContext {
+    let state = app.state::<AppState>();
+    crate::report::context(&state, app.package_info().version.to_string()).await
+}
+
+#[tauri::command]
+pub async fn report_preview(app: AppHandle, input: crate::report::ReportInput) -> Result<ReportPreview> {
+    let state = app.state::<AppState>();
+    let ctx = crate::report::redaction_ctx(&state).await;
+    let p = crate::report::prepare(&input, &ctx)?;
+    let built = crate::report::build_url(&p)?;
+    Ok(ReportPreview {
+        title: p.title.clone().unwrap_or_default(),
+        text: crate::report::report_text(&p),
+        flags: p.flags.clone(),
+        level: built.level,
+        missing: crate::report::missing_required(&p),
+    })
+}
+
+#[derive(Serialize)]
+pub struct IssueOpened {
+    level: crate::report::Level,
+    /// The full redacted report, for the clipboard when the link was too long.
+    text: String,
+}
+
+/// Opens the GitHub new-issue page with the redacted report in the link. The fields are redacted again here,
+/// so the link never holds text the preview did not show.
+#[tauri::command]
+pub async fn open_issue(app: AppHandle, input: crate::report::ReportInput) -> Result<IssueOpened> {
+    let state = app.state::<AppState>();
+    let ctx = crate::report::redaction_ctx(&state).await;
+    let p = crate::report::prepare(&input, &ctx)?;
+    if let Some(label) = crate::report::missing_required(&p) {
+        return Err(AppError::Invalid(format!("Fill in \"{label}\" first.")));
+    }
+    let built = crate::report::build_url(&p)?;
+    crate::storage::open_url(&built.url)?;
+    tracing::info!(category = ?p.category, level = ?built.level, bytes = built.url.len(), "issue page opened");
+    Ok(IssueOpened { level: built.level, text: crate::report::report_text(&p) })
+}
+
+/// The last log lines, redacted. Only ever copied to the clipboard by the user's choice.
+#[tauri::command]
+pub async fn report_log(app: AppHandle) -> Result<String> {
+    let state = app.state::<AppState>();
+    let ctx = crate::report::redaction_ctx(&state).await;
+    let raw = std::fs::read(crate::storage::log_path()).unwrap_or_default();
+    Ok(crate::report::log_tail(&raw, &ctx))
+}
+
+/// Saves the report text into Downloads, for when the browser or clipboard fails. Returns the path.
+#[tauri::command]
+pub fn report_save(app: AppHandle, text: String) -> Result<String> {
+    let dir = app.path().download_dir().map_err(|_| AppError::NotFound("No Downloads folder found.".into()))?;
+    let path = dir.join("onsite-report.txt");
+    std::fs::write(&path, text.chars().take(100_000).collect::<String>())?;
+    Ok(path.display().to_string())
 }
 
 #[tauri::command]

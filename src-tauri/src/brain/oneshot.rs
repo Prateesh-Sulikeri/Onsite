@@ -114,7 +114,7 @@ async fn run_cli(
     match result {
         Some((text, false)) => Ok(OneShot { json: extract_json(&text), text, duration_ms, model: model_used }),
         Some((text, true)) => {
-            tracing::warn!(%status, stderr = %stderr.trim(), "one-shot job failed: {text}");
+            tracing::warn!(%status, stderr = %crate::error::log_clip(&stderr), "one-shot job failed: {}", crate::error::log_clip(&text));
             Err(AppError::Claude(if text.trim().is_empty() { "the job failed with no message".into() } else { text }))
         }
         None => {

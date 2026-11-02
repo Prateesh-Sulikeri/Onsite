@@ -582,13 +582,30 @@ fn spawn_decode(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, tx: UnboundedS
     });
 }
 
-/// Decodes the open segment for a live caption. Never more than one at a time (`busy`); skipped
-/// while a finished segment is being decoded.
-fn spawn_caption(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, busy: Arc<AtomicBool>, tx: UnboundedSender<SegMsg>) {
-    busy.store(true, Ordering::SeqCst);
+/// When the next caption may start. A caption decode is followed by a rest as long as the decode took,
+/// so captions use at most half the CPU. On slow laptops back-to-back decodes starved the mic thread
+/// ("buffer underrun or overrun") and audio was lost.
+#[derive(Default)]
+struct CaptionGate {
+    busy: AtomicBool,
+    next: Mutex<Option<Instant>>,
+}
+
+impl CaptionGate {
+    fn ready(&self) -> bool {
+        !self.busy.load(Ordering::SeqCst) && self.next.lock().unwrap().is_none_or(|t| Instant::now() >= t)
+    }
+}
+
+/// Decodes the open segment for a live caption. Never more than one at a time; skipped while a
+/// finished segment is being decoded.
+fn spawn_caption(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, gate: Arc<CaptionGate>, tx: UnboundedSender<SegMsg>) {
+    gate.busy.store(true, Ordering::SeqCst);
     tokio::task::spawn_blocking(move || {
+        let t = Instant::now();
         let text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| stt.caption(&pcm))).ok().flatten();
-        busy.store(false, Ordering::SeqCst);
+        *gate.next.lock().unwrap() = Some(Instant::now() + t.elapsed());
+        gate.busy.store(false, Ordering::SeqCst);
         if let Some(text) = text.filter(|t| !t.is_empty()) {
             let _ = tx.send(SegMsg::Msg(idx, serde_json::json!({"type": "partial", "text": text})));
         }
@@ -650,7 +667,7 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
     let mut mic_lost = false;
     let mut caption = tokio::time::interval(CAPTION_EVERY);
     caption.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let caption_busy = Arc::new(AtomicBool::new(false));
+    let caption_gate = Arc::new(CaptionGate::default());
     // (segment, samples) of the last caption started: no re-decode of audio that hasn't grown.
     let mut captioned = (usize::MAX, 0usize);
     emit(VoiceEvent::Listening { active: true });
@@ -671,9 +688,9 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
             _ = caption.tick(), if matches!(src, Source::Local(_)) => {
                 if let (Source::Local(stt), Some(i)) = (src, active) {
                     let n = ans.segs[i].pcm.len();
-                    if n >= MIC_RATE as usize / 2 && captioned != (i, n) && !caption_busy.load(Ordering::SeqCst) {
+                    if n >= MIC_RATE as usize / 2 && captioned != (i, n) && caption_gate.ready() {
                         captioned = (i, n);
-                        spawn_caption(stt.clone(), i, ans.segs[i].pcm.clone(), caption_busy.clone(), seg_tx.clone());
+                        spawn_caption(stt.clone(), i, ans.segs[i].pcm.clone(), caption_gate.clone(), seg_tx.clone());
                     }
                 }
             }
@@ -811,7 +828,8 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
     let stt_ms = ended_at.elapsed().as_millis() as u64;
     tracing::info!(stt_ms, segments = ans.segs.len(), by_whisper, words = text.split_whitespace().count(), "utterance transcribed");
     if raw != text {
-        tracing::debug!(%raw, "transcript cleaned");
+        // Lengths only: the words themselves are the candidate's speech and never go in the log.
+        tracing::debug!(raw_chars = raw.chars().count(), chars = text.chars().count(), "transcript cleaned");
     }
     Ok(if text.is_empty() { ListenEnd::NoSpeech } else { ListenEnd::Text { text, stt_ms } })
 }

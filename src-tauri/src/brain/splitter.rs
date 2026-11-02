@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn unicode_is_safe() {
-        let (out, _) = feed(&["Namaste — welcome. ", "Let’s start…"]);
-        assert_eq!(out, vec![sentence("Namaste — welcome."), sentence("Let’s start…")]);
+        let (out, _) = feed(&["Namaste \u{2014} welcome. ", "Let’s start…"]);
+        assert_eq!(out, vec![sentence("Namaste \u{2014} welcome."), sentence("Let’s start…")]);
     }
 }

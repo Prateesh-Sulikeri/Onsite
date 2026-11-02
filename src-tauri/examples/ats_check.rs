@@ -27,7 +27,7 @@ fn main() {
     println!("{} | {} page(s) | {} words | text: {}", r.file.kind_label, r.file.pages.map_or("-".into(), |p| p.to_string()), r.file.words, r.extractability);
     println!("parse {}  content {}  match {}  sections {:?}  years {:?}", r.parse_score, r.content_score, r.matched.overall, r.sections, r.experience_years);
     for c in &r.checks {
-        println!("  [{:?}] {} — {}", c.status, c.id, c.title);
+        println!("  [{:?}] {}: {}", c.status, c.id, c.title);
     }
     for a in &r.ats {
         println!("  {:<15} {:>3} {}  {}", a.name, a.score, if a.passes { "pass" } else { "BELOW" }, a.issues.join(" / "));

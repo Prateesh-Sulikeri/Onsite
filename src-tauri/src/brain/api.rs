@@ -239,7 +239,7 @@ impl ApiClient {
 
     fn net(&self, e: reqwest::Error) -> AppError {
         let what = if e.is_timeout() { "timed out" } else if e.is_connect() { "could not connect" } else { "connection failed" };
-        tracing::warn!(provider = self.provider.id(), "{what}: {e}");
+        tracing::warn!(provider = self.provider.id(), "{what}: {}", crate::error::log_clip(&e.to_string()));
         AppError::Ai(format!("{}: {what}. Check your internet connection.", self.provider.label()))
     }
 
@@ -250,7 +250,7 @@ impl ApiClient {
             return Ok(resp);
         }
         let body = resp.text().await.unwrap_or_default();
-        tracing::warn!(provider = self.provider.id(), %status, "API error: {body}");
+        tracing::warn!(provider = self.provider.id(), %status, "API error: {}", crate::error::log_clip(&body));
         Err(AppError::Ai(http_error(self.provider, status.as_u16(), &body)))
     }
 
@@ -308,7 +308,7 @@ impl ApiClient {
             if !text.contains("fallback") {
                 return Err(AppError::Ai(http_error(self.provider, 400, &text)));
             }
-            tracing::warn!("Claude API refused refusal fallbacks; sending without them: {text}");
+            tracing::warn!("Claude API refused refusal fallbacks; sending without them: {}", crate::error::log_clip(&text));
             body.as_object_mut().map(|o| o.remove("fallbacks"));
         }
         self.send(self.post(&url, body, timeout)).await
@@ -533,11 +533,11 @@ impl ApiClient {
             let text = resp.text().await.unwrap_or_default();
             if attempt < GROQ_RESEARCH_TRIES && groq_flaky(status, &text) {
                 // The same request often works the second time (seen live: 500, "Parsing failed").
-                tracing::warn!(attempt, status, "Groq research failed; trying again: {text}");
+                tracing::warn!(attempt, status, "Groq research failed; trying again: {}", crate::error::log_clip(&text));
                 attempt += 1;
                 continue;
             }
-            tracing::warn!(provider = self.provider.id(), status, "API error: {text}");
+            tracing::warn!(provider = self.provider.id(), status, "API error: {}", crate::error::log_clip(&text));
             return Err(AppError::Ai(http_error(self.provider, status, &text)));
         };
         let msg = &v["choices"][0]["message"];

@@ -4,7 +4,7 @@ Onsite is MIT-licensed (see `LICENSE`). It includes or is based on the work belo
 
 ## Code ported into Onsite
 
-### Resume-Matcher — Apache License 2.0
+### Resume-Matcher: Apache License 2.0
 https://github.com/srbhr/Resume-Matcher. Copyright the Resume-Matcher authors.
 
 The resume checks and the job match score were ported from Python to Rust and changed to fit Onsite:
@@ -14,7 +14,7 @@ The resume checks and the job match score were ported from Python to Rust and ch
 
 These files stay under the Apache License 2.0. Full text: `LICENSES/Apache-2.0.txt`.
 
-### ats-screener — MIT License
+### ats-screener: MIT License
 https://github.com/sunnypatell/ats-screener. Copyright (c) 2026 Sunny Patel.
 
 The six ATS profiles in `src-tauri/src/ats/score.rs` follow its `src/lib/engine/scorer/profiles`.

@@ -417,7 +417,7 @@ pub fn tips(i: &Inputs) -> Vec<String> {
         }
     }
     if sub.date_consistency.is_some_and(|d| d < 100.0) {
-        out.push("Write every date the same way, e.g. \"Jan 2020 – Mar 2023\". Mixed formats make ATSs miscount your experience.".to_string());
+        out.push("Write every date the same way, e.g. \"Jan 2020 to Mar 2023\". Mixed formats make ATSs miscount your experience.".to_string());
     }
     if i.facts.bullets >= 3 && (i.facts.quantified as f64) < i.facts.bullets as f64 * 0.3 {
         out.push(format!("Only {} of {} experience lines have a number. Add scale, latency, money or percentages.", i.facts.quantified, i.facts.bullets));
@@ -436,7 +436,7 @@ mod tests {
     use super::*;
     use crate::ats::checks;
 
-    const RESUME: &str = "Jane Doe\nSenior Backend Engineer\njane@example.com | +91 98765 43210\n\nSummary\nBackend engineer building payment systems.\n\nExperience\nAcme Payments  Jan 2020 – Present\nBuilt event-driven microservice in Java on Postgres handling 2M payments a day\nRan Kafka consumers with idempotency keys and retries\nBeta Corp  Jun 2017 – Dec 2019\nWrote REST services and Redis caches for checkout flows\n\nEducation\nBITS Pilani  2013 – 2017\n\nSkills\nJava, Spring Boot, Kafka, Redis, Postgres, Docker";
+    const RESUME: &str = "Jane Doe\nSenior Backend Engineer\njane@example.com | +91 98765 43210\n\nSummary\nBackend engineer building payment systems.\n\nExperience\nAcme Payments  Jan 2020 \u{2013} Present\nBuilt event-driven microservice in Java on Postgres handling 2M payments a day\nRan Kafka consumers with idempotency keys and retries\nBeta Corp  Jun 2017 \u{2013} Dec 2019\nWrote REST services and Redis caches for checkout flows\n\nEducation\nBITS Pilani  2013 \u{2013} 2017\n\nSkills\nJava, Spring Boot, Kafka, Redis, Postgres, Docker";
 
     fn job() -> JobKeywords {
         JobKeywords {
