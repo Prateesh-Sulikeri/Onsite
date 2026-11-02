@@ -334,13 +334,15 @@ pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
     let Ok(health) = vs.health().await else {
         return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None, whisper: crate::voice::whisper::status(), version: crate::updates::installed_voicestudio(), engine, models, voices, studio_up: false });
     };
+    // These probes are independent. Run them together so the status costs one round trip, not three.
+    let (ready, profiles, english) = tokio::join!(vs.ready(), vs.profiles(), crate::voice::stt::english_model(&vs));
     Ok(VoiceStatus {
         up: true,
-        loaded: vs.ready().await.unwrap_or(false),
+        loaded: ready.unwrap_or(false),
         device: health["device"].as_str().unwrap_or_default().to_string(),
-        profiles: vs.profiles().await.unwrap_or_default(),
+        profiles: profiles.unwrap_or_default(),
         installed,
-        english: Some(crate::voice::stt::english_model(&vs).await),
+        english: Some(english),
         whisper: crate::voice::whisper::status(),
         version: health["version"].as_str().map(String::from).or_else(crate::updates::installed_voicestudio),
         engine,

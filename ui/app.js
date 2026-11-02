@@ -206,14 +206,22 @@ function modeLine(who){
 const provider = () => (SETTINGS && SETTINGS.provider) || "claude_code";
 function aiReady(){ const p = provider(); return p === "claude_code" ? !!(SETTINGS && SETTINGS.claude) : !!AIKEYS[p]; }
 
+/* Settings and keys are local and fast. Voice status asks VoiceStudio over HTTP, which can be slow or down,
+   so startup paints the AI status first and fills the voice chip in when it arrives. */
 async function refreshStatus(){
+  await refreshAiStatus();
+  await refreshVoiceStatus();
+}
+async function refreshAiStatus(){
   try{ SETTINGS = await api.invoke("get_settings"); }catch(e){}
   try{ AIKEYS = await api.invoke("ai_keys"); }catch(e){}
-  try{ VS = await api.invoke("voice_status"); }catch(e){ VS = {up:false, loaded:false, profiles:[]}; }
   const cl = $("#sysClaude"), name = PROVIDERS[provider()].name;
   cl.className = "sys " + (aiReady() ? "ok" : "bad");
   $("#sysClaudeName").textContent = name;
   cl.title = aiReady() ? `${name} connected` : `${name} isn’t set up. Open Settings.`;
+}
+async function refreshVoiceStatus(){
+  try{ VS = await api.invoke("voice_status"); }catch(e){ VS = {up:false, loaded:false, profiles:[]}; }
   const vs = $("#sysVoice"), bi = builtinVoice(); vs.className = "sys " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
   vs.querySelector("span").textContent = bi ? "Voice" : "VoiceStudio";
   vs.title = bi ? (VS.up ? "Built-in voice ready" : "Voice models aren’t downloaded. Open Settings.")
@@ -3489,17 +3497,22 @@ $("#roomMic").addEventListener("change", () => {
   if (OnsiteTheme.read().image) api.invoke("get_backdrop").then(d => { if (d) OnsiteTheme.setImage(d); else OnsiteTheme.save({...OnsiteTheme.read(), image: false}); }).catch(() => {});
   initSetup();
   initAts();
-  await refreshStatus();
+  await refreshAiStatus();
   if (SETTINGS && provider() === "claude_code" && !SETTINGS.claude){
     try{ await api.invoke("detect_claude"); }catch(e){}
-    await refreshStatus();
+    await refreshAiStatus();
   }
+  // Voice status is not needed to open the first screen. It fills in behind it.
+  const voiceReady = refreshVoiceStatus();
   // First run with nothing to talk to: start on the AI picker.
   if (!aiReady()){
+    await voiceReady;
     SET_SEC = "models";
     nav("settings");
+    hideBoot();
     msg("#clResult", "Connect an AI model to start. Claude Code needs Claude Pro or Max; otherwise paste a Claude, OpenAI, Gemini or Groq key.");
     return;
   }
   nav("dashboard");
+  hideBoot();
 })();
