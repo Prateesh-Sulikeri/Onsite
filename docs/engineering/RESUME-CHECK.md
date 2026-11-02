@@ -54,7 +54,7 @@ Profile issues e.g. Workday: >2 pages, contact only in header, two columns; Tale
 
 Fixtures `src-tauri/tests/fixtures/ats/` (clean/messy docx, one/two-column + scan pdf, rtf, html sources);
 `tests/ats_files.rs`; `analyze` is pure → unit tests. CLI: `cargo run --example ats_check -- resume.pdf [job.json] [--json]`
-(app running locks the exe → `--target-dir target/ats-test`).
+(app running locks the exe → `--target-dir D:\cargo-target\onsite-test`).
 
 ## Requirements
 

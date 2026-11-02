@@ -252,7 +252,7 @@ Reports and transcripts must survive app restarts. Export/import dossiers as JSO
   gender or other traits from the name (opus said "she" before that rule).
 - The interview setup's resume/JD drops also take PDF/Word/RTF via `read_document`.
 - Offline CLI: `cargo run --example ats_check -- resume.pdf [job.json] [--json]`. Fixtures + sources: `tests/fixtures/ats/`.
-- If the app is running, `onsite.exe` is locked: test with `--target-dir target/ats-test`.
+- If the app is running, `onsite.exe` is locked: test with `--target-dir D:\cargo-target\onsite-test` (the one shared test folder, see Working rules).
 
 ### Question bank (prompts/questions.csv, bank.rs, runner/)
 - One LeetCode problem per row: 20 originals + the rest of Blind 75 (81 total). Expected values are data;
@@ -300,7 +300,7 @@ rest with `color-mix`. app.css has no color literals left except status glows: *
 `<app data>/backdrop.{jpg,png,webp}` (type checked from bytes). The whiteboard's Excalidraw theme is compiled in as dark.
 Settings is one view with sections (Appearance, AI model, VoiceStudio, Updates, Privacy, Storage, Send feedback, About); `data-sec` on a
 `data-nav="settings"` link opens a section. About (`setSection('about')` fills the live version from `app_version`): why Onsite exists, free + MIT, author, credits, roadmap.
-Its links are `data-link` buttons; `open_link` (commands.rs) takes only fixed keys, never a URL: feedback_form, site, guides, repo, issues, releases, license, privacy, security, notices, author,
+Its links are `data-link` buttons; `open_link` (commands.rs) takes only fixed keys, never a URL: feedback_form, site, guides, repo, issues, issues_search, discussions, releases, license, privacy, security, notices, author,
 resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw. Add a key there before adding a link. Persona cards come from `get_panels` (traits, strictness, backstory,
 voice, rounds); "Play voice" = `voice_persona_preview` (builds the profile once, then speaks one line).
 Updates (`updates.rs`): GitHub releases of Prateesh-Sulikeri/Onsite, only when the user presses Check. Install =
@@ -377,6 +377,9 @@ hard-coded in JS.
   skips the `WindowsApps` Store stub). Java, g++ and Node must be installed to Run in those languages.
 
 ## Working rules for Claude Code in this repo
+- Build folders: the dev build uses `D:\cargo-target\onsite`. When the running app locks it, every agent and check uses the one shared
+  test folder `--target-dir D:\cargo-target\onsite-test`. Never make a new target dir per task: each is a full 8-15 GB debug build that
+  nothing cleans up (11 of them filled ~100 GB, cleaned 2026-11-02).
 - Small commits per step with clear messages. Run `cargo clippy -- -D warnings` and `cargo test` before
   committing Rust changes.
 - Do not add a provider SDK dependency. API keys come only from Settings (`api_keys`), never from env vars or files.

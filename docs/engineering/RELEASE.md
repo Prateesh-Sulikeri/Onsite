@@ -70,7 +70,7 @@ to `release.yml`, update `SECURITY.md` + release-notes warnings table. macOS: ad
 - macOS/Linux GUI launches get a bare PATH → `lib.rs::path_from_login_shell` (`$SHELL -ilc`, 3 s cap).
 - Windows children: `CREATE_NO_WINDOW` (no console flashes).
 - `build.rs` watches `icons/` (else new logos never reach the exe without a clean build).
-- Running app locks `onsite.exe` → test builds with `--target-dir target/<other>`.
+- Running app locks `onsite.exe` → test builds with `--target-dir D:\cargo-target\onsite-test` (one shared folder, never a new one).
 - macOS mic: `Info.plist` (prompt text) **and** `Entitlements.plist` (`com.apple.security.device.audio-input`). Tauri signs with the
   hardened runtime by default (`--options runtime`, even ad-hoc); without the entitlement the mic is silently blocked. sherpa-onnx is
   linked statically, so no library-validation entitlement is needed.
