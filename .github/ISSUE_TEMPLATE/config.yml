@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ask a question
+    url: https://github.com/Prateesh-Sulikeri/Onsite/discussions
+    about: How does something work? Setup help? Ask in Discussions.
   - name: Security problem
     url: https://github.com/Prateesh-Sulikeri/Onsite/security/advisories/new
-    about: Report it privately, not as an issue.
+    about: Report it privately, not as an issue. See SECURITY.md.
+  - name: Guides
+    url: https://prateesh-sulikeri.github.io/Onsite/guides.html
+    about: Setup help for Claude Code, API keys, voice and updates.
