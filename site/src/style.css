@@ -46,6 +46,7 @@ body{
   font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
 img{ max-width: 100%; height: auto; display: block; }
+button{ font: inherit; }
 a{ color: var(--accent-text); text-decoration: none; }
 a:hover{ color: var(--ink); }
 a:focus-visible, .btn:focus-visible{ outline: 2px solid var(--accent-hi); outline-offset: 3px; border-radius: 6px; }
@@ -77,6 +78,8 @@ p{ margin: 0; }
 .nav-links{ display: flex; align-items: center; gap: 4px; min-width: 0; }
 .nav-links a:not(.btn){ color: var(--ink-2); font-size: .93rem; font-weight: 550; padding: 6px 10px; border-radius: 8px; }
 .nav-links a:not(.btn):hover, .nav-links a[aria-current]{ color: var(--ink); background: var(--hover); }
+.nav-links a{ white-space: nowrap; }
+@media (max-width: 900px){ .nav-links a[href$="#features"], .nav-links a[href$="#engines"]{ display: none; } }
 @media (max-width: 640px){ .nav-links a:not(.btn){ display: none; } }
 
 /* Buttons */
@@ -162,6 +165,18 @@ th{ color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spa
 tr:last-child td{ border-bottom: 0; }
 td:first-child{ font-weight: 650; white-space: nowrap; }
 td{ color: var(--ink-2); }
+/* Phones: each row becomes a card, cells labelled with their column (data-label, added by build.mjs). */
+@media (max-width: 600px){
+  table{ min-width: 0; }
+  table, tbody, tr, td{ display: block; }
+  thead{ display: none; }
+  tr{ padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  tr:last-child{ border-bottom: 0; }
+  td, tr:last-child td{ padding: 3px 0; border: 0; }
+  td:first-child{ color: var(--ink); white-space: normal; padding-bottom: 6px; }
+  td:not(:first-child)[data-label]::before{ content: attr(data-label); display: block; color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+  table td code{ white-space: normal; overflow-wrap: anywhere; }
+}
 
 /* Changelog page */
 .page main{ padding-top: clamp(48px, 8vw, 88px); }
@@ -264,11 +279,28 @@ td code{ white-space: nowrap; overflow-wrap: normal; }
 
 /* Guides */
 .recipes{ display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 18px; }
-@media (min-width: 700px){ .recipes{ grid-template-columns: 1fr 1fr; } }
-@media (min-width: 1280px){ .recipes{ grid-template-columns: repeat(3, 1fr); } }
-.recipe{ padding: 20px; display: flex; flex-direction: column; gap: 8px; transition: border-color .2s; }
-.recipe:hover{ border-color: var(--accent-line); }
-.recipe header{ display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+@media (min-width: 640px){ .recipes{ grid-template-columns: 1fr 1fr; } }
+@media (min-width: 1100px){ .recipes:has(> :nth-child(3):last-child){ grid-template-columns: repeat(3, 1fr); } }
+.recipe{ padding: 20px; display: flex; flex-direction: column; gap: 8px; transition: border-color .2s, transform .2s var(--ease); color: var(--ink); }
+.recipe:hover{ border-color: var(--accent-line); color: var(--ink); transform: translateY(-1px); }
+/* Each option inside a "Choose" section starts below a rule, so the options read as separate guides. */
+.prose h3[id]{ margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 1.3rem; }
+.prose h4{ font-size: 1rem; font-weight: 650; margin: 22px 0 6px; color: var(--ink); }
+/* Video slot: a link out to YouTube (the site loads nothing from third parties). .soon = not up yet. */
+.video{ display: flex; align-items: center; gap: 14px; margin: 18px 0; padding: 14px 18px; border: 1px solid var(--accent-line); border-radius: var(--r-lg); background: var(--panel); color: var(--ink); }
+a.video:hover{ color: var(--ink); background: var(--surface-2); }
+.video .play{ flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); }
+.video .play svg{ width: 18px; height: 18px; fill: var(--accent-ink); margin-left: 2px; }
+.video strong{ display: block; }
+.video .muted{ display: block; font-size: .88rem; }
+/* Home hero: the screenshot is the demo video's thumbnail. */
+.watch{ position: relative; display: block; margin-top: clamp(48px, 7vw, 72px); color: var(--ink); }
+.watch .shot-hero{ margin-top: 0; transition: border-color .2s; }
+.watch:hover .shot-hero{ border-color: var(--accent-line); }
+.watch-badge{ position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 12px; padding: 8px 20px 8px 8px; border-radius: 999px; background: var(--panel); border: 1px solid var(--accent-line); box-shadow: var(--glow); font-weight: 650; white-space: nowrap; transition: transform .2s var(--ease); }
+.watch:hover .watch-badge{ transform: translate(-50%, -50%) scale(1.05); color: var(--ink); }
+.watch-badge .play{ width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); }
+.watch-badge svg{ width: 20px; height: 20px; fill: var(--accent-ink); margin-left: 3px; }.recipe header{ display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .recipe h3{ margin: 0; font-size: 1.05rem; }
 .recipe .badge{ flex-shrink: 0; }
 .recipe p{ margin: 0; font-size: .92rem; }
@@ -287,3 +319,28 @@ td code{ white-space: nowrap; overflow-wrap: normal; }
 .callout strong{ color: var(--ink); }
 .prose pre + p{ margin-top: 12px; }
 .prose ol.how + p, .prose ol.how + .grid{ margin-top: 14px; }
+
+/* Download dialog (site.js), shown until the app is code-signed. */
+.dlg{ width: min(520px, calc(100% - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: auto; color: var(--ink); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-xl); box-shadow: var(--deep-shadow); }
+.dlg::backdrop{ background: color-mix(in oklch, var(--bg) 72%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.dlg > *{ margin-left: 24px; margin-right: 24px; }
+.dlg-head{ display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 22px; }
+.dlg-head h2{ font-size: 1.45rem; }
+.dlg-x{ flex-shrink: 0; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.dlg-x:hover{ background: var(--hover); color: var(--ink); }
+.dlg-x svg{ width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.dlg-file{ margin-top: 4px !important; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.dlg p, .dlg li{ color: var(--ink-2); font-size: .95rem; }
+.dlg p{ margin-top: 12px; }
+.dlg strong{ color: var(--ink); }
+.dlg code{ overflow-wrap: anywhere; }
+.dlg-os{ padding: 10px 14px; border-radius: var(--r); background: var(--warm-soft); }
+.dlg-cmd{ display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 10px 10px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--code-bg); }
+.dlg-cmd code{ flex: 1; min-width: 0; font: .84rem/1.5 var(--mono); color: var(--ink); background: none; padding: 0; }
+.dlg-cmd .btn{ flex-shrink: 0; margin: 0; }
+.dlg-actions{ position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 10px; margin: 20px 0 0 !important; padding: 16px 24px; background: var(--surface); border-top: 1px solid var(--line); }
+.dlg-actions .btn{ padding: 11px 20px; }
+@media (max-width: 480px){ .dlg-actions .btn{ flex: 1; } }
+.dlg-steps{ margin: 6px 24px 0; padding-left: 20px; display: grid; gap: 10px; color: var(--ink-2); font-size: .95rem; }
+.dlg-steps li::marker{ color: var(--accent-text); font-weight: 700; }
+.dlg-steps .dlg-cmd{ margin-top: 6px; }

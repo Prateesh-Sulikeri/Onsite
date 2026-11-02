@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#0c0d21">
 <link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="stylesheet" href="style.css">
+<script src="site.js" defer></script>
 </head>
 <body class="page">
 <a class="skip" href="#main">Skip to content</a>
@@ -30,11 +31,13 @@
 <main id="main" class="wrap narrow">
   <p class="eyebrow">Changelog</p>
   <h1>What changed</h1>
-  <p class="lead small"><strong>Stable</strong> releases come from <code>main</code>. <strong>Experimental</strong> builds come out on every change to <code>m1</code>; only the newest three are kept. They get new features first and may break.</p>
+  <p class="lead small"><strong>Stable</strong> releases come from <code>main</code>. <strong>Experimental</strong> builds come out on most pushes to <code>m1</code> (docs-only changes are skipped); only the newest three are kept. They get new features first and may break.</p>
   <div class="entries">
 {{changelog}}
   </div>
 </main>
+
+{{download_dialog}}
 
 <footer class="foot">
   <div class="wrap foot-in">

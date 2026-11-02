@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'">
 <title>Set up Onsite</title>
-<meta name="description" content="Step-by-step guides for Onsite: Claude Code, a free Groq key or another API key, with the built-in voice, VoiceStudio, VoiceStudio in Docker, or typed rounds.">
+<meta name="description" content="Set up Onsite in four steps, then pick your AI (Claude Code, a free Groq key or another API key) and your voice (built-in, VoiceStudio, Docker or typed).">
 <meta name="theme-color" content="#0c0d21">
 <link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="stylesheet" href="style.css">
@@ -30,15 +30,9 @@
   <aside class="toc" aria-label="On this page">
     <p class="eyebrow">On this page</p>
     <ol>
-      <li><a href="#pick">Pick your setup</a></li>
-      <li><a href="#install">Install Onsite</a></li>
-      <li><a href="#claude-code">AI: Claude Code</a></li>
-      <li><a href="#groq">AI: Groq (free)</a></li>
-      <li><a href="#api-keys">AI: Claude, OpenAI, Gemini key</a></li>
-      <li><a href="#builtin">Voice: built-in</a></li>
-      <li><a href="#voicestudio">Voice: VoiceStudio</a></li>
-      <li><a href="#docker">Voice: VoiceStudio in Docker</a></li>
-      <li><a href="#typed">No voice: typed</a></li>
+      <li><a href="#start">Start here</a></li>
+      <li><a href="#ai">Choose your AI</a></li>
+      <li><a href="#voice">Choose your voice</a></li>
       <li><a href="#first">Your first interview</a></li>
       <li><a href="#trouble">When something's off</a></li>
     </ol>
@@ -47,59 +41,53 @@
   <article class="prose">
     <p class="eyebrow">Guides</p>
     <h1>Set up Onsite</h1>
-    <p class="lead small">Onsite needs two things: an <strong>AI</strong> to run the interview and, for spoken rounds, a <strong>voice engine</strong>. Pick one of each. You can change either later in Settings, and your interviews stay.</p>
+    <p class="lead small">Onsite needs an <strong>AI</strong> to run the interview and, for spoken rounds, a <strong>voice</strong>. Start here gets you to your first round. The sections after it cover every option.</p>
 
-    <section id="pick">
-      <h2>Pick your setup</h2>
-      <p>Each card is a full setup. Follow its steps in order.</p>
-      <div class="recipes">
-        <article class="card recipe">
-          <header><h3>Claude Code + built-in voice</h3><span class="badge">Recommended</span></header>
-          <p class="muted">You have Claude Pro or Max. Any computer, no GPU.</p>
-          <ol><li><a href="#install">Install Onsite</a></li><li><a href="#claude-code">Connect Claude Code</a></li><li><a href="#builtin">Download the voice models</a></li><li><a href="#first">Start an interview</a></li></ol>
-        </article>
-        <article class="card recipe">
-          <header><h3>Groq + built-in voice</h3><span class="badge ok">Free</span></header>
-          <p class="muted">No subscription. A free Groq key and any computer.</p>
-          <ol><li><a href="#install">Install Onsite</a></li><li><a href="#groq">Add a Groq key</a></li><li><a href="#builtin">Download the voice models</a></li><li><a href="#first">Start an interview</a></li></ol>
-        </article>
-        <article class="card recipe">
-          <header><h3>Claude Code + VoiceStudio</h3><span class="badge warm">NVIDIA GPU</span></header>
-          <p class="muted">Windows with an NVIDIA GPU. A different voice for every interviewer, and the most accurate transcripts.</p>
-          <ol><li><a href="#install">Install Onsite</a></li><li><a href="#claude-code">Connect Claude Code</a></li><li><a href="#voicestudio">Install VoiceStudio</a></li><li><a href="#first">Start an interview</a></li></ol>
-        </article>
-        <article class="card recipe">
-          <header><h3>Groq + VoiceStudio</h3><span class="badge warm">NVIDIA GPU</span></header>
-          <p class="muted">Free AI, with VoiceStudio's voices on your GPU.</p>
-          <ol><li><a href="#install">Install Onsite</a></li><li><a href="#groq">Add a Groq key</a></li><li><a href="#voicestudio">Install VoiceStudio</a></li><li><a href="#first">Start an interview</a></li></ol>
-        </article>
-        <article class="card recipe">
-          <header><h3>Any AI + VoiceStudio in Docker</h3><span class="badge warm">Docker</span></header>
-          <p class="muted">You already run containers, or you want VoiceStudio on Linux.</p>
-          <ol><li><a href="#install">Install Onsite</a></li><li>Connect an AI: <a href="#claude-code">Claude Code</a>, <a href="#groq">Groq</a> or <a href="#api-keys">a key</a></li><li><a href="#docker">Run VoiceStudio in Docker</a></li><li><a href="#first">Start an interview</a></li></ol>
-        </article>
-        <article class="card recipe">
-          <header><h3>Any AI, typed</h3><span class="badge">Light</span></header>
-          <p class="muted">An older laptop, a quiet office, or you just prefer to type. Nothing to download.</p>
-          <ol><li><a href="#install">Install Onsite</a></li><li>Connect an AI: <a href="#claude-code">Claude Code</a>, <a href="#groq">Groq</a> or <a href="#api-keys">a key</a></li><li><a href="#typed">Switch to typed</a></li><li><a href="#first">Start an interview</a></li></ol>
-        </article>
-      </div>
-      <p class="muted note">Have a Claude API, OpenAI or Gemini key? Use it in place of Claude Code or Groq in any card: <a href="#api-keys">see how</a>.</p>
-    </section>
+    <section id="start">
+      <h2>Start here</h2>
+      <p>The recommended setup: Claude Code and the built-in voice. Four steps to a first spoken round, about ten minutes.</p>
+      <!--video:setup--><a class="video" href="{{video_setup}}" target="_blank" rel="noopener">
+        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+        <span><strong>Watch: Set up Onsite</strong><span class="muted">Video on YouTube</span></span>
+      </a><!--/video-->
+      <ol class="how">
+        <li><strong>Install Onsite.</strong> Download it for your system from the <a href="./#download">download section</a>. <a href="#install">Notes for each system</a>.</li>
+        <li><strong>Connect Claude Code.</strong> Install it and sign in once with your Claude Pro or Max account. Onsite opens on Settings → AI model the first time: pick <strong>Claude Code</strong> and press <strong>Run health check</strong>. <a href="#claude-code">Full steps</a>. No subscription? Use a free <a href="#groq">Groq key</a> instead.</li>
+        <li><strong>Get the built-in voice.</strong> Settings → Voice: download both models (about 580 MB, once). Rather type? <a href="#typed">Skip this</a>.</li>
+        <li><strong>Start one round.</strong> Interviews → General practice, pick one round, add your resume and press <strong>Start interview</strong>. <a href="#first">What to expect</a>.</li>
+      </ol>
 
-    <section id="install">
-      <h2>Install Onsite</h2>
-      <p>Download Onsite for your system from the <a href="./#download">download section</a> and install it.</p>
+      <h3 id="install">Installing on each system</h3>
       <ul>
         <li><strong>Windows:</strong> run the <code>-setup.exe</code>. SmartScreen may warn because the installer isn't signed yet: press <strong>More info → Run anyway</strong>.</li>
         <li><strong>macOS:</strong> open the <code>.dmg</code> and drag Onsite into Applications. The first time, run <code>xattr -dr com.apple.quarantine /Applications/Onsite.app</code> in Terminal, or use System Settings → Privacy &amp; Security → <strong>Open Anyway</strong>. Allow the microphone when asked.</li>
         <li><strong>Linux:</strong> <code>chmod +x Onsite_*.AppImage</code> and run it, or <code>sudo apt install ./Onsite_*_amd64.deb</code>.</li>
       </ul>
-      <p>Onsite opens on <strong>Settings → AI model</strong> the first time. That's the next step.</p>
     </section>
 
-    <section id="claude-code">
-      <h2>AI: Claude Code</h2>
+    <section id="ai">
+      <h2>Choose your AI</h2>
+      <p>The AI plays the interviewer and writes your feedback. Pick one in Settings → AI model. You can switch any time, and your interviews stay.</p>
+      <!--video:ai--><a class="video" href="{{video_ai}}" target="_blank" rel="noopener">
+        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+        <span><strong>Watch: Every AI option</strong><span class="muted">Video on YouTube</span></span>
+      </a><!--/video-->
+      <div class="recipes">
+        <a class="card recipe" href="#claude-code">
+          <header><h3>Claude Code</h3><span class="badge">Recommended</span></header>
+          <p class="muted">You pay for Claude Pro or Max. No key and no extra cost.</p>
+        </a>
+        <a class="card recipe" href="#groq">
+          <header><h3>Groq</h3><span class="badge ok">Free</span></header>
+          <p class="muted">No subscription. The fastest replies, with a per-minute limit.</p>
+        </a>
+        <a class="card recipe" href="#api-keys">
+          <header><h3>Claude API, OpenAI, Gemini</h3><span class="badge">Key</span></header>
+          <p class="muted">You already have a key. Gemini has a free tier too.</p>
+        </a>
+      </div>
+
+      <h3 id="claude-code">Claude Code</h3>
       <p>Use this if you pay for <strong>Claude Pro or Max</strong>. Onsite runs Claude Code with your own login, so there's no key and no extra cost. It's what Onsite is built and tested on.</p>
       <ol class="how">
         <li><strong>Install Claude Code</strong> if you haven't. On Windows, in PowerShell: <code>irm https://claude.ai/install.ps1 | iex</code>. On macOS, Linux or WSL: <code>curl -fsSL https://claude.ai/install.sh | bash</code>. Full steps: <a href="https://code.claude.com/docs/en/setup">Claude Code setup</a>.</li>
@@ -109,14 +97,12 @@
         <li><strong>Pick the models.</strong> Sonnet for the interviewer (fast replies), Opus for feedback and research (best judgment).</li>
       </ol>
       <figure class="shot"><img src="img/guides/ai-claude-code.jpg" width="1215" height="1003" loading="lazy" alt="Settings, AI model. Claude Code is selected and found at C:\Users\you\.local\bin\claude.exe. The health check line reads Working, OK, 6.4 seconds. Interviewer model Sonnet, feedback model Opus."><figcaption>Claude Code found on Windows, health check passed.</figcaption></figure>
-      <h3>Claude Code only in WSL (Windows)</h3>
+      <h4>Claude Code only in WSL (Windows)</h4>
       <p>If you installed Claude Code inside WSL and not on Windows, that works too. Onsite looks on Windows first, then asks WSL. The path shows as <em>WSL: claude</em>. Make sure <code>claude</code> runs in a fresh WSL terminal (it must be on the login shell's PATH).</p>
       <figure class="shot"><img src="img/guides/ai-claude-code-wsl.jpg" width="1215" height="1003" loading="lazy" alt="Settings, AI model with Claude Code found as WSL: claude, and the health check working."><figcaption>Claude Code found in WSL.</figcaption></figure>
       <p class="muted">Each reply takes a few seconds on Claude Code, so spoken rounds feel a little slower than on an API key. Company research takes 10-40 minutes.</p>
-    </section>
 
-    <section id="groq">
-      <h2>AI: Groq (free)</h2>
+      <h3 id="groq">Groq (free)</h3>
       <p>Groq gives a <strong>free key</strong> and is the fastest option: the first words arrive in about half a second.</p>
       <ol class="how">
         <li><strong>Get a key.</strong> Sign in at <a href="https://console.groq.com/keys">console.groq.com/keys</a> and press <strong>Create API Key</strong>. Copy it; it starts with <code>gsk_</code>.</li>
@@ -129,10 +115,8 @@
         <figure class="shot"><img src="img/guides/ai-groq-ready.jpg" width="1215" height="979" loading="lazy" alt="Groq key saved. Health check: Working, OK, 0.5 seconds, qwen/qwen3.8-27b. Interviewer model Qwen 3.8 27B, feedback model GPT-OSS 120B."><figcaption>Saved and working. The model lists load from Groq.</figcaption></figure>
       </div>
       <p class="callout"><strong>Free-tier limit.</strong> Groq's free tier allows 8,000 tokens a minute. Coding rounds send a lot per turn, so after quick back-and-forth the interviewer may wait up to 30 seconds before replying. Onsite waits it out by itself. Slow down a little, or use a paid key, if it happens often.</p>
-    </section>
 
-    <section id="api-keys">
-      <h2>AI: Claude API, OpenAI or Gemini key</h2>
+      <h3 id="api-keys">Claude API, OpenAI or Gemini key</h3>
       <p>Same steps as Groq: pick the provider in Settings → AI model, paste the key, press <strong>Save key</strong>, then <strong>Run health check</strong>. Keys stay in Onsite's local database and are never sent anywhere except that provider.</p>
       <div class="table-wrap">
         <table>
@@ -147,8 +131,33 @@
       <figure class="shot"><img src="img/guides/ai-api-key.jpg" width="1215" height="951" loading="lazy" alt="Settings, AI model with Gemini key selected, key saved, health check working with gemini-flash-latest."><figcaption>A Gemini key, saved and checked.</figcaption></figure>
     </section>
 
-    <section id="builtin">
-      <h2>Voice: built-in</h2>
+    <section id="voice">
+      <h2>Choose your voice</h2>
+      <p>The voice engine speaks for the interviewer and turns your answers into text. Pick one in Settings → Voice. Every round also works typed.</p>
+      <!--video:voice--><a class="video" href="{{video_voice}}" target="_blank" rel="noopener">
+        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+        <span><strong>Watch: Every voice option</strong><span class="muted">Video on YouTube</span></span>
+      </a><!--/video-->
+      <div class="recipes">
+        <a class="card recipe" href="#builtin">
+          <header><h3>Built-in</h3><span class="badge">Default</span></header>
+          <p class="muted">Any computer, no GPU. One 580 MB download.</p>
+        </a>
+        <a class="card recipe" href="#voicestudio">
+          <header><h3>VoiceStudio</h3><span class="badge warm">NVIDIA GPU</span></header>
+          <p class="muted">Windows with an NVIDIA GPU. A voice per interviewer and the best transcripts.</p>
+        </a>
+        <a class="card recipe" href="#docker">
+          <header><h3>VoiceStudio in Docker</h3><span class="badge warm">Untested</span></header>
+          <p class="muted">You already run containers, or want VoiceStudio on Linux.</p>
+        </a>
+        <a class="card recipe" href="#typed">
+          <header><h3>Typed</h3><span class="badge">Light</span></header>
+          <p class="muted">No mic needed. Any computer, nothing to download.</p>
+        </a>
+      </div>
+
+      <h3 id="builtin">Built-in voice</h3>
       <p>The default. Speech runs inside Onsite on your CPU: <strong>Pocket TTS</strong> speaks and <strong>Parakeet</strong> listens. No GPU and no other app. After one download it works offline.</p>
       <ol class="how">
         <li><strong>Open Settings → Voice.</strong> Engine should read <em>Built-in</em>.</li>
@@ -162,10 +171,8 @@
         <figure class="shot"><img src="img/guides/voice-builtin-ready.jpg" width="935" height="574" loading="lazy" alt="Settings, Voice. Built-in engine Ready. Both models Installed."><figcaption>After: both installed, engine Ready.</figcaption></figure>
       </div>
       <p class="muted">Two voices: Ethan (American) and Charlotte (British). Interviewers use the one that matches them. Panels whose interviewers have Indian accents need VoiceStudio; Onsite says so when you pick one. If the interviewer pauses mid-sentence, your CPU is struggling: pick <strong>Listen &amp; type</strong> on the Get ready screen.</p>
-    </section>
 
-    <section id="voicestudio">
-      <h2>Voice: VoiceStudio</h2>
+      <h3 id="voicestudio">VoiceStudio</h3>
       <p><a href="https://github.com/debpalash/VoiceStudio">VoiceStudio</a> is a separate open-source desktop app. Onsite talks to it on your own machine (<code>127.0.0.1:3900</code>). Every interviewer on a panel gets their own voice. On Windows with an NVIDIA GPU, Onsite also runs each answer through <strong>Whisper large-v3</strong>, which gets terms like Redis and idempotency key right.</p>
       <ol class="how">
         <li><strong>Install VoiceStudio</strong> from its <a href="https://github.com/debpalash/VoiceStudio/releases">releases page</a> and open it once. Let it download its models.</li>
@@ -176,13 +183,11 @@
       </ol>
       <figure class="shot"><img src="img/guides/voice-studio-ready.jpg" width="935" height="329" loading="lazy" alt="Settings, Voice. Engine VoiceStudio, Ready, version 0.5.6, running on cuda."><figcaption>VoiceStudio running on the GPU.</figcaption></figure>
       <p class="muted">The first spoken line after starting VoiceStudio can take up to a minute while it loads its weights. Onsite warms it up while the room gets ready. VoiceStudio unloads after about 15 idle minutes; the next round warms it again.</p>
-    </section>
 
-    <section id="docker">
-      <h2>Voice: VoiceStudio in Docker</h2>
+      <h3 id="docker">VoiceStudio in Docker</h3>
       <p class="callout warn"><strong>Not tested end to end yet.</strong> These steps follow VoiceStudio's <a href="https://github.com/debpalash/VoiceStudio/blob/main/docs/install/docker.md">Docker guide</a> and how Onsite talks to VoiceStudio. If something doesn't work, tell us with Settings → Send feedback.</p>
       <p>Run VoiceStudio as a container and point Onsite at it. Onsite always uses <code>http://127.0.0.1:3900</code>, so publish that port on the same machine. You need Docker (Docker Desktop on Windows) and, for an NVIDIA GPU, the <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html">NVIDIA Container Toolkit</a>. Docker Desktop on Windows includes GPU support through WSL 2.</p>
-      <h3>1. Make an admin key and start the container</h3>
+      <h4>1. Make an admin key and start the container</h4>
       <p>The image needs an admin key. Onsite reads the same key from the <code>OMNIVOICE_API_KEY</code> environment variable, so set it for your user too.</p>
       <p><strong>Windows (PowerShell):</strong></p>
 <pre><code>$key = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 40 | ForEach-Object { [char]$_ })
@@ -206,19 +211,17 @@ docker run -d --name omnivoice --restart unless-stopped --gpus all \
         <li><code>OMNIVOICE_TRUST_HOST_LOOPBACK=1</code> lets this computer use it without VoiceStudio's share PIN. Use it only on a single-user machine.</li>
         <li>On a Mac, use the VoiceStudio app or the built-in engine: containers can't use the Apple GPU.</li>
       </ul>
-      <h3>2. Wait for it to load</h3>
+      <h4>2. Wait for it to load</h4>
       <p>The first start downloads about 2.4 GB of models. Follow it with <code>docker logs -f omnivoice</code>. It's ready when <code>curl http://127.0.0.1:3900/health</code> (on Windows, <code>curl.exe</code>) returns <code>200</code> with <code>"status"</code>, <code>"device"</code> and <code>"version"</code>.</p>
-      <h3>3. Connect Onsite</h3>
+      <h4>3. Connect Onsite</h4>
       <ol class="how">
         <li><strong>Restart Onsite</strong> after setting the environment variable (on Linux, log out and in again, or start Onsite from that terminal).</li>
         <li>Settings → Voice → Engine: <strong>VoiceStudio (separate app)</strong>. The pill turns <em>Ready</em> and the device shows <em>cuda</em> (or <em>cpu</em>).</li>
         <li>Press <strong>Test voice</strong> and <strong>Test mic</strong>.</li>
       </ol>
       <p class="muted">With Docker, Onsite can't start or stop VoiceStudio for you (no Start button), and the Whisper accuracy pass doesn't run: it needs the Windows VoiceStudio app's own Python. Transcripts come from Parakeet. Update the container with <code>docker pull ghcr.io/debpalash/voicestudio:stable</code>, then remove and run it again; the <code>omnivoice-data</code> volume keeps its models and voices.</p>
-    </section>
 
-    <section id="typed">
-      <h2>No voice: typed</h2>
+      <h3 id="typed">Typed</h3>
       <p>Every round works typed. Nothing to download, and it runs on any 64-bit computer with 4 GB of RAM.</p>
       <ol class="how">
         <li>Open Settings → Voice → Speaking and listening.</li>
@@ -230,6 +233,10 @@ docker run -d --name omnivoice --restart unless-stopped --gpus all \
 
     <section id="first">
       <h2>Your first interview</h2>
+      <!--video:demo--><a class="video" href="{{video_demo}}" target="_blank" rel="noopener">
+        <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
+        <span><strong>Watch: Onsite in action</strong><span class="muted">Video on YouTube</span></span>
+      </a><!--/video-->
       <ol class="how">
         <li><strong>Open Interviews.</strong> Pick <strong>General practice</strong> to start now, or <strong>Company-specific</strong> to run a company's real loop (research it first in Dossiers).</li>
         <li><strong>Set your context:</strong> company style, interviewer style, level and coding language.</li>
@@ -244,9 +251,8 @@ docker run -d --name omnivoice --restart unless-stopped --gpus all \
       <figure class="shot"><img src="img/guides/use-ready.jpg" width="1600" height="1075" loading="lazy" alt="Get ready screen. Check your mic and speaker with Test speaker and Test mic. On the right: round 1 of 3, DSA coding, 45 minutes. Spoken, built-in voice. Join interview button."><figcaption>Get ready: a ten-second audio check.</figcaption></figure>
       <h3>In the room</h3>
       <p>Talk like it's real: think out loud. Write code in the editor and press <strong>Run</strong> or <strong>Submit</strong>. Draw designs on the whiteboard. Press <strong>Share now</strong> to show the interviewer your code, drawing or notes. The interviewer ends the round when time's up; <strong>End interview</strong> ends it early.</p>
-      <figure class="shot"><img src="assets/room.jpg" width="1440" height="900" loading="lazy" alt="An Onsite call: the Two Sum problem on the left, the conversation below it, and a Java editor on the right."><figcaption>A coding round in progress.</figcaption></figure>
+      <figure class="shot"><img src="img/hero-room.jpg" width="2160" height="1350" loading="lazy" alt="An Onsite DSA round in Python: the problem and the conversation with the interviewer on the left, the solution in the code editor on the right."><figcaption>A coding round in progress.</figcaption></figure>
       <h3>The report</h3>
-      <p class="muted">Settings → About explains why Onsite exists, links to the MIT licence and the credits. Onsite is free and open source.</p>
       <p>After the round you get a score, a hire signal, a rubric with evidence, and stronger answers for the key moments. Start with <strong>Fix this first</strong>. Finish a whole loop for a hiring-committee verdict.</p>
       <figure class="shot"><img src="img/guides/use-report.jpg" width="1600" height="1375" loading="lazy" alt="Round report: score 70 of 100, Lean hire, near SDE-2 bar. Fix this first: list three edge cases out loud before writing code. Rubric with five dimensions scored out of 4."><figcaption>Every round gets written feedback.</figcaption></figure>
     </section>

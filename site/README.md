@@ -9,6 +9,13 @@ Static site, deployed to GitHub Pages by `.github/workflows/site.yml`. Plain HTM
   `docs/engineering/img/`) into `dist/`.
 
 Local: `node site/build.mjs`, then open `site/dist/index.html`. It uses `gh auth token` if `GITHUB_TOKEN` is unset.
+Changelog: write lines for any release in `release-notes.json` (`{"v0.1.5": ["Voice: ...", "..."]}`); they replace the
+commit subjects for that tag. Releases with nothing to list are left out, except the latest stable.
+Videos: paste the YouTube links into `VIDEOS` at the top of `build.mjs` (`demo`, `setup`, `ai`, `voice`). A slot with
+no link is left out of the page. The home hero and Guides link out to YouTube; nothing is embedded. Preview one
+without editing: `SITE_VIDEO_DEMO=https://youtu.be/... node site/build.mjs`.
+`404.html` links with absolute paths (`/Onsite/` by default, as on GitHub Pages); set `SITE_BASE=/` to try it on a
+local server at the root (in Git Bash also `MSYS2_ENV_CONV_EXCL=SITE_BASE`, or it becomes a Windows path).
 
 The site rebuilds on a push to `main` touching `site/**`, after every stable and experimental release, and daily.
 It loads nothing from third parties and has no analytics; keep it that way (see PRIVACY.md).

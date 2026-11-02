@@ -9,6 +9,12 @@
 <meta property="og:title" content="Onsite">
 <meta property="og:description" content="Practise software-engineering interview loops out loud, on your own machine. Free and open source.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="{{site_url}}">
+<meta property="og:image" content="{{site_url}}img/hero-room.jpg">
+<meta property="og:image:width" content="2160">
+<meta property="og:image:height" content="1350">
+<meta property="og:image:alt" content="An Onsite coding round: the problem, the conversation and the code editor.">
+<link rel="canonical" href="{{site_url}}">
 <meta name="theme-color" content="#0c0d21">
 <link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="stylesheet" href="style.css">
@@ -38,7 +44,7 @@
     <h1>Practise the interview loop. <span class="accent">Out loud.</span></h1>
     <p class="lead">Onsite runs realistic software-engineering interviews on your own computer. You talk, write code and draw the design. The interviewer pushes back, and you get honest written feedback.</p>
     <div class="cta">
-      <a class="btn primary big" id="get" href="{{dl_win}}" data-win="{{dl_win}}" data-mac="{{dl_mac}}" data-linux="{{dl_appimage}}">
+      <a class="btn primary big" id="get" href="{{dl_win}}" data-sums="{{sums_url}}" data-win="{{dl_win}}" data-mac="{{dl_mac}}" data-linux="{{dl_appimage}}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
         <span id="get-label">Download for Windows</span>
       </a>
@@ -47,10 +53,12 @@
     <p class="meta">Version {{version}} · <time datetime="{{datetime}}">{{date}}</time> · <a href="changelog.html">What changed</a></p>
   </div>
   <div class="wrap">
+    <!--video:demo--><a class="watch" href="{{video_demo}}" target="_blank" rel="noopener" aria-label="Watch the Onsite demo on YouTube"><!--/video-->
     <figure class="window shot-hero">
       <div class="window-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-      <img src="assets/room.jpg" width="1440" height="900" alt="An Onsite call: the Two Sum problem on the left, the candidate and interviewer talking below it, and a Java editor on the right.">
+      <img src="img/hero-room.jpg" width="2160" height="1350" alt="An Onsite DSA round in Python: the problem and the conversation with the interviewer on the left, the solution in the code editor on the right.">
     </figure>
+    <!--video:demo--><span class="watch-badge" aria-hidden="true"><span class="play"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>Watch the demo</span></a><!--/video-->
   </div>
 </section>
 
@@ -87,7 +95,7 @@
     <article class="card feature">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 14l2.5 2.5L16 11"/></svg>
       <h3>Resume check</h3>
-      <p>See your resume the way six common ATS products read it. Add a job posting and get a match score and an AI screen of your fit.</p>
+      <p>Run a simulation of six common ATS products on your resume. Add a job posting and get a match score and an AI screen of your fit.</p>
     </article>
   </div>
 </section>
@@ -153,34 +161,6 @@
   <p class="muted note">Three ways to answer: <strong>Spoken</strong>, <strong>Listen</strong> (the interviewer speaks, you type) or <strong>Typed</strong>. If voice can't start, the round goes typed instead of failing. English only for now.</p>
 </section>
 
-<section class="wrap section" id="start">
-  <p class="eyebrow">Recommended setup</p>
-  <h2>How to get the most out of it</h2>
-  <div class="grid three picks">
-    <article class="card pick">
-      <h3>AI</h3>
-      <p><strong>Claude Code</strong> if you already pay for Claude Pro or Max. No subscription? Start with a free <strong>Groq</strong> or <strong>Gemini</strong> key.</p>
-    </article>
-    <article class="card pick">
-      <h3>Voice</h3>
-      <p>The <strong>built-in engine and a headset</strong>. Keep the answer pause at 3 seconds so a thinking pause doesn't end your answer. You can also tap to finish.</p>
-    </article>
-    <article class="card pick">
-      <h3>Slow laptop?</h3>
-      <p>If the interviewer pauses mid-sentence, your CPU is struggling with the voice. Pick <strong>Listen</strong> or <strong>Typed</strong> on the Get ready screen.</p>
-    </article>
-  </div>
-  <ol class="steps">
-    <li><strong>Connect an AI.</strong> Settings → AI model: pick one, paste the key, press Run health check.</li>
-    <li><strong>Get the voice.</strong> Settings → Voice: download the models. Skip this for typed rounds.</li>
-    <li><strong>Start small.</strong> One round first. Paste your resume and the job description so the questions fit you.</li>
-    <li><strong>Talk like it's real.</strong> Think out loud and share your code or drawing. The interviewer gives no feedback during the round, and it ends the round when time's up.</li>
-    <li><strong>Read the report.</strong> Start with "Fix this first", then the stronger answers for the key moments.</li>
-    <li><strong>Go for a real target.</strong> Research a company in Dossiers (a few minutes on an API key, 10-40 on Claude Code), then run its whole loop for a hiring-committee verdict.</li>
-  </ol>
-  <p class="muted note">Step by step for every setup, with screenshots: Claude Code, Groq, API keys, the built-in voice, VoiceStudio and Docker. <a href="guides.html">Open the guides →</a></p>
-</section>
-
 <section class="wrap section">
   <div class="card privacy">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
@@ -210,10 +190,10 @@
   <div class="grid four downloads">
 {{download_cards}}
   </div>
-  <p class="muted note">Already installed? Settings → Updates → Check for updates. Your interviews and settings stay.</p>
+  <p class="muted note">New to Onsite? Read the <a href="#start">recommended setup</a> below. Already installed? Settings → Updates → Check for updates. Your interviews and settings stay.</p>
 
   <h3 class="sub">Opening it the first time</h3>
-  <p class="muted">Onsite isn't code-signed yet, so your system warns about it once.</p>
+  <p class="muted">Onsite isn't code-signed yet, so your system may warn you when you first open it.</p>
   <div class="table-wrap">
     <table>
       <thead><tr><th>System</th><th>What you see</th><th>What to do</th></tr></thead>
@@ -240,7 +220,37 @@
   </div>
   <p class="muted note">The voice models download once from Settings → Voice. Keep about 1.6 GB free for that. A headset works best.</p>
 </section>
+
+<section class="wrap section" id="start">
+  <p class="eyebrow">Recommended setup</p>
+  <h2>How to get the most out of it</h2>
+  <div class="grid three picks">
+    <article class="card pick">
+      <h3>AI</h3>
+      <p><strong>Claude Code</strong> if you already pay for Claude Pro or Max. No subscription? Start with a free <strong>Groq</strong> or <strong>Gemini</strong> key.</p>
+    </article>
+    <article class="card pick">
+      <h3>Voice</h3>
+      <p>The <strong>built-in engine and a headset</strong>. Keep the answer pause at 3 seconds so a thinking pause doesn't end your answer. You can also tap to finish.</p>
+    </article>
+    <article class="card pick">
+      <h3>Slow laptop?</h3>
+      <p>If the interviewer pauses mid-sentence, your CPU is struggling with the voice. Pick <strong>Listen</strong> or <strong>Typed</strong> on the Get ready screen.</p>
+    </article>
+  </div>
+  <ol class="steps">
+    <li><strong>Connect an AI.</strong> Settings → AI model: pick one, paste the key, press Run health check.</li>
+    <li><strong>Get the voice.</strong> Settings → Voice: download the models. Skip this for typed rounds.</li>
+    <li><strong>Start small.</strong> One round first. Paste your resume and the job description so the questions fit you.</li>
+    <li><strong>Talk like it's real.</strong> Think out loud and share your code or drawing. The interviewer gives no feedback during the round, and it ends the round when time's up.</li>
+    <li><strong>Read the report.</strong> Start with "Fix this first", then the stronger answers for the key moments.</li>
+    <li><strong>Go for a real target.</strong> Research a company in Dossiers (a few minutes on an API key, 10-40 on Claude Code), then run its whole loop for a hiring-committee verdict.</li>
+  </ol>
+  <p class="muted note">Step by step for every setup, with screenshots: Claude Code, Groq, API keys, the built-in voice, VoiceStudio and Docker. <a href="guides.html">Open the guides →</a></p>
+</section>
 </main>
+
+{{download_dialog}}
 
 <footer class="foot">
   <div class="wrap foot-in">

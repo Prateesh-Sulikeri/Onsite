@@ -1,0 +1,30 @@
+<!-- Shown by site.js before any release download starts, until the app is code-signed. Without JS the links download directly. -->
+<dialog class="dlg" id="dlg" aria-labelledby="dlgTitle">
+  <div class="dlg-head">
+    <h2 id="dlgTitle">Before you download</h2>
+    <button type="button" class="dlg-x" data-close aria-label="Close">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <p class="dlg-file"><code id="dlgName">Onsite</code></p>
+  <p>Onsite isn't code-signed yet (approval pending), so your system will show a warning. It's safe to continue.</p>
+  <p class="dlg-os" data-os="win"><strong>Windows:</strong> click <strong>More info</strong>, then <strong>Run anyway</strong>.</p>
+  <p class="dlg-os" data-os="mac"><strong>macOS:</strong> run <code>xattr -dr com.apple.quarantine /Applications/Onsite.app</code> once in Terminal.</p>
+  <p class="dlg-os" data-os="linux"><strong>Linux:</strong> run <code>chmod +x Onsite_*.AppImage</code> first.</p>
+  <p><a href="{{gh}}">Open source</a>, <a href="{{gh}}/blob/main/.github/workflows/build.yml">built by GitHub Actions</a>, no tracking.</p>
+  <p class="dlg-check"><strong>Verify it's safe:</strong></p>
+  <ol class="dlg-steps">
+    <li>After downloading, run this:
+      <div class="dlg-cmd"><code id="dlgCmd"></code><button type="button" class="btn ghost small" id="dlgCopy">Copy</button></div>
+    </li>
+    <li>Open <a id="dlgSums" href="{{sums_url}}">SHA256SUMS.txt</a>. The code next to your file must match.</li>
+  </ol>
+
+  <div class="dlg-actions">
+    <button type="button" class="btn ghost" data-close>Cancel</button>
+    <a class="btn primary" id="dlgGo" href="{{release_url}}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
+      Download
+    </a>
+  </div>
+</dialog>
