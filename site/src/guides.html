@@ -53,7 +53,7 @@
       <ol class="how">
         <li><strong>Install Onsite.</strong> Download it for your system from the <a href="./#download">download section</a>. <a href="#install">Notes for each system</a>.</li>
         <li><strong>Connect Claude Code.</strong> Install it and sign in once with your Claude Pro or Max account. Onsite opens on Settings → AI model the first time: pick <strong>Claude Code</strong> and press <strong>Run health check</strong>. <a href="#claude-code">Full steps</a>. No subscription? Use a free <a href="#groq">Groq key</a> instead.</li>
-        <li><strong>Get the built-in voice.</strong> Settings → Voice: download both models (about 580 MB, once). Rather type? <a href="#typed">Skip this</a>.</li>
+        <li><strong>Get the built-in voice.</strong> Settings → Voice: download both models (about 610 MB, once). Rather type? <a href="#typed">Skip this</a>.</li>
         <li><strong>Start one round.</strong> Interviews → General practice, pick one round, add your resume and press <strong>Start interview</strong>. <a href="#first">What to expect</a>.</li>
       </ol>
 
@@ -141,7 +141,7 @@
       <div class="recipes">
         <a class="card recipe" href="#builtin">
           <header><h3>Built-in</h3><span class="badge">Default</span></header>
-          <p class="muted">Any computer, no GPU. One 580 MB download.</p>
+          <p class="muted">Any computer, no GPU. One 610 MB download.</p>
         </a>
         <a class="card recipe" href="#voicestudio">
           <header><h3>VoiceStudio</h3><span class="badge warm">NVIDIA GPU</span></header>
@@ -158,19 +158,19 @@
       </div>
 
       <h3 id="builtin">Built-in voice</h3>
-      <p>The default. Speech runs inside Onsite on your CPU: <strong>Pocket TTS</strong> speaks and <strong>Parakeet</strong> listens. No GPU and no other app. After one download it works offline.</p>
+      <p>The default. Speech runs inside Onsite on your CPU: <strong>Supertonic 3</strong> speaks and <strong>Parakeet</strong> listens. No GPU and no other app. After one download it works offline.</p>
       <ol class="how">
         <li><strong>Open Settings → Voice.</strong> Engine should read <em>Built-in</em>.</li>
-        <li><strong>Download both models</strong> (about 580 MB, once; have 1.6 GB free while it unpacks). They come from GitHub.</li>
+        <li><strong>Download both models</strong> (about 610 MB, once; have 1.6 GB free while it unpacks). They come from GitHub.</li>
         <li><strong>Pick your mic and speaker.</strong> A headset works best: it stops the interviewer hearing itself.</li>
         <li><strong>Press Test voice and Test mic.</strong> The bar should move when you talk.</li>
         <li><strong>Set the pause.</strong> "Send my answer after I stop talking for" 3 seconds suits most people. Pick "Never" to end each answer with a tap.</li>
       </ol>
       <div class="grid two shots-pair">
-        <figure class="shot"><img src="img/guides/voice-builtin-download.jpg" width="935" height="580" loading="lazy" alt="Settings, Voice. Built-in engine, Models needed. Pocket TTS, 98 MB, and Parakeet TDT 0.6B v2, 482 MB, each with a Download button."><figcaption>Before: press Download on both.</figcaption></figure>
+        <figure class="shot"><img src="img/guides/voice-builtin-download.jpg" width="935" height="580" loading="lazy" alt="Settings, Voice. Built-in engine, Models needed. Supertonic 3 TTS, 129 MB, and Parakeet TDT 0.6B v2, 482 MB, each with a Download button."><figcaption>Before: press Download on both.</figcaption></figure>
         <figure class="shot"><img src="img/guides/voice-builtin-ready.jpg" width="935" height="574" loading="lazy" alt="Settings, Voice. Built-in engine Ready. Both models Installed."><figcaption>After: both installed, engine Ready.</figcaption></figure>
       </div>
-      <p class="muted">Two voices: Ethan (American) and Charlotte (British). Interviewers use the one that matches them. Panels whose interviewers have Indian accents need VoiceStudio; Onsite says so when you pick one. If the interviewer pauses mid-sentence, your CPU is struggling: pick <strong>Listen &amp; type</strong> on the Get ready screen.</p>
+      <p class="muted">Two voices: Ethan (male) and Charlotte (female). Interviewers use the one that matches them. Panels whose interviewers have Indian accents need VoiceStudio; Onsite says so when you pick one. If the interviewer pauses mid-sentence, your CPU is struggling: pick <strong>Listen &amp; type</strong> on the Get ready screen.</p>
 
       <h3 id="voicestudio">VoiceStudio</h3>
       <p><a href="https://github.com/debpalash/VoiceStudio">VoiceStudio</a> is a separate open-source desktop app. Onsite talks to it on your own machine (<code>127.0.0.1:3900</code>). Every interviewer on a panel gets their own voice. On Windows with an NVIDIA GPU, Onsite also runs each answer through <strong>Whisper large-v3</strong>, which gets terms like Redis and idempotency key right.</p>

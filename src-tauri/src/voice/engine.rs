@@ -1,7 +1,7 @@
 //! One interface over the two speech engines. `voice/mod.rs` speaks through [`Tts`] and `stt.rs`
 //! listens through [`Engine`]; VoiceStudio and the built-in engine differ only in here and in `stt::run`'s segment source.
 
-use super::builtin::{self, ParakeetStt, PocketTts};
+use super::builtin::{self, ParakeetStt, Supertonic};
 use super::vs::{Profile, VoiceStudio, TTS_RATE};
 use super::VoiceSettings;
 use crate::error::{AppError, Result};
@@ -24,7 +24,7 @@ pub fn legacy_engine() -> VoiceEngine {
 }
 
 pub struct Builtin {
-    pub tts: Arc<PocketTts>,
+    pub tts: Arc<Supertonic>,
     pub stt: Arc<ParakeetStt>,
 }
 
@@ -40,8 +40,7 @@ impl Engine {
         match v.engine {
             VoiceEngine::Voicestudio => Ok(Self::Studio(VoiceStudio::new(&v.base_url))),
             VoiceEngine::Builtin => {
-                let voices = state.prompts_dir.join("voices");
-                let (tts, stt) = tokio::try_join!(state.builtin.tts(&state.data_dir, &voices), state.builtin.stt(&state.data_dir))?;
+                let (tts, stt) = tokio::try_join!(state.builtin.tts(&state.data_dir), state.builtin.stt(&state.data_dir))?;
                 Ok(Self::Builtin(Arc::new(Builtin { tts, stt })))
             }
         }
@@ -68,11 +67,11 @@ impl Engine {
 
 pub enum Tts {
     Studio { vs: VoiceStudio, profile: Box<Profile> },
-    Builtin { tts: Arc<PocketTts>, clip: &'static str },
+    Builtin { tts: Arc<Supertonic>, clip: &'static str },
 }
 
 impl Tts {
-    pub fn builtin(tts: &Arc<PocketTts>, clip: &str) -> Self {
+    pub fn builtin(tts: &Arc<Supertonic>, clip: &str) -> Self {
         Self::Builtin { tts: tts.clone(), clip: builtin::known_clip(clip) }
     }
 

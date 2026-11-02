@@ -44,7 +44,7 @@ prompts_dir: PathBuf; data_dir: PathBuf        // dev: repo prompts/; release: b
 research: Mutex<HashMap<i64, research::Running>>               // live jobs: counters + AbortHandle
 rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>  // held across .await
 voice: voice::Voice                            // speaker + current round voice loop
-builtin: voice::builtin::Cache                 // Pocket TTS + Parakeet, loaded on first use
+builtin: voice::builtin::Cache                 // Supertonic 3 TTS + Parakeet, loaded on first use
 prep_gen: AtomicU64                            // loader cancellation generation
 ```
 

@@ -615,7 +615,6 @@
                 <label class="field"><span>Microphone</span><select id="vMic"></select></label>
                 <label class="field"><span>Speaker</span><select id="vSpk"></select></label>
                 <label class="field" id="vVoiceField"><span>Interviewer voice</span><select id="vVoice"></select></label>
-                <label class="field" id="vBiVoiceField"><span>Interviewer voice</span><select id="vBiVoice"></select></label>
                 <label class="field" id="vStepsField"><span>Voice quality</span>
                   <select id="vSteps"><option value="8">Fast: about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best: slow</option></select></label>
                 <label class="field"><span>Speaking speed</span>
@@ -780,7 +779,7 @@
               <ul>
                 <li><button type="button" class="linkbtn" data-link="resume_matcher">Resume-Matcher</button> (Apache-2.0) and <button type="button" class="linkbtn" data-link="ats_screener">ats-screener</button> (MIT): the resume check and match score.</li>
                 <li><button type="button" class="linkbtn" data-link="voicestudio">VoiceStudio</button>: the optional voice engine.</li>
-                <li><button type="button" class="linkbtn" data-link="sherpa_onnx">sherpa-onnx</button>: Pocket TTS and Parakeet, the built-in voice.</li>
+                <li><button type="button" class="linkbtn" data-link="sherpa_onnx">sherpa-onnx</button>: Supertonic 3 and Parakeet, the built-in voice.</li>
                 <li><button type="button" class="linkbtn" data-link="codemirror">CodeMirror 6</button>: the code editor.</li>
                 <li><button type="button" class="linkbtn" data-link="excalidraw">Excalidraw</button>: the whiteboard.</li>
               </ul>
@@ -828,7 +827,7 @@
     <dialog class="dlg" id="voiceDlg" aria-labelledby="voiceDlgTitle">
       <form method="dialog">
         <h2 id="voiceDlgTitle">Set up a voice first</h2>
-        <p class="muted" id="voiceDlgBody">Spoken rounds need a voice. Download the built-in voice models once (about 580 MB) and they work offline. Or use typed interviews: chat only, no voice needed.</p>
+        <p class="muted" id="voiceDlgBody">Spoken rounds need a voice. Download the built-in voice models once (about 610 MB) and they work offline. Or use typed interviews: chat only, no voice needed.</p>
         <div class="btn-row">
           <button class="btn primary" value="models"><svg><use href="#i-download"/></svg>Download voice models</button>
           <button class="btn" value="studio" id="voiceDlgStudio">Start VoiceStudio</button>

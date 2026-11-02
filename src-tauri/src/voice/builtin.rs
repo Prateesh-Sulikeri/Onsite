@@ -1,5 +1,5 @@
-//! The built-in voice engine: Pocket TTS (speech) and Parakeet TDT (text) through sherpa-onnx, in this process.
-//! Settings that worked in the Phase 0 spike are in `docs/plans/voice-spike-results.md`.
+//! The built-in voice engine: Supertonic 3 (speech) and Parakeet TDT (text) through sherpa-onnx, in this process.
+//! Why Supertonic replaced Pocket TTS, and what was measured: `docs/engineering/VOICE.md`.
 //!
 //! Everything here blocks; callers run it with `spawn_blocking`.
 
@@ -8,7 +8,7 @@ use crate::error::{AppError, Result};
 use serde_json::json;
 use sherpa_onnx::{
     GenerationConfig, OfflineRecognizer, OfflineRecognizerConfig, OfflineTransducerModelConfig, OfflineTts, OfflineTtsConfig,
-    OfflineTtsModelConfig, OfflineTtsPocketModelConfig, Wave,
+    OfflineTtsModelConfig, OfflineTtsSupertonicModelConfig,
 };
 use std::collections::HashMap;
 use std::path::Path;
@@ -16,19 +16,19 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
-/// The two shipped voices: (clip id = file in `prompts/voices/`, name shown in Settings, accent).
-// The id and clip file stay "priya_shah" so saved settings and paths keep working; the voice is shown and spoken as Charlotte.
-pub const VOICES: [(&str, &str, &str); 2] = [("ethan_brooks", "Ethan", "American, male"), ("priya_shah", "Charlotte", "British, female")];
+/// The two shipped voices: (key, name shown in Settings, description, Supertonic speaker id).
+/// The keys stay "ethan_brooks" and "priya_shah" so saved settings and panel personas keep working.
+/// Speaker ids 0-4 are the five female styles and 5-9 the five male ones (pitch measured on the model's output,
+/// 2026-11-02). Supertonic has no accent labels, so none are shown.
+pub const VOICES: [(&str, &str, &str, i32); 2] = [("ethan_brooks", "Ethan", "Male voice", 5), ("priya_shah", "Charlotte", "Female voice", 0)];
 pub const DEFAULT_VOICE: &str = "ethan_brooks";
-/// Long sentences are cut into parts of about this many words. Pocket returns audio only when a whole
-/// sentence is done, so on a slow CPU a 25-word sentence is a long silence before anything plays.
+/// Long sentences are cut into parts of about this many words. The model returns audio only when a whole
+/// part is done, so a long sentence is a long wait before anything plays.
 const MAX_PIECE_WORDS: usize = 14;
 /// A cut never leaves a part shorter than this; very short parts sound clipped.
 const MIN_PIECE_WORDS: usize = 4;
-/// Pocket reads at most this much of the reference clip; the clips are ~21 s. Longer references held the voice steady.
-const MAX_REFERENCE_S: f64 = 25.0;
-/// Fixed seed: the same line sounds the same on every run.
-const SEED: i64 = 42;
+/// Flow-matching steps per part. Measured on the owner's Ryzen 7 250: 5 steps RTF 0.13, 16 steps RTF 0.4.
+const STEPS: i32 = 8;
 
 /// ONNX threads for each model: about one per physical core, at most 4 (more didn't help on an 8-core CPU).
 /// Using every core starved the speaker thread on 4-thread laptops, and the audio stuttered.
@@ -37,7 +37,7 @@ fn threads() -> i32 {
     (logical / 2).clamp(1, 4) as i32
 }
 
-/// Splits `text` into the parts Pocket speaks one call at a time: sentences over [`MAX_PIECE_WORDS`] are cut at a
+/// Splits `text` into the parts the TTS speaks one call at a time: sentences over [`MAX_PIECE_WORDS`] are cut at a
 /// comma, semicolon, colon or dash near their middle; short sentences are packed together up to that size.
 pub fn pieces(text: &str) -> Vec<String> {
     let mut units = Vec::new();
@@ -107,25 +107,24 @@ pub fn clip_for_gender(gender: &str) -> &'static str {
     }
 }
 
-/// Whether a built-in voice is a woman's.
-pub fn is_female(clip: &str) -> bool {
-    known_clip(clip) == "priya_shah"
-}
-
-/// A saved or unknown clip id falls back to the default voice.
+/// A saved or unknown voice key falls back to the default voice.
 pub fn known_clip(id: &str) -> &'static str {
     VOICES.iter().find(|v| v.0 == id).map_or(DEFAULT_VOICE, |v| v.0)
 }
 
-struct Clip {
-    samples: Vec<f32>,
-    rate: i32,
+/// Pace of a voice on top of the user's speed. Ethan's Supertonic voice reads slower than Charlotte's at the same setting.
+pub fn tempo(id: &str) -> f32 {
+    if known_clip(id) == "ethan_brooks" {
+        1.2
+    } else {
+        1.0
+    }
 }
 
-pub struct PocketTts {
-    tts: Mutex<OfflineTts>,
-    clips: HashMap<&'static str, Clip>,
-    pub rate: u32,
+/// The Supertonic speaker id for a voice key.
+pub fn speaker_id(id: &str) -> i32 {
+    let key = known_clip(id);
+    VOICES.iter().find(|v| v.0 == key).map_or(VOICES[0].3, |v| v.3)
 }
 
 fn file(dir: &Path, name: &str) -> Option<String> {
@@ -136,46 +135,46 @@ fn voice_err(what: &str) -> AppError {
     AppError::Voice(format!("{what} Check Settings > Voice."))
 }
 
-impl PocketTts {
-    /// `models_root` = `<app data>/models`; `voices_dir` = `prompts/voices`.
-    pub fn load(models_root: &Path, voices_dir: &Path) -> Result<Self> {
-        let dir = models_root.join(models::POCKET.id);
-        let mut model = OfflineTtsModelConfig { num_threads: threads(), provider: Some("cpu".into()), ..Default::default() };
-        model.pocket = OfflineTtsPocketModelConfig {
-            lm_flow: file(&dir, "lm_flow.int8.onnx"),
-            lm_main: file(&dir, "lm_main.int8.onnx"),
-            encoder: file(&dir, "encoder.onnx"),
-            decoder: file(&dir, "decoder.int8.onnx"),
-            text_conditioner: file(&dir, "text_conditioner.onnx"),
-            vocab_json: file(&dir, "vocab.json"),
-            token_scores_json: file(&dir, "token_scores.json"),
-            voice_embedding_cache_capacity: 16,
-        };
-        let tts = OfflineTts::create(&OfflineTtsConfig { model, ..Default::default() }).ok_or_else(|| voice_err("The voice model didn't load."))?;
-        let mut clips = HashMap::new();
-        for (id, ..) in VOICES {
-            let w = Wave::read(&voices_dir.join(format!("{id}.wav")).to_string_lossy()).ok_or_else(|| voice_err(&format!("The voice clip {id}.wav is missing.")))?;
-            clips.insert(id, Clip { samples: w.samples().to_vec(), rate: w.sample_rate() });
-        }
-        let rate = tts.sample_rate() as u32;
-        Ok(Self { tts: Mutex::new(tts), clips, rate })
-    }
+pub struct Supertonic {
+    tts: Mutex<OfflineTts>,
+    pub rate: u32,
+}
 
-    /// Speaks `text` in voice `clip`, sending PCM16 (at `self.rate`) to `out` as each sentence finishes.
-    /// Stops early when `out` is closed. Returns the number of samples sent.
-    pub fn speak(&self, text: &str, clip: &str, speed: f32, out: UnboundedSender<Vec<i16>>) -> Result<usize> {
-        let c = &self.clips[known_clip(clip)];
-        let mut extra = HashMap::new();
-        extra.insert("max_reference_audio_len".to_string(), json!(MAX_REFERENCE_S));
-        extra.insert("seed".to_string(), json!(SEED));
-        let cfg = GenerationConfig {
-            speed,
-            reference_audio: Some(c.samples.clone()),
-            reference_sample_rate: c.rate,
-            extra: Some(extra),
+impl Supertonic {
+    /// `models_root` = `<app data>/models`.
+    pub fn load(models_root: &Path) -> Result<Self> {
+        let dir = models_root.join(models::SUPERTONIC.id);
+        let model = OfflineTtsModelConfig {
+            supertonic: OfflineTtsSupertonicModelConfig {
+                duration_predictor: file(&dir, "duration_predictor.int8.onnx"),
+                text_encoder: file(&dir, "text_encoder.int8.onnx"),
+                vector_estimator: file(&dir, "vector_estimator.int8.onnx"),
+                vocoder: file(&dir, "vocoder.int8.onnx"),
+                tts_json: file(&dir, "tts.json"),
+                unicode_indexer: file(&dir, "unicode_indexer.bin"),
+                voice_style: file(&dir, "voice.bin"),
+            },
+            num_threads: threads(),
+            provider: Some("cpu".into()),
             ..Default::default()
         };
-        // Pocket sometimes runs on for tens of seconds after a one-word line ("Okay."). Cap the audio.
+        let tts = OfflineTts::create(&OfflineTtsConfig { model, ..Default::default() }).ok_or_else(|| voice_err("The voice model didn't load."))?;
+        let rate = tts.sample_rate() as u32;
+        Ok(Self { tts: Mutex::new(tts), rate })
+    }
+
+    /// Speaks `text` in voice `voice` (a voice key), sending PCM16 (at `self.rate`) to `out` as each part finishes.
+    /// Stops early when `out` is closed. Returns the number of samples sent.
+    pub fn speak(&self, text: &str, voice: &str, speed: f32, out: UnboundedSender<Vec<i16>>) -> Result<usize> {
+        // The model reads text as-is (no phonemes), so only the language is set.
+        let cfg = GenerationConfig {
+            sid: speaker_id(voice),
+            speed: speed * tempo(voice),
+            num_steps: STEPS,
+            extra: Some(HashMap::from([("lang".to_string(), json!("en"))])),
+            ..Default::default()
+        };
+        // A short line must not run on for seconds. Cap the audio at a generous per-word length.
         let cap = ((text.split_whitespace().count() as f32 * 0.7 + 2.5) * self.rate as f32) as usize;
         let sent = Arc::new(AtomicUsize::new(0));
         let (cb_sent, cb_out) = (sent.clone(), out.clone());
@@ -249,7 +248,7 @@ impl ParakeetStt {
 /// Both halves of the engine, loaded once and kept for later rounds.
 #[derive(Default)]
 pub struct Cache {
-    tts: Mutex<Option<Arc<PocketTts>>>,
+    tts: Mutex<Option<Arc<Supertonic>>>,
     stt: Mutex<Option<Arc<ParakeetStt>>>,
 }
 
@@ -258,18 +257,18 @@ fn not_installed(p: &Pin) -> AppError {
 }
 
 impl Cache {
-    pub async fn tts(&self, data_dir: &Path, voices_dir: &Path) -> Result<Arc<PocketTts>> {
+    pub async fn tts(&self, data_dir: &Path) -> Result<Arc<Supertonic>> {
         if let Some(t) = self.tts.lock().unwrap().clone() {
             return Ok(t);
         }
-        if !models::installed(data_dir, &models::POCKET) {
-            return Err(not_installed(&models::POCKET));
+        if !models::installed(data_dir, &models::SUPERTONIC) {
+            return Err(not_installed(&models::SUPERTONIC));
         }
-        let (root, voices) = (models::root(data_dir), voices_dir.to_path_buf());
+        let root = models::root(data_dir);
         let t0 = std::time::Instant::now();
-        let t = Arc::new(tokio::task::spawn_blocking(move || PocketTts::load(&root, &voices)).await.map_err(|e| AppError::Voice(e.to_string()))??);
+        let t = Arc::new(tokio::task::spawn_blocking(move || Supertonic::load(&root)).await.map_err(|e| AppError::Voice(e.to_string()))??);
         let cpus = std::thread::available_parallelism().map_or(0, |n| n.get());
-        tracing::info!(ms = t0.elapsed().as_millis() as u64, cpus, threads = threads(), "Pocket TTS loaded");
+        tracing::info!(ms = t0.elapsed().as_millis() as u64, cpus, threads = threads(), "Supertonic TTS loaded");
         *self.tts.lock().unwrap() = Some(t.clone());
         Ok(t)
     }
@@ -323,6 +322,16 @@ mod tests {
         assert_eq!(pieces(&plain), [plain.trim()]);
         assert!(pieces("  ").is_empty());
         assert_eq!(pieces("It costs 1.5 ms. Fine."), ["It costs 1.5 ms. Fine."]);
+    }
+
+    #[test]
+    fn voices_map_to_supertonic_speakers() {
+        // Speakers 0-4 are female, 5-9 male (pitch check, 2026-11-02). Saved keys keep working.
+        assert_eq!(speaker_id("priya_shah"), 0);
+        assert_eq!(speaker_id("ethan_brooks"), 5);
+        assert_eq!(speaker_id("nobody"), 5, "unknown keys fall back to the default voice");
+        assert!(VOICES.iter().all(|v| (0..10).contains(&v.3)));
+        assert!(tempo("ethan_brooks") > tempo("priya_shah"), "Ethan is sped up, Charlotte is not");
     }
 
     #[test]

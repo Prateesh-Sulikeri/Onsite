@@ -178,7 +178,7 @@ class Solution { ... }
       <h2>Voice</h2>
       <p>Two engines sit behind one interface (<code>voice/engine.rs</code>):</p>
       <ul>
-        <li><strong>Built-in:</strong> Pocket TTS and Parakeet TDT v2 (int8) through the <code>sherpa-onnx</code> crate, on the CPU. The models are pinned GitHub release assets, checked by size and SHA-256, and downloaded only from github.com.</li>
+        <li><strong>Built-in:</strong> Supertonic 3 and Parakeet TDT v2 (int8) through the <code>sherpa-onnx</code> crate, on the CPU. The models are pinned GitHub release assets, checked by size and SHA-256, and downloaded only from github.com.</li>
         <li><strong>VoiceStudio:</strong> an external app on 127.0.0.1:3900. Onsite renders a sample line for each panel persona, scores the takes (voiced share, hiss, pitch against the description) and clones the best one, so each persona keeps one stable voice.</li>
       </ul>
       <h3>Listening</h3>

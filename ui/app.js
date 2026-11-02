@@ -166,9 +166,11 @@ const PROVIDERS = {
 const builtinVoice = () => !!(VS && VS.engine === "builtin");
 /* Which voice speaks for an interviewer. The built-in engine has two voices, picked by gender. */
 const clipFor = voice => /^\s*f/i.test(voice || "") ? "priya_shah" : "ethan_brooks";
-const bvClip = who => who && who.voice ? clipFor(who.voice) : ((SETTINGS && SETTINGS.voice.builtin_voice) || "ethan_brooks");
+/* A panel interviewer's voice comes from their gender. A round without a panel is named after its voice (catalogName),
+   so the name decides the voice here too. */
+const bvClip = who => who && who.voice ? clipFor(who.voice) : ((CAT.FEMALE_NAMES || []).includes(who && who.name) ? "priya_shah" : "ethan_brooks");
 const bvName = id => ((VS.voices || []).find(v => v.id === id) || {}).name || (id === "priya_shah" ? "Charlotte" : "Ethan");
-/* A panel needs VoiceStudio when any of its people has an Indian accent (the built-in voices are American and British). */
+/* A panel needs VoiceStudio when any of its people has an Indian accent (the built-in voices are English, not Indian). */
 const needsVS = p => !!p && p.interviewers.some(iv => /indian/i.test(iv.voice || ""));
 const wantsVoice = () => !!(SETTINGS && SETTINGS.voice.enabled);
 const panelBlocked = p => wantsVoice() && builtinVoice() && needsVS(p);
@@ -751,13 +753,12 @@ function interviewerFor(i, key, panelId){
   const iv = panel && panel.interviewers.find(x => x.id === (panel.round_owner || {})[key]);
   return iv ? {name: iv.name.split(" ")[0], full: iv.name, role: iv.role, voice: iv.voice} : {name: catalogName(i), full: null, role: null};
 }
-/* A round without a panel gets a name that matches its voice (built-in voices only; a VoiceStudio profile has no gender).
-   Same rule as Catalog::persona in Rust. */
+/* A round without a panel alternates: odd rounds are a woman's name (and voice), even rounds a man's.
+   Same rule as interview::mod.rs plan() and Catalog::persona in Rust. */
 function catalogName(i){
-  const v = SETTINGS && SETTINGS.voice;
-  const female = v && v.enabled && v.engine === "builtin" ? (v.builtin_voice === "priya_shah") : null;
+  const female = i % 2 === 1;
   const women = CAT.FEMALE_NAMES || [];
-  let pool = female === null ? CAT.NAMES : CAT.NAMES.filter(n => women.includes(n) === female);
+  let pool = CAT.NAMES.filter(n => women.includes(n) === female);
   if (!pool.length) pool = CAT.NAMES;
   return pool[(i*5+3) % pool.length];
 }
@@ -791,7 +792,7 @@ function renderPanelPeople(){
   const w = $("#panelWarn");
   if (w){
     w.hidden = !PANELS.some(panelBlocked);
-    w.textContent = `${panelNote}The built-in voice has American and British voices only. Switch to VoiceStudio in Settings › Voice to use the Indian panel.`;
+    w.textContent = `${panelNote}The built-in voice has English voices only. Switch to VoiceStudio in Settings › Voice to use the Indian panel.`;
   }
   $("#panelPeople").textContent = panel ? panel.interviewers.map(iv => `${iv.name} (${iv.role})`).join(" · ") : "Names rotate. Pick a panel to meet the same people every time.";
   syncMore();
@@ -2645,7 +2646,7 @@ async function renderSettings(){
   const bi = builtinVoice();
   $("#vEngine").value = bi ? "builtin" : "voicestudio";
   $("#biBlock").hidden = !bi; $("#vsBlock").hidden = bi;
-  $("#vVoiceField").hidden = bi; $("#vStepsField").hidden = bi; $("#vBiVoiceField").hidden = !bi; $("#biVoices").hidden = !bi;
+  $("#vVoiceField").hidden = bi; $("#vStepsField").hidden = bi; $("#biVoices").hidden = !bi;
   $("#vEngineInfo").textContent = bi ? "Speech runs inside Onsite on your CPU. Download the voice models once; after that it works offline, with no other app."
     : "VoiceStudio is a separate app that speaks and transcribes locally. Start it before a spoken round.";
   const vp = $("#vsPill");
@@ -2690,7 +2691,7 @@ function renderBuiltin(){
     const pct = busy && p.total ? Math.round(p.done / p.total * 100) : 0;
     const status = busy ? (p.state === "downloading" ? `Downloading ${pct}%` : p.state === "verifying" ? "Checking the file…" : "Unpacking…") : m.installed ? "Installed" : "Not downloaded";
     return `<div class="row-item vm" data-model="${esc(m.id)}">
-      <span class="row-ic">${icon(m.id.includes("pocket") ? "speaker" : "mic")}</span>
+      <span class="row-ic">${icon(m.id.includes("parakeet") ? "mic" : "speaker")}</span>
       <span class="row-tx"><b>${esc(m.label)}</b><span>${esc(m.purpose)} · ${fmtBytes(m.bytes)} download</span>
         ${busy ? `<div class="pbar" role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><i style="width:${pct}%"></i></div>` : ""}</span>
       <span class="vm-act"><span class="pill ${m.installed ? "ok" : busy ? "warn" : ""}">${status}</span>
@@ -2702,18 +2703,30 @@ function renderBuiltin(){
   if (err) msg("#biMsg", esc(err.message), "err");
   else if (!(VS.models || []).every(m => m.installed)) msg("#biMsg", "Until both models are downloaded, spoken rounds are typed.");
   else msg("#biMsg", "");
-  const cur = SETTINGS.voice.builtin_voice || "ethan_brooks";
-  $("#vBiVoice").innerHTML = (VS.voices || []).map(v => `<option value="${esc(v.id)}">${esc(v.name)}: ${esc(v.accent)}</option>`).join("");
-  $("#vBiVoice").value = cur;
   $("#biVoices").innerHTML = (VS.voices || []).map(v => `<div class="row-item vm">
-      <span class="row-ic">${esc(v.name[0])}</span><span class="row-tx"><b>${esc(v.name)}</b><span>${esc(v.accent)}${v.id === cur ? " · default" : ""}</span></span>
+      <span class="row-ic">${esc(v.name[0])}</span><span class="row-tx"><b>${esc(v.name)}</b><span>${esc(v.accent)}</span></span>
       <button class="btn sm" data-play-voice="${esc(v.id)}" ${VS.up ? "" : "disabled"}>${icon("speaker")}Play</button></div>`).join("");
 }
+/* Progress ticks (every ~200 ms) only move the bar and the label. Rebuilding the list on each tick
+   replaced the hovered row, so its hover style flashed. */
+function patchModelProgress(ev){
+  const row = document.querySelector(`#biModels [data-model="${CSS.escape(ev.id)}"]`);
+  const bar = row && row.querySelector(".pbar");
+  if (!bar) return false;
+  const pct = ev.total ? Math.round(ev.done / ev.total * 100) : 0;
+  bar.setAttribute("aria-valuenow", pct);
+  bar.firstElementChild.style.width = pct + "%";
+  const pill = row.querySelector(".pill");
+  if (ev.state === "downloading") pill.textContent = `Downloading ${pct}%`;
+  return true;
+}
 api.listen("voice_model", ev => {
+  const prev = modelState[ev.id];
   modelState[ev.id] = ev;
   if (ev.state === "done") delete modelState[ev.id];
   if (!$("#view-settings").hidden && builtinVoice()) {
-    if (ev.state === "done" || ev.state === "error") renderSettings(); else renderBuiltin();
+    if (ev.state === "done" || ev.state === "error") renderSettings();
+    else if (!(prev && prev.state === ev.state && patchModelProgress(ev))) renderBuiltin();
   }
 });
 $("#biModels").onclick = async e => {
@@ -3230,7 +3243,7 @@ $("#aiKeyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#a
 $("#aiKeyRemove").onclick = () => saveKey("");
 
 function formVoice(){
-  return {...SETTINGS.voice, engine: $("#vEngine").value, builtin_voice: $("#vBiVoice").value || SETTINGS.voice.builtin_voice || "ethan_brooks", voice: $("#vEngine").value === "builtin" ? SETTINGS.voice.voice : $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
+  return {...SETTINGS.voice, engine: $("#vEngine").value, voice: $("#vEngine").value === "builtin" ? SETTINGS.voice.voice : $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
 }
 function msg(sel, text, kind = ""){ const el = $(sel); el.className = "form-msg " + kind; el.innerHTML = text; }
 
@@ -3249,10 +3262,9 @@ function saveSettings(){
   });
   return saveChain;
 }
-["#ivModel","#repModel","#vVoice","#vBiVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
+["#ivModel","#repModel","#vVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
 /* Switching engine takes effect at the next round start; no restart. */
 $("#vEngine").addEventListener("change", async () => { await saveSettings(); await renderSettings(); });
-$("#vBiVoice").addEventListener("change", () => setTimeout(renderSettings, 300));
 $("#vMic").addEventListener("change", () => setDevices($("#vMic").value, null));
 $("#vSpk").addEventListener("change", () => setDevices(null, $("#vSpk").value));
 
@@ -3441,7 +3453,7 @@ async function renderAudioCheck(){
   $("#readyMode").textContent = modeLine(who);
   const badPanel = audio && panelBlocked(PANELS.find(p => p.id === loop.setup.panel));
   $("#readyPanelWarn").hidden = !badPanel;
-  if (badPanel) $("#readyPanelWarn").innerHTML = `The built-in voice can’t do Indian accents, so these interviewers will sound American or British. ${voiceSettingsLink}`;
+  if (badPanel) $("#readyPanelWarn").innerHTML = `The built-in voice can’t do Indian accents, so these interviewers will sound like the English voices. ${voiceSettingsLink}`;
   $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";
   showLang("#acLang");
   setTesting(testing);

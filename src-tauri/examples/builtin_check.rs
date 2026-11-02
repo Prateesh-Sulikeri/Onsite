@@ -6,10 +6,10 @@
 //! ```
 //! `--download` installs both models into a temp app-data folder first (about 580 MB from github.com).
 //! Otherwise models are read from `--models` (default `target/voice-spike/models`, layout `<root>/<id>/`).
-//! Speech goes to `target/voice-spike/out/builtin/`.
+//! Speech goes to `target/voice-spike/out/builtin/`. Models are `sherpa-onnx-supertonic-3-tts-int8-2026-05-11` and Parakeet.
 
 use onsite_lib::voice::audio::{f32_to_i16, i16_to_f32, Resampler, MIC_RATE};
-use onsite_lib::voice::builtin::{ParakeetStt, PocketTts, VOICES};
+use onsite_lib::voice::builtin::{ParakeetStt, Supertonic, VOICES};
 use onsite_lib::voice::models;
 use onsite_lib::voice::stt::{clean_transcript, domain_vocab};
 use std::path::{Path, PathBuf};
@@ -51,8 +51,8 @@ async fn main() {
     println!("models: {}", root.display());
 
     let t = Instant::now();
-    let tts = std::sync::Arc::new(PocketTts::load(&root, &manifest.join("../prompts/voices")).expect("load Pocket TTS"));
-    println!("Pocket TTS loaded in {} ms ({} Hz)", t.elapsed().as_millis(), tts.rate);
+    let tts = std::sync::Arc::new(Supertonic::load(&root).expect("load Supertonic TTS"));
+    println!("Supertonic TTS loaded in {} ms ({} Hz)", t.elapsed().as_millis(), tts.rate);
     let t = Instant::now();
     let stt = ParakeetStt::load(&root).expect("load Parakeet");
     println!("Parakeet loaded in {} ms", t.elapsed().as_millis());
@@ -61,7 +61,7 @@ async fn main() {
     std::fs::create_dir_all(&out).unwrap();
     let vocab = domain_vocab(&[]);
     let mut spoken: Vec<(String, Vec<i16>)> = Vec::new();
-    for (clip, name, _) in VOICES {
+    for (clip, name, _, _) in VOICES {
         for (n, line) in LINES.iter().enumerate() {
             let line = line.replace("{name}", name);
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
