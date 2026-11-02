@@ -1,12 +1,20 @@
 name: Idea
 description: Suggest a feature, round type, question or company.
-labels: [enhancement]
+title: "[Idea] "
+labels: [enhancement, needs-triage]
 body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
   - type: textarea
     id: problem
     attributes:
       label: What would help
-      description: What you're trying to practise or do, and what gets in the way today.
+      description: What you are trying to practise or do, and what gets in the way today.
     validations:
       required: true
   - type: textarea
@@ -14,3 +22,7 @@ body:
     attributes:
       label: Your idea
       description: How it could work. Rough is fine.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead

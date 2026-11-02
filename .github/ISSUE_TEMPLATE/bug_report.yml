@@ -1,47 +1,98 @@
 name: Bug report
-description: Something doesn't work.
-labels: [bug]
+description: Something in Onsite does not work.
+title: "[Bug] "
+labels: [bug, needs-triage]
 body:
   - type: markdown
     attributes:
-      value: Never paste an API key here.
+      value: |
+        Thanks for the report. The in-app "Report a bug" button fills this form for you. I aim to reply within a week.
+        **Do not paste** API keys, your resume, job descriptions, interview transcripts or code you wrote in a round.
+        Onsite never puts keys in its log, but check before you paste anything.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I did not include API keys, my resume, transcripts or other private text.
+          required: true
   - type: textarea
     id: what
     attributes:
       label: What happened
-      description: What you did, what you expected, and what you got instead.
+      description: A short summary, in plain words.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you clicked or said, in order.
+      placeholder: |
+        1. Open Settings > Voice
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
     validations:
       required: true
   - type: input
     id: version
     attributes:
       label: Onsite version
-      description: Settings → Updates.
-      placeholder: 0.1.2
+      description: Settings > Updates, or About.
+      placeholder: 0.1.4
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: os
     attributes:
       label: System
-      options: [Windows, macOS, Linux (AppImage), Linux (.deb)]
+      description: "One of: [Windows, macOS, Linux (AppImage), Linux (.deb)]"
+      placeholder: Windows
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: ai
     attributes:
-      label: AI
-      options: [Claude Code, Claude API, OpenAI, Gemini, Groq]
+      label: AI provider
+      description: "Settings > AI model. One of: [Claude Code, Claude API, OpenAI, Gemini, Groq]"
+      placeholder: Claude Code
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: voice
     attributes:
-      label: Round type
-      options: [Typed, Spoken (VoiceStudio), Not in a round]
+      label: How you ran the round
+      description: "One of: [Typed, Spoken (built-in voice), Spoken (VoiceStudio), Not in a round]"
+      placeholder: Typed
+    validations:
+      required: true
+  - type: input
+    id: view
+    attributes:
+      label: Screen you were on
+      description: For example Setup, Call room, Report, Settings.
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message
+      description: The last error text shown by the app, if any. File paths are removed by the app.
+      render: text
   - type: textarea
     id: log
     attributes:
-      label: Log
-      description: Settings → Storage → Open log folder. Paste the lines around the problem. Remove anything private.
+      label: Log lines
+      description: Optional. Settings > Storage > Open log folder. Paste only the lines around the problem and remove anything private.
       render: text
