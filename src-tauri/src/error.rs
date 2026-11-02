@@ -30,4 +30,15 @@ impl Serialize for AppError {
     }
 }
 
+/// For log lines that carry text we do not control (provider error bodies, CLI output): one line, at most 300 chars.
+/// Logs must never hold speech, transcripts, resume, job description or keys; see `docs/engineering/REPORT.md`.
+pub fn log_clip(s: &str) -> String {
+    let one: String = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if one.chars().count() <= 300 {
+        one
+    } else {
+        format!("{}...", one.chars().take(300).collect::<String>())
+    }
+}
+
 pub type Result<T> = std::result::Result<T, AppError>;

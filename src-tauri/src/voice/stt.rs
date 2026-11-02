@@ -828,7 +828,8 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
     let stt_ms = ended_at.elapsed().as_millis() as u64;
     tracing::info!(stt_ms, segments = ans.segs.len(), by_whisper, words = text.split_whitespace().count(), "utterance transcribed");
     if raw != text {
-        tracing::debug!(%raw, "transcript cleaned");
+        // Lengths only: the words themselves are the candidate's speech and never go in the log.
+        tracing::debug!(raw_chars = raw.chars().count(), chars = text.chars().count(), "transcript cleaned");
     }
     Ok(if text.is_empty() { ListenEnd::NoSpeech } else { ListenEnd::Text { text, stt_ms } })
 }

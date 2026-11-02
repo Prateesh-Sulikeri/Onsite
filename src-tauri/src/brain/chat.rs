@@ -150,7 +150,7 @@ impl ApiSession {
                     StreamEvent::Result { text, session_id: String::new(), is_error: false, duration_ms: 0 }
                 }
                 Err(e) => {
-                    tracing::warn!(round_id, "interviewer reply failed: {e}");
+                    tracing::warn!(round_id, "interviewer reply failed: {}", crate::error::log_clip(&e.to_string()));
                     // The candidate's turn stays in the history; their next answer is joined to it.
                     StreamEvent::Result { text: e.to_string(), session_id: String::new(), is_error: true, duration_ms: 0 }
                 }

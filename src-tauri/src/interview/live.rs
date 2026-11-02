@@ -38,6 +38,13 @@ pub struct ActiveRound {
     log: Arc<RoundLog>,
 }
 
+impl ActiveRound {
+    /// Texts a bug report must not repeat (the transcript so far). Used by `report.rs` to flag or drop private lines.
+    pub fn private_texts(&self) -> Vec<String> {
+        self.log.turns.lock().unwrap().iter().map(|t| t.text.clone()).collect()
+    }
+}
+
 struct RoundLog {
     round_id: i64,
     /// Reset when the loader finishes, so preparation time doesn't count against the round.
@@ -904,7 +911,7 @@ pub async fn generate_report(app: &AppHandle, round_id: i64) -> Result<Value> {
         if !matches!(store.report(round_id), Ok(Some((Some(_), _)))) {
             let _ = store.save_report(round_id, None, &out.text);
         }
-        tracing::warn!(round_id, raw = %out.text.chars().take(500).collect::<String>(), "report JSON did not parse");
+        tracing::warn!(round_id, chars = out.text.chars().count(), "report JSON did not parse");
         AppError::Ai("The report came back in the wrong format. Try again.".into())
     })?;
     report["metrics"] = serde_json::to_value(&m)?;
@@ -1018,7 +1025,7 @@ pub async fn loop_feedback(app: &AppHandle, loop_id: i64) -> Result<LoopFeedback
         done += 1;
         progress(done, "rounds");
         if let Err(e) = res {
-            tracing::warn!(round_id = id, "interview feedback: round report failed: {e}");
+            tracing::warn!(round_id = id, "interview feedback: round report failed: {}", crate::error::log_clip(&e.to_string()));
             failed.push((id, e.to_string()));
         }
     }
@@ -1028,7 +1035,7 @@ pub async fn loop_feedback(app: &AppHandle, loop_id: i64) -> Result<LoopFeedback
     if reviewed >= 2 && (done > failed.len() || saved.verdict.is_none()) {
         progress(done, "verdict");
         if let Err(e) = loop_verdict(app, loop_id).await {
-            tracing::warn!(loop_id, "interview feedback: verdict failed: {e}");
+            tracing::warn!(loop_id, "interview feedback: verdict failed: {}", crate::error::log_clip(&e.to_string()));
         }
     }
     let mut out = loop_feedback_saved(&state, loop_id)?;
