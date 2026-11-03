@@ -29,7 +29,7 @@ const base = process.env.SITE_BASE || `/${name}/`;
 // YouTube links for the video slots. Empty = not up yet: the slot is left out. SITE_VIDEO_<NAME> overrides one
 // (handy for a local preview). Templates mark slots with <!--video:name-->...<!--/video--> (shown when the video has
 // a link; {{video_name}} inside is the link) and <!--novideo:name-->...<!--/novideo--> (shown when it hasn't).
-const VIDEOS = { demo: "", setup: "", ai: "", voice: "" };
+const VIDEOS = { promo: "https://youtu.be/v9lG6l2rH18", setup: "", tour: "", ai: "", voice: "" };
 for (const k of Object.keys(VIDEOS)) VIDEOS[k] = process.env[`SITE_VIDEO_${k.toUpperCase()}`] || VIDEOS[k];
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-exp\.(\d+))?$/;
