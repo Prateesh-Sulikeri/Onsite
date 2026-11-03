@@ -53,7 +53,7 @@ name/minutes from the dossier round; `dossier_block` per round (RESEARCH.md).
 3. `me = prep_gen += 1`; `prep claude run`; `backend()`; `close_other_rounds`; `store.create_round`.
 4. `voice.begin` → `VoiceStart {ready, go}`; `spawn_session` + `send(opening_message(minutes))`.
 5. `join!(wait_claude, prepare_voice)` raced against `prep_gen != me` (cancel). Steps emitted as `prep`:
-   `claude` (Started) · `question` (first Sentence) · `voicestudio` · `speaker` · `voice` (persona profile + warm-up) ·
+   `claude` (Started) · `question` (first Sentence) · `voicestudio` (checks the voice models; the step id is kept for both engines) · `speaker` · `voice` (persona profile + warm-up) ·
    `stt` (Parakeet v2 chosen) · `whisper` (Ready, waits ≤ 60 s) · `mic` (3 s of audio).
 6. Cancel/failure → `voice.end`, `session.shutdown`, `delete_round`, Err. Voice-only failure → round continues with
    `voice:false` (UI offers *Start typed*).

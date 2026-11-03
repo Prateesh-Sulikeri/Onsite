@@ -16,7 +16,7 @@ Rebuild of a claude.ai artifact (sandbox blocked the mic; browser TTS was roboti
 |---|---|---|
 | N1 | Bring your own AI: Claude Code CLI or user key for Claude API / OpenAI / Gemini / Groq; keys only in local SQLite; no SDKs | every model call works on all 5 providers |
 | N2 | Native on Windows, owns real mic/speakers | no browser audio APIs |
-| N3 | Speech local (VoiceStudio) with fallbacks; never dead-end | voice failure → "Start typed" |
+| N3 | Speech local (built-in engine, or VoiceStudio) with fallbacks; never dead-end | voice failure → "Start typed" |
 | N4 | Interviewer never gets tools; only research gets web search/fetch | new calls default to no tools |
 | N5 | Model output and dossiers are data, never executed | parse/escape only |
 
@@ -58,7 +58,7 @@ First audio latency (`voice latency` events) < 2.5 s · TTFT (`ttft_ms` per turn
 ## Constraints
 
 Claude Code has no temperature flag (variety via openers, INTERVIEW.md) · Groq free tier ~8K tokens/min (coding turn
-~5.4K) · VoiceStudio is external (never installed/updated by Onsite) · Whisper needs a GPU, else Parakeet text.
+~5.4K) · VoiceStudio is optional and external (never installed/updated by Onsite) · built-in voice is CPU only · Whisper needs a GPU, else Parakeet text.
 
 ## Open questions
 
