@@ -1,4 +1,19 @@
 {
   "_about": "Hand-written changelog lines per release tag. A tag listed here replaces the commit subjects on the website. 'Area: text' shows Area as a label. Releases with no lines anywhere are hidden.",
-  "_example": ["Voice: the interviewer's name follows its voice", "Faster first reply on Groq"]
+  "_example": ["Voice: the interviewer's name follows its voice", "Faster first reply on Groq"],
+  "v1.0.0": [
+    "First official release.",
+    "Voice: speech works without VoiceStudio. Supertonic 3 speaks and Parakeet listens, on your CPU. Settings > Voice downloads the models once (about 580 MB).",
+    "Voice: interviewers in a panel take turns with different voices.",
+    "Voice: smoother playback on slow CPUs.",
+    "Start: the first screen shows at once, then a short loader while the room gets ready.",
+    "Answers: type, listen only, or talk. Pick the mode per round.",
+    "Company rounds: research a company once. The loop then uses its real rounds and question bank.",
+    "Comprehension round: read a small multi-file project and explain your changes. Six projects are bundled.",
+    "Resume check: reads PDF, Word, RTF and text files the way an ATS parser does, then scores the match with a job post.",
+    "Feedback: send feedback from the app. Report a bug opens a filled-in GitHub issue.",
+    "Updates: Settings > Updates checks GitHub only when you press Check. Choose Stable or Experimental.",
+    "Storage: set how long rounds are kept, clear the log, and remove everything on uninstall.",
+    "Themes: Onsite, Nord, Rosé Pine and Gruvbox, each in light and dark."
+  ]
 }
