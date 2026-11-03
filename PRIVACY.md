@@ -43,8 +43,12 @@ or submit a report.
 
 Onsite talks to VoiceStudio only on this computer (`127.0.0.1`). VoiceStudio is a separate app with its own terms.
 
+## The website
+The Onsite website counts page visits with [GoatCounter](https://www.goatcounter.com). It sets no cookies and
+stores no personal data: only page, country, browser and referrer counts. There are no ads.
+
 ## What Onsite never does
-- No accounts, analytics, telemetry, ads or tracking.
+- The app has no accounts, analytics, telemetry, ads or tracking.
 - Nothing is sent to the Onsite developer except feedback or a report you choose to send.
 - The interviewer gets no tools: it can't browse, run commands or read your files.
 - Model replies and dossiers are shown and saved as text, never run as code.

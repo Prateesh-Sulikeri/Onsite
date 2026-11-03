@@ -29,8 +29,13 @@ const base = process.env.SITE_BASE || `/${name}/`;
 // YouTube links for the video slots. Empty = not up yet: the slot is left out. SITE_VIDEO_<NAME> overrides one
 // (handy for a local preview). Templates mark slots with <!--video:name-->...<!--/video--> (shown when the video has
 // a link; {{video_name}} inside is the link) and <!--novideo:name-->...<!--/novideo--> (shown when it hasn't).
-const VIDEOS = { promo: "https://youtu.be/v9lG6l2rH18", setup: "https://www.youtube.com/watch?v=S1_G-g1jhgs", tour: "", ai: "", voice: "" };
+const VIDEOS = { promo: "https://youtu.be/v9lG6l2rH18", setup: "", tour: "", ai: "", voice: "" };
 for (const k of Object.keys(VIDEOS)) VIDEOS[k] = process.env[`SITE_VIDEO_${k.toUpperCase()}`] || VIDEOS[k];
+
+// Website visit counts via GoatCounter (https://www.goatcounter.com): page counts, no cookies, no personal data.
+// Value = your GoatCounter site code (the part before .goatcounter.com). Empty = off: no script, no third-party host
+// in the CSP, and the "no trackers" copy stays. SITE_GOATCOUNTER overrides (local preview; "" turns it off).
+const GOATCOUNTER = process.env.SITE_GOATCOUNTER ?? "prateesh";
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-exp\.(\d+))?$/;
 // Commit subjects that say nothing to someone downloading the app.
@@ -198,6 +203,23 @@ function videoSlots(html) {
     .replace(/<!--novideo:(\w+)-->([\s\S]*?)<!--\/novideo-->/g, (m, k, inner) => url(k) ? "" : inner);
 }
 
+// Switches the analytics copy and script. <!--analytics-->...<!--/analytics--> shows when GOATCOUNTER is set,
+// <!--noanalytics-->...<!--/noanalytics--> when it is not. The CSP is widened only for the two GoatCounter hosts.
+function analytics(html) {
+  if (!GOATCOUNTER) return html
+    .replace(/<!--analytics-->[\s\S]*?<!--\/analytics-->/g, "")
+    .replace(/<!--noanalytics-->([\s\S]*?)<!--\/noanalytics-->/g, "$1");
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(GOATCOUNTER)) throw new Error(`Bad GoatCounter code: ${GOATCOUNTER}`);
+  const host = `https://${GOATCOUNTER}.goatcounter.com`;
+  return html
+    .replace(/<!--analytics-->([\s\S]*?)<!--\/analytics-->/g, "$1")
+    .replace(/<!--noanalytics-->[\s\S]*?<!--\/noanalytics-->/g, "")
+    .replace("script-src 'self';", "script-src 'self' https://gc.zgo.at;")
+    .replace("img-src 'self';", `img-src 'self' ${host};`)
+    .replace("base-uri 'none';", `connect-src ${host}; base-uri 'none';`)
+    .replace("</head>", `<script data-goatcounter="${host}/count" async src="https://gc.zgo.at/count.js"></script>\n</head>`);
+}
+
 function fill(html, vars) {
   return html.replace(/\{\{(\w+)\}\}/g, (m, k) => {
     if (!(k in vars)) throw new Error(`No value for ${m}`);
@@ -248,12 +270,12 @@ async function main() {
   await mkdir(path.join(out, "assets"), { recursive: true });
   for (const name of await readdir(src)) {
     const from = path.join(src, name);
-    if (name.endsWith(".html")) await writeFile(path.join(out, name), labelCells(fill(bust(videoSlots(await readFile(from, "utf8"))), vars)));
+    if (name.endsWith(".html")) await writeFile(path.join(out, name), labelCells(fill(bust(analytics(videoSlots(await readFile(from, "utf8")))), vars)));
     else await cp(from, path.join(out, name), { recursive: true });
   }
   await cp(path.join(repoRoot, "ui/assets/logo.png"), path.join(out, "assets/logo.png"));
   await cp(path.join(repoRoot, "ui/assets/twilight.webp"), path.join(out, "assets/twilight.webp"));
-  for (const shot of ["room", "dashboard", "dossiers", "resume", "feedback"])
+  for (const shot of ["room", "resume", "feedback"])
     await cp(path.join(repoRoot, `docs/engineering/img/${shot}.jpg`), path.join(out, `assets/${shot}.jpg`));
   await writeFile(path.join(out, ".nojekyll"), "");
 
