@@ -81,6 +81,7 @@ to `release.yml`, update `SECURITY.md` + release-notes warnings table. macOS: ad
 
 ## Status / gaps
 
+1.0.0 (2026-11-03) is the first official release. The cut: branch `release/v1.0.0-onsite-golive` (version 1.0.0 in both files, changelog in `site/release-notes.json`), merge to `main` with the tests passing, dry run from Actions, then tag `v1.0.0` on `main`. Built-in voice (Supertonic 3 + Parakeet) is the default for new installs. It has run on Windows only. macOS and Linux still need a first person run.
 Windows used daily. Linux AppImage launched under WSLg 2026-10-31 (UI, DB, dossier import OK; no mic or round tested).
 macOS never run by a person. Treat reports as first contact.
 Known for later: a hand-run newer setup.exe over an install with these hooks offers "uninstall first"; that runs the old

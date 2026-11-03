@@ -192,7 +192,7 @@ async fn start_voice(app: &AppHandle, round_id: i64, settings: &crate::voice::Vo
                 return None;
             }
             prep(app, "voicestudio", "ok", "Installed");
-            prep(app, "voice", "run", "Loading Pocket TTS");
+            prep(app, "voice", "run", "Loading the voice");
             prep(app, "stt", "run", "Loading Parakeet");
             match Engine::from_settings(&state, settings).await {
                 Ok(e) => e,
@@ -351,7 +351,6 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize, ready_made
     let state = app.state::<AppState>();
     let mut setup = load_setup(&state, loop_id)?;
     let mut settings = state.settings();
-    setup.voice_female = settings.voice.voice_female();
     if let Some(r) = ready_made {
         setup.ready_made_project = r;
     }
@@ -420,6 +419,10 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize, ready_made
     if let Some(p) = state.panels.persona(&setup.panel, &plan.key) {
         settings.voice.speed *= p.speed_factor;
         settings.voice.persona = Some(crate::voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states, clip: p.clip });
+    } else if settings.voice.engine == crate::voice::engine::VoiceEngine::Builtin {
+        // No panel: the interviewer's name decides the voice, so women and men both get their own voice.
+        let female = state.catalog.female_names.contains(&plan.persona);
+        settings.voice.builtin_voice = crate::voice::builtin::clip_for_gender(if female { "female" } else { "male" }).into();
     }
     prep(app, "claude", "run", "Connecting to the AI model");
     let backend = match state.backend().await {

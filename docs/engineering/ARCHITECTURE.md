@@ -1,7 +1,7 @@
 # ARCHITECTURE
 
 Onsite: Tauri 2 desktop app. Rust core (`src-tauri/src`) + plain-JS UI (`ui/`) in the system WebView. Runs spoken
-mock interviews; AI = one user-chosen provider; speech = local VoiceStudio + Whisper sidecar.
+mock interviews; AI = one user-chosen provider; speech = local built-in engine (Supertonic 3 + Parakeet via sherpa-onnx, in-process) or VoiceStudio; Whisper sidecar runs only with VoiceStudio.
 
 ## Processes
 
@@ -13,7 +13,8 @@ mock interviews; AI = one user-chosen provider; speech = local VoiceStudio + Whi
 | `wsl.exe -e bash -lc "cd … && exec claude …"` | same, when Claude Code is only in WSL | same | same |
 | `sidecar/whisper_server.py` | `voice::whisper::start` | app (restarted at round start if dead) | JSON lines stdin/stdout |
 | python/node/java/main.exe | `runner::run` | one Run/Submit | `\x1e`-prefixed JSON lines |
-| VoiceStudio | user (or `voice_launch`) | external | HTTP + WS on `127.0.0.1:3900` |
+| built-in voice (`voice::builtin`) | in-process | app | sherpa-onnx; models in `<app data>/models` |
+| VoiceStudio (optional engine) | user (or `voice_launch`) | external | HTTP + WS on `127.0.0.1:3900` |
 
 Network leaves the machine only for: model calls (provider), research web search (provider-side tools), update
 checks (GitHub, on user click). UI CSP allows only `self` + IPC → the UI cannot fetch.
@@ -44,7 +45,7 @@ prompts_dir: PathBuf; data_dir: PathBuf        // dev: repo prompts/; release: b
 research: Mutex<HashMap<i64, research::Running>>               // live jobs: counters + AbortHandle
 rounds: tokio::sync::Mutex<HashMap<i64, interview::live::ActiveRound>>  // held across .await
 voice: voice::Voice                            // speaker + current round voice loop
-builtin: voice::builtin::Cache                 // Pocket TTS + Parakeet, loaded on first use
+builtin: voice::builtin::Cache                 // Supertonic 3 TTS + Parakeet, loaded on first use
 prep_gen: AtomicU64                            // loader cancellation generation
 ```
 
@@ -145,4 +146,4 @@ Dev builds read the repo copies (edit → next round uses it, no rebuild); relea
 ## Platforms
 
 Windows 11: primary, daily use. macOS (universal dmg, ad-hoc signed) and Linux (AppImage, deb): CI-built, not run by a
-person yet (2026-10-29). VoiceStudio is Windows-first; without it rounds are typed.
+person yet (2026-10-29). The built-in voice needs no VoiceStudio and runs on the CPU; it has been run on Windows only so far. VoiceStudio is optional and Windows-first. Without any voice engine, rounds are typed.

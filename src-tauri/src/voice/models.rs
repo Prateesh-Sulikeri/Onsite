@@ -30,19 +30,22 @@ pub struct Pin {
     pub files: &'static [&'static str],
 }
 
-pub const POCKET: Pin = Pin {
-    id: "sherpa-onnx-pocket-tts-int8-2026-01-26",
-    label: "Pocket TTS",
+pub const SUPERTONIC: Pin = Pin {
+    id: "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
+    label: "Supertonic 3 TTS",
     purpose: "The interviewer's voice",
-    url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2",
-    bytes: 98_336_520,
-    sha256: "2f3b88823cbbb9bf0b2477ec8ae7b3fec417b3a87b6bb5f256dba66f2ad967cb",
-    unpacked: 195_000_000,
+    url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-supertonic-3-tts-int8-2026-05-11.tar.bz2",
+    bytes: 128_774_318,
+    sha256: "82fa96f91c4ef8abaae3a14a3f4153facf88bed821d1f7331cec2700f432c427",
+    unpacked: 150_000_000,
     files: &[
-        "lm_flow.int8.onnx", "lm_main.int8.onnx", "encoder.onnx", "decoder.int8.onnx", "text_conditioner.onnx", "vocab.json",
-        "token_scores.json",
+        "duration_predictor.int8.onnx", "text_encoder.int8.onnx", "vector_estimator.int8.onnx", "vocoder.int8.onnx", "tts.json",
+        "unicode_indexer.bin", "voice.bin",
     ],
 };
+
+/// The speech model this app used before Supertonic. Removed after a Supertonic install finishes.
+pub const RETIRED_POCKET: &str = "sherpa-onnx-pocket-tts-int8-2026-01-26";
 
 pub const PARAKEET: Pin = Pin {
     id: "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8",
@@ -55,7 +58,7 @@ pub const PARAKEET: Pin = Pin {
     files: &["encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"],
 };
 
-pub const PINS: [Pin; 2] = [POCKET, PARAKEET];
+pub const PINS: [Pin; 2] = [SUPERTONIC, PARAKEET];
 
 pub fn pin(id: &str) -> Option<Pin> {
     PINS.iter().copied().find(|p| p.id == id)
@@ -250,6 +253,10 @@ async fn install_inner(data_dir: &Path, p: Pin, on: &(impl Fn(Progress) + Send +
     let _ = std::fs::remove_dir_all(&dest);
     std::fs::rename(&inner, &dest)?;
     let _ = std::fs::remove_dir_all(&work);
+    if p.id == SUPERTONIC.id {
+        // The old speech model is no longer used; free its ~195 MB.
+        let _ = std::fs::remove_dir_all(root(data_dir).join(RETIRED_POCKET));
+    }
     tracing::info!(id = p.id, "voice model installed");
     Ok(())
 }

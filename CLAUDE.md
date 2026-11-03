@@ -152,7 +152,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   If Whisper is missing or fails, Parakeet's text is used.
 
 ### Built-in voice engine (2026-10-30)
-Speech can also run inside Onsite (Pocket TTS + Parakeet TDT through the `sherpa-onnx` crate, models downloaded from
+Speech can also run inside Onsite (Supertonic 3 TTS + Parakeet TDT through the `sherpa-onnx` crate, models downloaded from
 github.com into `<app data>/models`), selected in Settings > Voice; VoiceStudio stays as the other engine. Details,
 files, pins and TODOs: `docs/engineering/VOICE.md`; plan: `docs/plans/voice-without-voicestudio.md`.
 

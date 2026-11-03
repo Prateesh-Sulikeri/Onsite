@@ -34,7 +34,7 @@ most: on a slow one the interviewer pauses between phrases. If that happens, pic
 | Linux | x86-64 · Ubuntu 22.04 or newer, or a distro with glibc 2.35+ · 4-core CPU from 2019 or newer · 8 GB RAM | 6+ core CPU from 2021 or newer · 16 GB RAM |
 
 On every system:
-- **Disk:** the voice models take 830 MB. Have about 1.6 GB free while they download.
+- **Disk:** the voice models download about 580 MB and keep about 830 MB on disk. Have about 1.6 GB free while they download.
 - **Microphone and speakers.** A headset works best.
 - **Internet** for the AI model you connect. Speech itself stays on your machine.
 - **Typed rounds only:** any 64-bit computer with 4 GB RAM.
@@ -121,4 +121,4 @@ problems privately: [SECURITY.md](SECURITY.md). `CLAUDE.md` has the spec and how
 see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Status
-Under construction. See `CLAUDE.md` for the spec and milestones.
+Version 1.0.0 is the first official release. Stable releases come from `main`; experimental builds come from `m1`. See `CLAUDE.md` for the spec and milestones.

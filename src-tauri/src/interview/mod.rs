@@ -48,10 +48,6 @@ pub struct LoopSetup {
     /// Comprehension round: use a ready-made project instead of one the AI writes for this job.
     #[serde(default)]
     pub ready_made_project: bool,
-    /// Whether the round's voice is a woman's (None = unknown or typed). Set at round start from the
-    /// voice settings so a catalog name matches the voice that speaks it. Never saved.
-    #[serde(skip)]
-    pub voice_female: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -126,7 +122,8 @@ impl LoopSetup {
         PlannedRound {
             key: k.clone(),
             name: reported.map_or_else(|| r.name.clone(), |d| d.name.clone()),
-            persona: p.as_ref().map_or_else(|| cat.persona(idx, self.voice_female).to_string(), |p| p.first_name.clone()),
+            // Rounds without a panel alternate: odd rounds are a woman's name, and her voice (see start_round).
+            persona: p.as_ref().map_or_else(|| cat.persona(idx, Some(idx % 2 == 1)).to_string(), |p| p.first_name.clone()),
             persona_id: p.as_ref().map(|p| p.id.clone()),
             persona_role: p.map(|p| p.role),
             minutes: self.minutes.or(reported.map(|d| d.minutes)).unwrap_or(r.min),
@@ -347,7 +344,6 @@ mod tests {
             dossier_rounds: Vec::new(),
             dossier: None,
             ready_made_project: false,
-            voice_female: None,
         }
     }
 
@@ -398,15 +394,13 @@ mod tests {
     }
 
     #[test]
-    fn catalog_name_matches_the_voice() {
+    fn mixed_rounds_alternate_women_and_men() {
         let (cat, _, panels) = fixtures();
         let mut s = setup();
-        for female in [true, false] {
-            s.voice_female = Some(female);
-            for i in 0..2 {
-                let name = s.plan(&cat, &panels, i).persona;
-                assert_eq!(cat.female_names.contains(&name), female, "round {i}: {name}");
-            }
+        s.rounds = vec!["coding".into(), "comprehension".into(), "behavioral".into(), "coding".into(), "resume".into(), "fundamentals".into()];
+        for i in 0..6 {
+            let name = s.plan(&cat, &panels, i).persona;
+            assert_eq!(cat.female_names.contains(&name), i % 2 == 1, "round {i}: {name}");
         }
     }
 

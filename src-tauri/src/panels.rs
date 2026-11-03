@@ -289,12 +289,11 @@ mod tests {
     }
 
     #[test]
-    fn every_persona_has_a_shipped_voice_clip() {
-        let voices = Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts/voices");
+    fn every_persona_has_a_shipped_voice() {
         let all = repo().all_personas();
         assert!(!all.is_empty());
         for p in &all {
-            assert!(voices.join(format!("{}.wav", p.clip)).is_file(), "{} -> {}", p.id, p.clip);
+            assert!(crate::voice::builtin::VOICES.iter().any(|v| v.0 == p.clip), "{} -> {}", p.id, p.clip);
         }
         // Charlotte (id priya_shah) is for the women on the panels, Ethan for the men.
         assert!(all.iter().any(|p| p.clip == "priya_shah") && all.iter().any(|p| p.clip == "ethan_brooks"));

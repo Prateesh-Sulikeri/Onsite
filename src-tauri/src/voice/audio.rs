@@ -303,11 +303,55 @@ fn fatal(e: &cpal::Error) -> bool {
     matches!(e.kind(), cpal::ErrorKind::StreamInvalidated | cpal::ErrorKind::DeviceNotAvailable)
 }
 
+/// Playback smoothing for one reply. While the reply is still being generated, the device waits until
+/// `prebuffer` samples are queued, and waits again after any dry spell. Without this, each short part
+/// plays out before the next one is generated, and the candidate hears a gap after almost every sentence.
+#[derive(Default)]
+pub struct Jitter {
+    /// Samples to queue before (re)starting. Set when the stream opens: about 300 ms.
+    pub prebuffer: usize,
+    rebuffering: bool,
+    /// Dry spells during the reply so far (taken for the log).
+    pub underruns: u32,
+}
+
+impl Jitter {
+    /// The next sample for the device, or silence while waiting.
+    pub fn next(&mut self, q: &mut VecDeque<f32>, streaming: bool) -> f32 {
+        if self.rebuffering {
+            // Once the reply is complete, play whatever is left.
+            if q.len() < self.prebuffer && (streaming || q.is_empty()) {
+                return 0.0;
+            }
+            self.rebuffering = false;
+        }
+        match q.pop_front() {
+            Some(v) => v,
+            None => {
+                if streaming {
+                    self.rebuffering = true;
+                    self.underruns += 1;
+                }
+                0.0
+            }
+        }
+    }
+}
+
+/// The sample queue and the playback state for it. One lock: the device callback and the speaker both use it.
+#[derive(Default)]
+struct Queue {
+    samples: VecDeque<f32>,
+    /// A reply is still being generated: more samples will come.
+    streaming: bool,
+    jitter: Jitter,
+}
+
 /// Default output device, fed from a sample queue at the device rate. Rebuilds its stream
 /// when Windows invalidates it (headphones plugged in, Bluetooth connecting).
 pub struct Player {
     stream: Mutex<Option<cpal::Stream>>,
-    queue: Arc<Mutex<VecDeque<f32>>>,
+    queue: Arc<Mutex<Queue>>,
     rate: AtomicU32,
     dead: Arc<AtomicBool>,
     /// The `OUTPUT` choice the stream was built for.
@@ -339,8 +383,13 @@ impl Player {
         let chosen = want.clone();
         let (stream, rate) = on_audio_thread(move || build_output(&chosen, queue, level, dead))?;
         *self.built_for.lock().unwrap() = want;
-        // Samples queued for the old device were resampled for its rate.
-        self.queue.lock().unwrap().clear();
+        {
+            // Samples queued for the old device were resampled for its rate.
+            let mut q = self.queue.lock().unwrap();
+            q.samples.clear();
+            q.jitter.rebuffering = q.streaming;
+            q.jitter.prebuffer = rate as usize * 3 / 10;
+        }
         self.rate.store(rate, Ordering::SeqCst);
         *self.stream.lock().unwrap() = Some(stream);
         self.dead.store(false, Ordering::SeqCst);
@@ -350,7 +399,22 @@ impl Player {
     /// Queues mono PCM recorded at `sr`.
     pub fn push(&self, resampler: &mut Resampler, pcm: &[i16]) {
         let out = resampler.process(&i16_to_f32(pcm));
-        self.queue.lock().unwrap().extend(out);
+        self.queue.lock().unwrap().samples.extend(out);
+    }
+
+    /// Marks the start (`true`) or end (`false`) of a reply that is still being generated. While it is on,
+    /// playback prebuffers and waits out dry spells; turning it off plays the rest and stops waiting.
+    pub fn set_streaming(&self, on: bool) {
+        let mut q = self.queue.lock().unwrap();
+        q.streaming = on;
+        if on {
+            q.jitter.rebuffering = true;
+        }
+    }
+
+    /// Dry spells since the last call (the log wants them per reply).
+    pub fn take_underruns(&self) -> u32 {
+        std::mem::take(&mut self.queue.lock().unwrap().jitter.underruns)
     }
 
     /// A resampler to the device rate. Reopens a dead stream first, so each reply after a
@@ -362,27 +426,32 @@ impl Player {
         Resampler::new(sr, self.rate.load(Ordering::SeqCst).max(1))
     }
 
+    /// Drops everything queued and ends the reply (barge-in, or the round is over).
     pub fn clear(&self) {
-        self.queue.lock().unwrap().clear();
+        let mut q = self.queue.lock().unwrap();
+        q.samples.clear();
+        q.streaming = false;
+        q.jitter.rebuffering = false;
     }
 
     /// Idle when nothing is queued, or when the stream died (the queue would never drain).
     pub fn is_idle(&self) -> bool {
-        self.dead.load(Ordering::SeqCst) || self.queue.lock().unwrap().is_empty()
+        self.dead.load(Ordering::SeqCst) || self.queue.lock().unwrap().samples.is_empty()
     }
 }
 
-fn build_output(chosen: &str, queue: Arc<Mutex<VecDeque<f32>>>, lv: Arc<Level>, dead: Arc<AtomicBool>) -> Result<(cpal::Stream, u32)> {
+fn build_output(chosen: &str, queue: Arc<Mutex<Queue>>, lv: Arc<Level>, dead: Arc<AtomicBool>) -> Result<(cpal::Stream, u32)> {
     let device = pick_device(&cpal::default_host(), chosen, false).ok_or_else(|| err("no speaker found"))?;
     let supported = device.default_output_config().map_err(err)?;
     let format = supported.sample_format();
     let config: cpal::StreamConfig = supported.into();
     let channels = config.channels as usize;
     let fill = move |out: &mut dyn FnMut(usize, f32), frames: usize| {
-        let mut q = queue.lock().unwrap();
+        let mut guard = queue.lock().unwrap();
+        let q = &mut *guard;
         let mut sum = 0.0;
         for f in 0..frames {
-            let v = q.pop_front().unwrap_or(0.0);
+            let v = q.jitter.next(&mut q.samples, q.streaming);
             sum += v * v;
             out(f, v);
         }
@@ -645,5 +714,47 @@ mod tests {
             v.push(0.3);
         });
         assert!((0..500).all(|_| v.push(0.0) == VadEvent::None));
+    }
+
+    /// Pulls `n` samples through the jitter buffer; returns (samples, silent count).
+    fn pull(j: &mut Jitter, q: &mut VecDeque<f32>, streaming: bool, n: usize) -> (Vec<f32>, usize) {
+        let out: Vec<f32> = (0..n).map(|_| j.next(q, streaming)).collect();
+        let silent = out.iter().filter(|v| **v == 0.0).count();
+        (out, silent)
+    }
+
+    #[test]
+    fn jitter_waits_for_prebuffer_while_streaming() {
+        let mut j = Jitter { prebuffer: 4, rebuffering: true, ..Default::default() };
+        let mut q: VecDeque<f32> = [0.5, 0.5].into();
+        assert_eq!(pull(&mut j, &mut q, true, 3).1, 3, "2 queued is below the prebuffer: silence");
+        assert_eq!(j.underruns, 0, "waiting at the start is not an underrun");
+        q.extend([0.5, 0.5, 0.5]);
+        assert_eq!(pull(&mut j, &mut q, true, 3).0, vec![0.5, 0.5, 0.5]);
+    }
+
+    #[test]
+    fn jitter_rebuffers_after_a_dry_spell_and_counts_it() {
+        let mut j = Jitter { prebuffer: 4, ..Default::default() };
+        let mut q: VecDeque<f32> = [0.5; 4].into();
+        assert_eq!(pull(&mut j, &mut q, true, 4).1, 0);
+        // Queue empty mid-reply: silence, one underrun, and the next part must fill the prebuffer again.
+        assert_eq!(pull(&mut j, &mut q, true, 1).1, 1);
+        assert_eq!(j.underruns, 1);
+        q.extend([0.5; 2]);
+        assert_eq!(pull(&mut j, &mut q, true, 2).1, 2, "2 of 4 prebuffered: still waiting");
+        q.extend([0.5; 2]);
+        assert_eq!(pull(&mut j, &mut q, true, 4).1, 0, "prebuffer reached: plays on");
+        assert_eq!(j.underruns, 1);
+    }
+
+    #[test]
+    fn jitter_plays_the_end_of_a_short_reply() {
+        let mut j = Jitter { prebuffer: 100, rebuffering: true, ..Default::default() };
+        let mut q: VecDeque<f32> = [0.5, 0.25].into();
+        // The reply ended before the prebuffer filled: play what there is, no waiting.
+        assert_eq!(pull(&mut j, &mut q, false, 2).0, vec![0.5, 0.25]);
+        assert_eq!(pull(&mut j, &mut q, false, 1).1, 1, "nothing left: silence, not an underrun");
+        assert_eq!(j.underruns, 0);
     }
 }
