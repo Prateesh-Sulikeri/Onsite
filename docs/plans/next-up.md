@@ -229,7 +229,7 @@ a faster or more accurate preset, and a clear view of download sizes and hardwar
 
 Engines (`VOICE.md`, `voice-without-voicestudio.md`):
 
-- **Built-in** (default for new installs): Pocket TTS int8 (speech) and Parakeet TDT 0.6B v2 int8 (listening). CPU only, sherpa-onnx.
+- **Built-in** (default for new installs; speech was Pocket TTS, replaced by Supertonic 3 on 2026-11-02, see VOICE.md): Pocket TTS int8 (speech) and Parakeet TDT 0.6B v2 int8 (listening). CPU only, sherpa-onnx.
   Two voices: Ethan (American male) and Charlotte (British female, Settings id `priya_shah`). English only.
   Models download on demand from GitHub: Pocket 98.3 MB (195 MB unpacked), Parakeet 482.5 MB (631 MB unpacked). Total about 580 MB download.
 - **VoiceStudio** (kept for old installs): OmniVoice TTS with a clone profile per persona, Parakeet v2 or v3 for live captions, and
