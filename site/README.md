@@ -11,7 +11,7 @@ Static site, deployed to GitHub Pages by `.github/workflows/site.yml`. Plain HTM
 Local: `node site/build.mjs`, then open `site/dist/index.html`. It uses `gh auth token` if `GITHUB_TOKEN` is unset.
 Changelog: write lines for any release in `release-notes.json` (`{"v0.1.5": ["Voice: ...", "..."]}`); they replace the
 commit subjects for that tag. Releases with nothing to list are left out, except the latest stable.
-Videos: paste the YouTube links into `VIDEOS` at the top of `build.mjs` (`demo`, `setup`, `ai`, `voice`). A slot with
+Videos: paste the YouTube links into `VIDEOS` at the top of `build.mjs` (`promo`, `setup`, `ai`, `voice`). A slot with
 no link is left out of the page. The home hero and Guides link out to YouTube; nothing is embedded. Preview one
 without editing: `SITE_VIDEO_DEMO=https://youtu.be/... node site/build.mjs`.
 `404.html` links with absolute paths (`/Onsite/` by default, as on GitHub Pages); set `SITE_BASE=/` to try it on a

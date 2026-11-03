@@ -29,7 +29,7 @@ const base = process.env.SITE_BASE || `/${name}/`;
 // YouTube links for the video slots. Empty = not up yet: the slot is left out. SITE_VIDEO_<NAME> overrides one
 // (handy for a local preview). Templates mark slots with <!--video:name-->...<!--/video--> (shown when the video has
 // a link; {{video_name}} inside is the link) and <!--novideo:name-->...<!--/novideo--> (shown when it hasn't).
-const VIDEOS = { demo: "", setup: "", ai: "", voice: "" };
+const VIDEOS = { promo: "https://youtu.be/v9lG6l2rH18", setup: "https://www.youtube.com/watch?v=S1_G-g1jhgs", tour: "", ai: "", voice: "" };
 for (const k of Object.keys(VIDEOS)) VIDEOS[k] = process.env[`SITE_VIDEO_${k.toUpperCase()}`] || VIDEOS[k];
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-exp\.(\d+))?$/;
@@ -253,7 +253,7 @@ async function main() {
   }
   await cp(path.join(repoRoot, "ui/assets/logo.png"), path.join(out, "assets/logo.png"));
   await cp(path.join(repoRoot, "ui/assets/twilight.webp"), path.join(out, "assets/twilight.webp"));
-  for (const shot of ["room", "dashboard", "dossiers", "resume", "feedback"])
+  for (const shot of ["room", "resume", "feedback"])
     await cp(path.join(repoRoot, `docs/engineering/img/${shot}.jpg`), path.join(out, `assets/${shot}.jpg`));
   await writeFile(path.join(out, ".nojekyll"), "");
 
