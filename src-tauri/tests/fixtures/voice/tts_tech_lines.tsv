@@ -1,0 +1,31 @@
+# written	spoken   (Task 4 must turn column 1 into column 2 exactly)
+It costs 1.5 ms.	It costs one point five milliseconds.
+We hit 99.99% uptime.	We hit ninety nine point nine nine percent uptime.
+The p99 is 250 ms.	The P ninety nine is two hundred fifty milliseconds.
+Upgrade to v2.1 first.	Upgrade to version two point one first.
+That is O(n log n) time.	That is O of n log n time.
+Can you get it to O(1)?	Can you get it to O of one?
+It was O(n^2) before.	It was O of n squared before.
+We serve 10k QPS.	We serve ten thousand Q P S.
+Each node has 256 GB of RAM.	Each node has two hundred fifty six gigabytes of RAM.
+Call getUserById with the order_id.	Call get User By Id with the order id.
+What if retries >= 3?	What if retries greater than or equal to three?
+So A -> B -> C.	So A to B to C.
+Is that read/write or read-only?	Is that read write or read-only?
+It takes 10-20 seconds.	It takes ten to twenty seconds.
+Use user.id as the key.	Use user dot id as the key.
+The 2nd attempt failed.	The second attempt failed.
+We store 5M rows.	We store five million rows.
+That is 2x faster.	That is two times faster.
+See https://example.com/docs for more.	See a link for more.
+Timeout is 30s.	Timeout is thirty seconds.
+Budget is $5 per user.	Budget is five dollars per user.
+Wait... is it idempotent?	Wait, is it idempotent?
+Use a HashMap<String, Integer>.	Use a Hash Map String, Integer.
+1 ms is fine.	one millisecond is fine.
+Set TTL = 60.	Set TTL equals sixty.
+x && y must hold.	x and y must hold.
+It is ~3 GB.	It is about three gigabytes.
+About 1,000,000 users.	About one million users.
+Okay.	Okay.
+Tell me about a time you disagreed with your manager.	Tell me about a time you disagreed with your manager.

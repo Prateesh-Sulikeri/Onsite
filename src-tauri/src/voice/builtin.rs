@@ -12,7 +12,7 @@ use sherpa_onnx::{
 };
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -32,7 +32,7 @@ const STEPS: i32 = 8;
 
 /// ONNX threads for each model: about one per physical core, at most 4 (more didn't help on an 8-core CPU).
 /// Using every core starved the speaker thread on 4-thread laptops, and the audio stuttered.
-fn threads() -> i32 {
+pub fn threads() -> i32 {
     let logical = std::thread::available_parallelism().map_or(4, |n| n.get());
     (logical / 2).clamp(1, 4) as i32
 }
@@ -135,6 +135,14 @@ fn voice_err(what: &str) -> AppError {
     AppError::Voice(format!("{what} Check Settings > Voice."))
 }
 
+/// One generation call: speaker, model speed and flow-matching steps.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Synth {
+    pub sid: i32,
+    pub speed: f32,
+    pub steps: i32,
+}
+
 pub struct Supertonic {
     tts: Mutex<OfflineTts>,
     pub rate: u32,
@@ -143,6 +151,11 @@ pub struct Supertonic {
 impl Supertonic {
     /// `models_root` = `<app data>/models`.
     pub fn load(models_root: &Path) -> Result<Self> {
+        Self::load_with(models_root, threads())
+    }
+
+    /// Same as [`Supertonic::load`] with a chosen ONNX thread count (the bench uses it).
+    pub fn load_with(models_root: &Path, threads: i32) -> Result<Self> {
         let dir = models_root.join(models::SUPERTONIC.id);
         let model = OfflineTtsModelConfig {
             supertonic: OfflineTtsSupertonicModelConfig {
@@ -154,13 +167,32 @@ impl Supertonic {
                 unicode_indexer: file(&dir, "unicode_indexer.bin"),
                 voice_style: file(&dir, "voice.bin"),
             },
-            num_threads: threads(),
+            num_threads: threads,
             provider: Some("cpu".into()),
             ..Default::default()
         };
         let tts = OfflineTts::create(&OfflineTtsConfig { model, ..Default::default() }).ok_or_else(|| voice_err("The voice model didn't load."))?;
         let rate = tts.sample_rate() as u32;
         Ok(Self { tts: Mutex::new(tts), rate })
+    }
+
+    /// One sherpa call for `text`: every sample at `self.rate`, no cap, no splitting. `stop` aborts generation.
+    pub fn synth(&self, text: &str, s: &Synth, stop: &Arc<AtomicBool>) -> Result<Vec<f32>> {
+        let cfg = GenerationConfig {
+            sid: s.sid,
+            speed: s.speed,
+            num_steps: s.steps,
+            extra: Some(HashMap::from([("lang".to_string(), json!("en"))])),
+            ..Default::default()
+        };
+        // The callback must be 'static, so it holds its own handle on the flag.
+        let stop = stop.clone();
+        let audio = self
+            .tts
+            .lock()
+            .unwrap()
+            .generate_with_config(text, &cfg, Some(move |_: &[f32], _: f32| !stop.load(Ordering::SeqCst)));
+        Ok(audio.map(|a| a.samples().to_vec()).unwrap_or_default())
     }
 
     /// Speaks `text` in voice `voice` (a voice key), sending PCM16 (at `self.rate`) to `out` as each part finishes.
@@ -212,6 +244,11 @@ pub struct ParakeetStt {
 
 impl ParakeetStt {
     pub fn load(models_root: &Path) -> Result<Self> {
+        Self::load_with(models_root, threads())
+    }
+
+    /// Same as [`ParakeetStt::load`] with a chosen ONNX thread count (the bench uses it).
+    pub fn load_with(models_root: &Path, threads: i32) -> Result<Self> {
         let dir = models_root.join(models::PARAKEET.id);
         let mut c = OfflineRecognizerConfig::default();
         c.model_config.transducer = OfflineTransducerModelConfig {
@@ -221,7 +258,7 @@ impl ParakeetStt {
         };
         c.model_config.tokens = file(&dir, "tokens.txt");
         c.model_config.model_type = Some("nemo_transducer".into());
-        c.model_config.num_threads = threads();
+        c.model_config.num_threads = threads;
         c.model_config.provider = Some("cpu".into());
         let rec = OfflineRecognizer::create(&c).ok_or_else(|| voice_err("The speech model didn't load."))?;
         Ok(Self { rec: Mutex::new(rec) })
@@ -237,6 +274,15 @@ impl ParakeetStt {
     /// Text of one finished segment (16 kHz mono). Waits for a caption decode in progress.
     pub fn transcribe(&self, pcm: &[i16]) -> String {
         Self::decode(&self.rec.lock().unwrap(), pcm)
+    }
+
+    /// Text of 16 kHz mono float audio (the bench uses it).
+    pub fn transcribe_f32(&self, pcm16k: &[f32]) -> String {
+        let rec = self.rec.lock().unwrap();
+        let s = rec.create_stream();
+        s.accept_waveform(super::audio::MIC_RATE as i32, pcm16k);
+        rec.decode(&s);
+        s.get_result().map(|r| r.text.trim().to_string()).unwrap_or_default()
     }
 
     /// Caption for the open segment. None when a decode is already running: that tick is skipped.
@@ -332,6 +378,17 @@ mod tests {
         assert_eq!(speaker_id("nobody"), 5, "unknown keys fall back to the default voice");
         assert!(VOICES.iter().all(|v| (0..10).contains(&v.3)));
         assert!(tempo("ethan_brooks") > tempo("priya_shah"), "Ethan is sped up, Charlotte is not");
+    }
+
+    #[test]
+    fn fixtures_parse() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/voice");
+        let tech = std::fs::read_to_string(dir.join("tts_tech_lines.tsv")).unwrap();
+        let rows: Vec<_> = tech.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()).collect();
+        assert_eq!(rows.len(), 30);
+        assert!(rows.iter().all(|r| r.split('\t').count() == 2));
+        let stt = std::fs::read_to_string(dir.join("stt_terms.tsv")).unwrap();
+        assert_eq!(stt.lines().filter(|l| l.split('\t').count() == 2).count(), 12);
     }
 
     #[test]

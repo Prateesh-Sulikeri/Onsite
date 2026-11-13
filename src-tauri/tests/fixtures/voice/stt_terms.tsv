@@ -1,0 +1,12 @@
+We keep the session in Redis and the orders in PostgreSQL.	Redis,PostgreSQL
+The Kafka consumer commits the offset after the write.	Kafka
+I used Spring Boot with Hibernate on the JVM.	Spring Boot,Hibernate,JVM
+The service talks gRPC inside and GraphQL at the edge.	gRPC,GraphQL
+We made the payment API idempotent with an idempotency key.	idempotent,idempotency
+At Razorpay we moved from RabbitMQ to Kafka Streams.	Razorpay,RabbitMQ,Kafka Streams
+We deploy on Kubernetes and watch it with Prometheus and Grafana.	Kubernetes,Prometheus,Grafana
+The token is a JWT issued through OAuth.	JWT,OAuth
+We shard MongoDB and cache hot rows in DynamoDB.	MongoDB,DynamoDB
+My name is Prateesh and I worked with Karthik at Juspay.	Prateesh,Karthik,Juspay
+We send SWIFT MT103 messages and are moving to ISO 20022.	SWIFT,MT103,ISO 20022
+Elasticsearch handles search and Cassandra holds the events.	Elasticsearch,Cassandra
