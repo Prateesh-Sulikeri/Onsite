@@ -6,6 +6,7 @@ pub mod audio;
 pub mod builtin;
 pub mod engine;
 pub mod models;
+pub mod score;
 pub mod stt;
 
 use crate::error::{AppError, Result};
