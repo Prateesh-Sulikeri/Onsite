@@ -102,7 +102,7 @@ impl SentenceSplitter {
     fn emit_prose(&mut self, text: &str, force: bool, out: &mut Vec<Piece>) {
         let mut rest = text;
         loop {
-            let n = complete_prefix_len_first(rest);
+            let n = first_sentence_len(rest);
             let (sentence, tail) = match n {
                 Some(n) => rest.split_at(n),
                 None if force => (rest, ""),
@@ -135,8 +135,9 @@ fn speakable(s: &str) -> String {
     s.trim().trim_start_matches('#').trim().to_string()
 }
 
-/// Byte length of the first complete sentence in `s`, including trailing whitespace.
-fn complete_prefix_len_first(s: &str) -> Option<usize> {
+/// Byte length of the first complete sentence in `s`, including trailing whitespace. None when no sentence
+/// is complete yet. The one sentence-boundary rule: the voice's own splitting uses it too.
+pub fn first_sentence_len(s: &str) -> Option<usize> {
     let bytes = s.as_bytes();
     for (i, c) in s.char_indices() {
         let end = match c {
@@ -166,7 +167,7 @@ fn complete_prefix_len_first(s: &str) -> Option<usize> {
 /// Byte length of all complete sentences at the start of `s`.
 fn complete_prefix_len(s: &str) -> usize {
     let mut total = 0;
-    while let Some(n) = complete_prefix_len_first(&s[total..]) {
+    while let Some(n) = first_sentence_len(&s[total..]) {
         total += n;
     }
     total

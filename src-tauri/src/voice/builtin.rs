@@ -61,18 +61,15 @@ fn words(s: &str) -> usize {
     s.split_whitespace().count()
 }
 
-/// Sentences of `text`, each ending at `.`, `!` or `?` followed by a space (or at the end).
+/// Sentences of `text`, cut by the same rule as the reply splitter (abbreviations and decimals stay whole).
 fn sentences(text: &str) -> Vec<&str> {
     let mut out = Vec::new();
-    let mut start = 0;
-    let b = text.as_bytes();
-    for i in 0..b.len() {
-        if matches!(b[i], b'.' | b'!' | b'?') && b.get(i + 1).is_some_and(|c| c.is_ascii_whitespace()) {
-            out.push(text[start..=i].trim());
-            start = i + 1;
-        }
+    let mut rest = text;
+    while let Some(n) = crate::brain::splitter::first_sentence_len(rest) {
+        out.push(rest[..n].trim());
+        rest = &rest[n..];
     }
-    out.push(text[start..].trim());
+    out.push(rest.trim());
     out.retain(|s| !s.is_empty());
     out
 }
@@ -378,6 +375,13 @@ mod tests {
         assert_eq!(speaker_id("nobody"), 5, "unknown keys fall back to the default voice");
         assert!(VOICES.iter().all(|v| (0..10).contains(&v.3)));
         assert!(tempo("ethan_brooks") > tempo("priya_shah"), "Ethan is sped up, Charlotte is not");
+    }
+
+    #[test]
+    fn pieces_use_the_splitter_rules() {
+        // "e.g." does not end a piece any more.
+        assert_eq!(pieces("Use a map, e.g. a hash map. It is fast."), ["Use a map, e.g. a hash map. It is fast."]);
+        assert_eq!(sentences("Use a map, e.g. a hash map. It is fast."), ["Use a map, e.g. a hash map.", "It is fast."]);
     }
 
     #[test]
