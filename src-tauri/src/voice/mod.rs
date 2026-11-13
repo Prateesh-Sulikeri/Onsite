@@ -481,6 +481,7 @@ impl Voice {
                 player.push(&mut rs, &piece.pcm);
             })
             .await?;
+        player.flush(&mut rs);
         first_ms.ok_or_else(|| AppError::Voice("The voice returned no audio.".into()))
     }
 }
@@ -538,6 +539,9 @@ async fn speak_into(
         })
         .await;
     // rtf > 1 = speech is made slower than it plays: the reply will pause between parts.
+    if alive.load(Ordering::SeqCst) && !cut.load(Ordering::SeqCst) {
+        player.flush(&mut rs);
+    }
     let (total_ms, audio_ms) = (started.elapsed().as_millis() as u64, samples as u64 * 1000 / voice.rate().max(1) as u64);
     let rtf_value = total_ms as f32 / audio_ms.max(1) as f32;
     if audio_ms > 0 {

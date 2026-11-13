@@ -8,20 +8,65 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
-/// Linear resampler that keeps its phase across chunks.
+/// Speaker-path rate conversion: sherpa-onnx's filtered resampler (low-pass, then interpolate), so 44.1 kHz
+/// speech reaches a 48 kHz device without the roughness plain interpolation adds. Same rate = untouched.
+/// Falls back to [`Linear`] (with a warning, once) if sherpa can't make one.
+pub struct Resampler(Conv);
+
+enum Conv {
+    Same,
+    Filtered(sherpa_onnx::LinearResampler),
+    Linear(Linear),
+}
+
+impl Resampler {
+    pub fn new(from: u32, to: u32) -> Self {
+        static WARNED: AtomicBool = AtomicBool::new(false);
+        if from == to {
+            return Self(Conv::Same);
+        }
+        match sherpa_onnx::LinearResampler::create(from as i32, to as i32) {
+            Some(r) => Self(Conv::Filtered(r)),
+            None => {
+                if !WARNED.swap(true, Ordering::SeqCst) {
+                    tracing::warn!(from, to, "filtered resampler unavailable; using linear");
+                }
+                Self(Conv::Linear(Linear::new(from, to)))
+            }
+        }
+    }
+
+    pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
+        match &mut self.0 {
+            Conv::Same => input.to_vec(),
+            Conv::Filtered(r) => r.resample(input, false),
+            Conv::Linear(l) => l.process(input),
+        }
+    }
+
+    /// The samples still held inside the filter. Call once after the last chunk of a reply.
+    pub fn flush(&mut self) -> Vec<f32> {
+        match &mut self.0 {
+            Conv::Filtered(r) => r.resample(&[], true),
+            Conv::Same | Conv::Linear(_) => Vec::new(),
+        }
+    }
+}
+
+/// Linear resampler that keeps its phase across chunks. The mic path uses it after its own low-pass.
 #[derive(Debug, Clone)]
-pub struct Resampler {
+struct Linear {
     step: f64,
     pos: f64,
     prev: f32,
 }
 
-impl Resampler {
-    pub fn new(from: u32, to: u32) -> Self {
+impl Linear {
+    fn new(from: u32, to: u32) -> Self {
         Self { step: from as f64 / to as f64, pos: 0.0, prev: 0.0 }
     }
 
-    pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
+    fn process(&mut self, input: &[f32]) -> Vec<f32> {
         if (self.step - 1.0).abs() < f64::EPSILON {
             return input.to_vec();
         }
@@ -89,7 +134,7 @@ impl LowPass {
 #[derive(Debug, Clone)]
 pub struct Downsampler {
     lp: Option<LowPass>,
-    rs: Resampler,
+    rs: Linear,
 }
 
 impl Downsampler {
@@ -99,7 +144,7 @@ impl Downsampler {
             // Pass to ~0.75 * Nyquist, stop by ~1.1 * Nyquist, so nothing folds below ~6 kHz at 16 kHz out.
             LowPass::new(from, nyq * 0.925, nyq * 0.35)
         });
-        Self { lp, rs: Resampler::new(from, to) }
+        Self { lp, rs: Linear::new(from, to) }
     }
 
     pub fn process(&mut self, input: &mut [f32]) -> Vec<f32> {
@@ -450,10 +495,18 @@ impl Player {
 
     /// Queues mono PCM, resampled to the device rate. A full ring waits up to 2 s for room, then drops the rest.
     pub fn push(&self, resampler: &mut Resampler, pcm: &[i16]) {
-        let out = resampler.process(&i16_to_f32(pcm));
+        self.push_f32(&resampler.process(&i16_to_f32(pcm)));
+    }
+
+    /// Queues what the resampler still holds; call after the last chunk of a reply.
+    pub fn flush(&self, resampler: &mut Resampler) {
+        self.push_f32(&resampler.flush());
+    }
+
+    fn push_f32(&self, out: &[f32]) {
         let mut guard = self.producer.lock().unwrap();
         let Some(prod) = guard.as_mut() else { return };
-        let mut rest = &out[..];
+        let mut rest = out;
         let waited = std::time::Instant::now();
         while !rest.is_empty() {
             let n = prod.slots().min(rest.len());
@@ -689,31 +742,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resample_length_and_dc() {
-        let mut r = Resampler::new(48_000, 16_000);
-        let mut total = 0;
-        for _ in 0..10 {
-            let out = r.process(&[0.5; 480]);
-            assert!(out.iter().all(|v| (v - 0.5).abs() < 1e-6));
-            total += out.len();
+    fn playback_resampler_keeps_level_and_length() {
+        let input = tone(44_100, 1000.0, 1.0);
+        let mut r = Resampler::new(44_100, 48_000);
+        let mut out = Vec::new();
+        for c in input.chunks(441) {
+            out.extend(r.process(c));
         }
-        assert!((1599..=1601).contains(&total), "got {total}");
-        let mut up = Resampler::new(24_000, 48_000);
-        let n: usize = (0..10).map(|_| up.process(&[0.0; 240]).len()).sum();
-        assert!((4798..=4800).contains(&n), "got {n}");
-    }
-
-    #[test]
-    fn resample_is_continuous_across_chunks() {
-        let ramp: Vec<f32> = (0..300).map(|i| i as f32 / 300.0).collect();
-        let mut one = Resampler::new(44_100, 16_000);
-        let whole = one.process(&ramp);
-        let mut two = Resampler::new(44_100, 16_000);
-        let mut parts = two.process(&ramp[..137]);
-        parts.extend(two.process(&ramp[137..]));
-        assert_eq!(whole.len(), parts.len());
-        assert!(whole.iter().zip(&parts).all(|(a, b)| (a - b).abs() < 1e-5));
-        assert!(parts.windows(2).all(|w| w[1] >= w[0] - 1e-6), "not monotonic");
+        out.extend(r.flush());
+        assert!((47_500..=48_500).contains(&out.len()), "{}", out.len());
+        let level = rms(&out[4800..43_200]);
+        assert!((level / (0.5 / 2f32.sqrt()) - 1.0).abs() < 0.05, "{level}");
+        // Same rate: untouched.
+        assert_eq!(Resampler::new(48_000, 48_000).process(&[0.25; 10]), vec![0.25; 10]);
     }
 
     fn tone(rate: u32, hz: f32, secs: f32) -> Vec<f32> {
@@ -725,7 +766,7 @@ mod tests {
     fn rms_after(hz: f32, filtered: bool) -> f32 {
         let input = tone(48_000, hz, 1.0);
         let mut ds = Downsampler::new(48_000, 16_000);
-        let mut plain = Resampler::new(48_000, 16_000);
+        let mut plain = Linear::new(48_000, 16_000);
         let mut out = Vec::new();
         for c in input.chunks(480) {
             let mut c = c.to_vec();
