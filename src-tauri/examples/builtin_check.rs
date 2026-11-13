@@ -9,7 +9,10 @@
 //! Speech goes to `target/voice-spike/out/builtin/`. Models are `sherpa-onnx-supertonic-3-tts-int8-2026-05-11` and Parakeet.
 
 use onsite_lib::voice::audio::{f32_to_i16, i16_to_f32, Resampler, MIC_RATE};
-use onsite_lib::voice::builtin::{ParakeetStt, Supertonic, VOICES};
+use onsite_lib::voice::builtin::{pieces, speaker_id, tempo, ParakeetStt, Supertonic, Synth, VOICES};
+use onsite_lib::voice::health::Health;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use onsite_lib::voice::models;
 use onsite_lib::voice::stt::{clean_transcript, domain_vocab};
 use std::path::{Path, PathBuf};
@@ -20,6 +23,12 @@ const LINES: [&str; 3] = [
     "Okay.",
     "Walk me through how you would make a payment endpoint idempotent, using Redis and PostgreSQL.",
 ];
+
+/// One piece through the round's guarded generation, at speed 1.0 and 8 steps.
+fn speak(tts: &Supertonic, text: &str, clip: &str) -> Vec<i16> {
+    let synth = Synth { sid: speaker_id(clip), speed: tempo(clip), steps: 8 };
+    tts.speak_piece(text, &synth, &Arc::new(AtomicBool::new(false)), &Health::default()).expect("speak").pcm
+}
 
 #[tokio::main]
 async fn main() {
@@ -64,17 +73,12 @@ async fn main() {
     for (clip, name, _, _) in VOICES {
         for (n, line) in LINES.iter().enumerate() {
             let line = line.replace("{name}", name);
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
             let start = Instant::now();
-            let (tts2, line2) = (tts.clone(), line.clone());
-            let job = tokio::task::spawn_blocking(move || tts2.speak(&line2, clip, 1.0, tx));
             let (mut pcm, mut first) = (Vec::new(), None);
-            while let Some(c) = rx.recv().await {
+            for part in pieces(&line, 14) {
+                pcm.extend(speak(&tts, &part, clip));
                 first.get_or_insert(start.elapsed().as_millis());
-                pcm.extend(c);
             }
-            let res = job.await.unwrap();
-            res.expect("speak");
             let total = start.elapsed().as_millis();
             let secs = pcm.len() as f32 / tts.rate as f32;
             println!("{name} line {}: first audio {} ms, total {total} ms, audio {secs:.1} s, rtf {:.2}", n + 1, first.unwrap_or(0), total as f32 / 1000.0 / secs.max(0.01));
@@ -85,18 +89,12 @@ async fn main() {
 
     // A long reply spoken whole vs in the clause pieces a round uses: first audio and total time.
     let long = "Okay, so imagine the payments service gets the same request twice because the client retried after a timeout, and the first attempt actually succeeded on our side. How would you make sure the customer is charged exactly once, and what would you store in Redis versus PostgreSQL?";
-    for (label, parts) in [("whole", vec![long.to_string()]), ("pieces", onsite_lib::voice::builtin::pieces(long))] {
+    for (label, parts) in [("whole", vec![long.to_string()]), ("pieces", pieces(long, 14))] {
         let start = Instant::now();
         let (mut first, mut samples) = (None, 0usize);
         for part in &parts {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
-            let (tts2, part2) = (tts.clone(), part.clone());
-            let job = tokio::task::spawn_blocking(move || tts2.speak(&part2, VOICES[0].0, 1.0, tx));
-            while let Some(c) = rx.recv().await {
-                first.get_or_insert(start.elapsed().as_millis());
-                samples += c.len();
-            }
-            job.await.unwrap().expect("speak");
+            samples += speak(&tts, part, VOICES[0].0).len();
+            first.get_or_insert(start.elapsed().as_millis());
         }
         let secs = samples as f32 / tts.rate as f32;
         println!("long reply, {label} ({} calls): first audio {} ms, total {} ms, audio {secs:.1} s", parts.len(), first.unwrap_or(0), start.elapsed().as_millis());

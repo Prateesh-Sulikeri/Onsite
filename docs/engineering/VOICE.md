@@ -14,8 +14,11 @@ numbers were measured with throwaway probes that were deleted; the Supertonic nu
 
 | File | Contents |
 |---|---|
-| `engine.rs` | `PersonaVoice {name, clip}`, `Engine {tts, stt}` (`load(state)` loads both models, `voice(&settings)` -> `Tts`), `Tts` (`name`, `rate`, `speak(text, speed, on_pcm)`) |
-| `builtin.rs` | `Supertonic::{load, speak}` (one sherpa call per part, sentence callback -> mpsc, audio capped at 0.7 s/word + 2.5 s), `ParakeetStt::{load, transcribe, caption}`, `Cache` (models kept in `AppState.builtin`), `VOICES`, `speaker_id`, `clip_for_gender`, `known_clip` |
+| `engine.rs` | `PersonaVoice {name, clip}`, `Engine {tts, stt, lexicon}` (`load(state)` loads both models and `prompts/pronounce.json`, `voice(&settings)` -> `Tts`), `Tts` (`name`, `rate`, `speak(text, speed, steps, max_piece_words, health, on_piece)`: `to_speech` first, nothing said when empty) |
+| `builtin.rs` | `Supertonic::{load, load_with, synth, speak_piece}` (`synth` = one raw sherpa call; `speak_piece` = guarded: `judge` length check, one retry at +2 steps when too short, cut + 30 ms fade when too long, `trim_silence`, 10 ms edge fades, `gap_ms` after), `Synth {sid, speed, steps}`, `Piece {pcm, ends_sentence}`, `pieces(text, max_words)` (sentences via `splitter::first_sentence_len`), `ParakeetStt::{load, load_with, transcribe, transcribe_f32, caption}`, `Cache`, `VOICES`, `speaker_id`, `clip_for_gender`, `known_clip` |
+| `speech_text.rs` | `to_speech(text, &Lexicon)`: written -> spoken text for the voice only (markdown, links, long values, lexicon, big-O, brackets, operators, numbers/units/codes, identifiers). `Lexicon::load` reads `prompts/pronounce.json` (empty + warning on error) |
+| `health.rs` | `Health` counters per round (replies, pieces, dry spells, cap hits, retries, RTF p50/p90); `Voice::end` logs one `voice health` line |
+| `score.rs` | Bench scoring: `words`, `wer` (with missing words), `term_recall` |
 | `audio.rs` | `Mic`, `Player` (one lock over the sample queue + `Jitter` + `streaming` flag), `Jitter::next` (prebuffer and dry-spell rule, testable), `set_streaming`, `take_underruns`, `Vad`, `LowPass` (windowed sinc), `Downsampler` (->16 kHz), `Resampler`, `on_audio_thread`, `set_devices`, `list_devices` |
 | `models.rs` | pinned list `PINS` (id, url, bytes, sha256, unpacked), `install` (also deletes the retired Pocket folder), `delete`, `status`, `installed`, `allowed_host`, `Progress` (`voice_model` event) |
 | `stt.rs` | `listen`/`listen_with`/`run`: mic -> VAD -> segments -> Parakeet -> `ListenEnd {Text{text,stt_ms}, Cancelled{heard}, NoSpeech}`; `spawn_decode` (finished segment), `spawn_caption` (every 500 ms); `SttState`; `clean_transcript` (`collapse_repeats`, `fix_vocab` Levenshtein); `domain_vocab` |
@@ -29,11 +32,12 @@ numbers were measured with throwaway probes that were deleted; the Supertonic nu
   Only github.com and `*.githubusercontent.com` (GitHub's release CDN redirect) over https; redirect policy enforces it.
   Disk check: (download + unpacked) x 1.1 free, else "Needs X GB free to install ...". Network error: "Couldn't reach GitHub. Check your connection and press Retry."
 - TTS: Supertonic 3 int8, CPU, threads = logical CPUs / 2 clamped 1-4 (`threads()`, also Parakeet; all cores starved the audio threads),
-  `lang: "en"` in `extra`, `num_steps` = `STEPS` (8), `speed` = persona pace x user speed. No reference clip: the voice is a preset speaker id.
+  `lang: "en"` in `extra`, steps 8 (`STEPS`, mod.rs), `speed` = persona pace x user speed. No reference clip: the voice is a preset speaker id.
   Output 44.1 kHz (read from the model). Two voices: Ethan (`ethan_brooks`, speaker 5, male) and Charlotte (`priya_shah`, speaker 0, female).
   Speaker ids are inferred from median pitch of the model's own output (0-4 female, 5-9 male, 2026-11-02): not yet checked by ear.
-  The model reads text directly (no lexicon, no phonemes). Panel persona -> `Persona.clip` via `voice.gender`. No Indian accents.
-  The model calls back per finished part, so `Tts::speak` sends `builtin::pieces(text)` one call each: sentences > 14 words cut at a
+  The model reads raw characters, so `Tts::speak` runs `speech_text::to_speech` first ("1.5 ms" -> "one point five milliseconds",
+  "PostgreSQL" -> lexicon). The screen and transcript keep the original text. Panel persona -> `Persona.clip` via `voice.gender`.
+  `Tts::speak` sends `builtin::pieces(text, 14)` one guarded call each (`speak_piece`): sentences > 14 words cut at a
   `, ; :` and the em dash character (U+2014) near the middle (parts >= 4 words), short ones packed to 14. Measured 2026-11-02 (`builtin_check`):
   six-sentence reply, first audio 1.7 s for the parts vs 4.1 s for the whole 18.5 s reply in one call.
 - STT: Parakeet TDT v2 int8 (`nemo_transducer`, CPU, 4 threads), offline model, English only. Finished segment
@@ -120,9 +124,19 @@ voice · R11 typed fallback · R12 device switch + lost-mic message · R13 Engli
 
 ## Change recipes
 
-- Tune latency: `WAIT_IDLE/WAIT_BUSY/SHORT_*/MAX_BATCH_CHARS` (mod.rs), `MAX_PIECE_WORDS` (builtin.rs), `SEG_*` (stt.rs), `STEPS` (builtin.rs).
+- Tune latency: `WAIT_IDLE/WAIT_BUSY/SHORT_*/MAX_BATCH_CHARS` (mod.rs), `PIECE_WORDS` and `STEPS` (mod.rs), `SEG_*` (stt.rs).
   Measure via `voice latency` events and the `tts` log line (`audio_ms`, `rtf`; > 1 = pauses mid-reply). `builtin_check` compares whole vs pieces.
 - New persona voice: set `voice.gender` in `panels.json`; the clip follows it.
+- A term said wrong: add `{"term", "as"}` to `prompts/pronounce.json` and check with `voice_bench tts --set tech`.
+- Measure a change: `cargo run --release --example voice_bench -- tts|sweep|stt|silence` (models in `D:\cargo-target\voice-bench\models`);
+  results in `docs/plans/voice-bench-results.md`.
+
+## Measured facts (2026-11-13, sherpa-onnx 2.0.1, owner's Ryzen 7 250)
+
+- sherpa-onnx does not split Supertonic input: two sentences gave one callback.
+- ONNX Runtime thread spinning can't be switched off through sherpa-onnx 2.0.1 (no `session_options`/spin field in `sherpa-onnx-sys`).
+- After a synthesis the process uses 0% CPU while idle (sampled 5 s), so the threads don't spin between replies.
+- Parakeet writes numbers as digits ("10,000", "99.9%", "P99"), so the bench scores both sides through `to_speech`.
 
 ## Gaps
 

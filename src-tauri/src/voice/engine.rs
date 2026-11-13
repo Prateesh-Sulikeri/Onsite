@@ -1,11 +1,13 @@
 //! The speech engine: Supertonic TTS and Parakeet STT, run inside Onsite through `sherpa-onnx`.
 //! `voice/mod.rs` speaks through [`Tts`] and `stt.rs` listens through [`Engine::stt`].
 
-use super::builtin::{self, ParakeetStt, Supertonic};
+use super::builtin::{self, ParakeetStt, Piece, Supertonic, Synth};
+use super::health::Health;
 use super::speech_text::{to_speech, Lexicon};
 use super::VoiceSettings;
 use crate::error::{AppError, Result};
 use crate::AppState;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// A panel interviewer's voice: who they are and which shipped clip they use (`builtin::VOICES`).
@@ -58,30 +60,52 @@ impl Tts {
         self.tts.rate
     }
 
-    /// Speaks `text`, calling `on_pcm` with PCM16 as it arrives. The text is first rewritten for the ear
-    /// (numbers, symbols, tech terms); when nothing is left to say, no TTS call is made.
-    pub async fn speak(&self, text: &str, speed: f32, mut on_pcm: impl FnMut(&[i16])) -> Result<()> {
+    /// Speaks `text`, calling `on_piece` with each generated piece (PCM16 at [`Tts::rate`]). The text is first
+    /// rewritten for the ear (numbers, symbols, tech terms); when nothing is left to say, no TTS call is made.
+    /// Dropping the future (a cut-in) stops the generator at once.
+    pub async fn speak(
+        &self,
+        text: &str,
+        speed: f32,
+        steps: i32,
+        max_piece_words: usize,
+        health: Arc<Health>,
+        mut on_piece: impl FnMut(Piece),
+    ) -> Result<()> {
         let text = to_speech(text, &self.lexicon);
         if text.is_empty() {
             return Ok(());
         }
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<i16>>();
-        let (tts, clip) = (self.tts.clone(), self.clip);
-        // One call per clause-sized piece, so the first audio and every later gap stay short on a slow CPU.
+        let synth = Synth { sid: builtin::speaker_id(self.clip), speed: speed * builtin::tempo(self.clip), steps };
+        let stop = Arc::new(AtomicBool::new(false));
+        let _stop_on_drop = StopOnDrop(stop.clone());
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Piece>();
+        let tts = self.tts.clone();
         let job = tokio::task::spawn_blocking(move || -> Result<()> {
-            for piece in builtin::pieces(&text) {
-                if tx.is_closed() {
+            for piece in builtin::pieces(&text, max_piece_words) {
+                if stop.load(Ordering::SeqCst) {
                     break;
                 }
-                tts.speak(&piece, clip, speed, tx.clone())?;
+                let p = tts.speak_piece(&piece, &synth, &stop, &health)?;
+                if tx.send(p).is_err() {
+                    break;
+                }
             }
             Ok(())
         });
-        // Dropping this future (a cut-in) drops `rx`, which makes the generator stop at its next sentence.
-        while let Some(pcm) = rx.recv().await {
-            on_pcm(&pcm);
+        while let Some(p) = rx.recv().await {
+            on_piece(p);
         }
         job.await.map_err(|e| AppError::Voice(e.to_string()))??;
         Ok(())
+    }
+}
+
+/// Sets the stop flag when dropped, so a cancelled `speak` ends the generation in progress.
+struct StopOnDrop(Arc<AtomicBool>);
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
     }
 }

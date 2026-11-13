@@ -78,6 +78,10 @@ pub enum VoiceEvent {
     Held { text: String },
 }
 
+/// Flow-matching steps and piece size for every call (one setting for every machine until tiers exist).
+const STEPS: i32 = 8;
+const PIECE_WORDS: usize = 14;
+
 /// Sentences shorter than this ("Okay.", "Got it.", "Hey Prateesh.") wait briefly for
 /// the next one and go to the TTS together. Fewer tiny calls means fewer gaps.
 const SHORT_WORDS: usize = 4;
@@ -242,7 +246,7 @@ impl Voice {
             // Warm up while Claude writes its first reply (loads the voice clip, ~1 s); sentences queue meanwhile.
             // Sent to the loader once the voice has spoken (or can't).
             let t = Instant::now();
-            let warm = match voice.speak("Okay, let's begin.", settings.speed, |_| {}).await {
+            let warm = match voice.speak("Okay, let's begin.", settings.speed, STEPS, PIECE_WORDS, Default::default(), |_| {}).await {
                 Ok(()) => {
                     tracing::info!(ms = t.elapsed().as_millis() as u64, "voice warm for the round");
                     Ok(voice.name())
@@ -461,9 +465,9 @@ impl Voice {
         let mut first_ms = None;
         let mut rs = player.resampler_from(voice.rate());
         voice
-            .speak(text, settings.speed, |pcm| {
+            .speak(text, settings.speed, STEPS, PIECE_WORDS, Default::default(), |piece| {
                 first_ms.get_or_insert(started.elapsed().as_millis() as u64);
-                player.push(&mut rs, pcm);
+                player.push(&mut rs, &piece.pcm);
             })
             .await?;
         first_ms.ok_or_else(|| AppError::Voice("The voice returned no audio.".into()))
@@ -480,7 +484,7 @@ async fn speak_into(
     answered_at: &Mutex<Option<Instant>>,
     alive: &AtomicBool,
     cut: &AtomicBool,
-    health: &Health,
+    health: &Arc<Health>,
     emit: &impl Fn(VoiceEvent),
 ) {
     let mut rs = player.resampler_from(voice.rate());
@@ -488,7 +492,8 @@ async fn speak_into(
     let mut first_ms: Option<u64> = None;
     let mut samples = 0usize;
     let res = voice
-        .speak(text, settings.speed, |pcm| {
+        .speak(text, settings.speed, STEPS, PIECE_WORDS, health.clone(), |piece| {
+            let pcm = &piece.pcm;
             samples += pcm.len();
             if !alive.load(Ordering::SeqCst) || cut.load(Ordering::SeqCst) {
                 return;
