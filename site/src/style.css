@@ -344,3 +344,9 @@ a.video:hover{ color: var(--ink); background: var(--surface-2); }
 .dlg-steps{ margin: 6px 24px 0; padding-left: 20px; display: grid; gap: 10px; color: var(--ink-2); font-size: .95rem; }
 .dlg-steps li::marker{ color: var(--accent-text); font-weight: 700; }
 .dlg-steps .dlg-cmd{ margin-top: 6px; }
+/* Home page: episode thumbnails as video links ("Coming soon" until the link is set). */
+.video-guides{ margin-top: 28px; }
+a.vidcard{ display: block; color: var(--ink); }
+a.vidcard:hover .window{ border-color: var(--accent-line); }
+.vidstate{ color: var(--muted); font-size: .9rem; }
+.vidstate.soon{ color: var(--accent); }
