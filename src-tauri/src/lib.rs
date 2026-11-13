@@ -71,7 +71,7 @@ pub struct AppState {
     pub projects: projects::Projects,
     pub voice: voice::Voice,
     /// Built-in voice engine models, loaded on first use and kept.
-    pub builtin: voice::builtin::Cache,
+    pub builtin: std::sync::Arc<voice::builtin::Cache>,
     /// Bumped by every round start and by `cancel_start`; a start whose number is stale stops loading.
     pub prep_gen: std::sync::atomic::AtomicU64,
 }

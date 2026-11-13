@@ -10,6 +10,7 @@ pub mod models;
 pub mod score;
 pub mod speech_text;
 pub mod stt;
+pub mod tier;
 
 use crate::error::{AppError, Result};
 use audio::Player;
@@ -23,6 +24,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::oneshot;
 use engine::{Engine, PersonaVoice, Tts};
 use health::{Health, Summary};
+use tier::{Drift, Tier};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -78,9 +80,8 @@ pub enum VoiceEvent {
     Held { text: String },
 }
 
-/// Flow-matching steps and piece size for every call (one setting for every machine until tiers exist).
-const STEPS: i32 = 8;
-const PIECE_WORDS: usize = 14;
+/// Measures this machine's tier: speak `TIER_LINE` twice at Fast settings and time the second run.
+const TIER_LINE: &str = "Okay, let's begin. Thanks for joining me today.";
 
 /// Sentences shorter than this ("Okay.", "Got it.", "Hey Prateesh.") wait briefly for
 /// the next one and go to the TTS together. Fewer tiny calls means fewer gaps.
@@ -198,7 +199,7 @@ impl Voice {
 
     /// Starts the voice loop for a round. Speech follows `say`/`turn_done` calls, but nothing
     /// plays until `go` is sent (or dropped), so the loader can finish first.
-    pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings, engine: Engine) -> Result<VoiceStart> {
+    pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings, engine: Engine, cache: Arc<builtin::Cache>) -> Result<VoiceStart> {
         self.end();
         let player = self.player()?;
         let (tx, mut rx) = unbounded_channel::<Cmd>();
@@ -246,7 +247,12 @@ impl Voice {
             // Warm up while Claude writes its first reply (loads the voice clip, ~1 s); sentences queue meanwhile.
             // Sent to the loader once the voice has spoken (or can't).
             let t = Instant::now();
-            let warm = match voice.speak("Okay, let's begin.", settings.speed, STEPS, PIECE_WORDS, Default::default(), |_| {}).await {
+            let warmed = match cache.tier() {
+                Some(_) => voice.speak("Okay, let's begin.", settings.speed, engine.tier.steps(), engine.tier.piece_words(), Default::default(), |_| {}).await,
+                None => measure_tier(&voice, &cache).await,
+            };
+            let mut drift = Drift::new(cache.tier().unwrap_or(engine.tier));
+            let warm = match warmed {
                 Ok(()) => {
                     tracing::info!(ms = t.elapsed().as_millis() as u64, "voice warm for the round");
                     Ok(voice.name())
@@ -308,9 +314,14 @@ impl Voice {
                         }
                         // Playback runs from the Player queue, so the next batch is generated
                         // while this one plays. A cut-in abandons the call still generating.
-                        tokio::select! {
-                            _ = speak_into(&player, &voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &task_health, &emit) => {}
-                            _ = until_set(&task_cut) => {}
+                        let tier = drift.tier();
+                        let rtf = tokio::select! {
+                            r = speak_into(&player, &voice, &settings, tier, &batch.0, &task_answered, &task_alive, &task_cut, &task_health, &emit) => r,
+                            _ = until_set(&task_cut) => None,
+                        };
+                        if let Some(slower) = rtf.and_then(|r| drift.piece(r)) {
+                            cache.set_tier(slower);
+                            tracing::info!(tier = slower.label(), "voice tier lowered during the round");
                         }
                     }
                     Cmd::TurnDone { ended } => {
@@ -465,7 +476,7 @@ impl Voice {
         let mut first_ms = None;
         let mut rs = player.resampler_from(voice.rate());
         voice
-            .speak(text, settings.speed, STEPS, PIECE_WORDS, Default::default(), |piece| {
+            .speak(text, settings.speed, voice.tier.steps(), voice.tier.piece_words(), Default::default(), |piece| {
                 first_ms.get_or_insert(started.elapsed().as_millis() as u64);
                 player.push(&mut rs, &piece.pcm);
             })
@@ -474,25 +485,42 @@ impl Voice {
     }
 }
 
+/// Speaks [`TIER_LINE`] twice at Fast settings (audio discarded), times the second run and stores the tier.
+async fn measure_tier(voice: &Tts, cache: &builtin::Cache) -> Result<()> {
+    let mut rtf = 0.0;
+    for _ in 0..2 {
+        let started = Instant::now();
+        let mut samples = 0usize;
+        voice.speak(TIER_LINE, 1.0, Tier::Fast.steps(), Tier::Fast.piece_words(), Default::default(), |p| samples += p.pcm.len()).await?;
+        rtf = started.elapsed().as_secs_f32() / (samples as f32 / voice.rate().max(1) as f32).max(0.01);
+    }
+    let tier = Tier::from_rtf(rtf);
+    cache.set_tier(tier);
+    tracing::info!(rtf, tier = tier.label(), "voice tier");
+    Ok(())
+}
+
 /// One TTS call into the speaker queue. Errors are reported, never replaced by another voice.
+/// Returns the call's real-time factor when it produced audio.
 #[allow(clippy::too_many_arguments)]
 async fn speak_into(
     player: &Player,
     voice: &Tts,
     settings: &VoiceSettings,
+    tier: Tier,
     text: &str,
     answered_at: &Mutex<Option<Instant>>,
     alive: &AtomicBool,
     cut: &AtomicBool,
     health: &Arc<Health>,
     emit: &impl Fn(VoiceEvent),
-) {
+) -> Option<f32> {
     let mut rs = player.resampler_from(voice.rate());
     let started = Instant::now();
     let mut first_ms: Option<u64> = None;
     let mut samples = 0usize;
     let res = voice
-        .speak(text, settings.speed, STEPS, PIECE_WORDS, health.clone(), |piece| {
+        .speak(text, settings.speed, tier.steps(), tier.piece_words(), health.clone(), |piece| {
             let pcm = &piece.pcm;
             samples += pcm.len();
             if !alive.load(Ordering::SeqCst) || cut.load(Ordering::SeqCst) {
@@ -521,6 +549,7 @@ async fn speak_into(
         tracing::warn!("tts failed: {e}");
         emit(VoiceEvent::Error { message: e.to_string() });
     }
+    (audio_ms > 0).then_some(rtf_value)
 }
 
 /// Resolves once `flag` is set. Polled, so a cut-in from an earlier turn can't leave a stale wake-up.

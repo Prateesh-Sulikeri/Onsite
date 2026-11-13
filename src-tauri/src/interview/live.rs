@@ -186,7 +186,7 @@ async fn start_voice(app: &AppHandle, round_id: i64, settings: &crate::voice::Vo
             return None;
         }
     };
-    match state.voice.begin(app, round_id, settings.clone(), engine) {
+    match state.voice.begin(app, round_id, settings.clone(), engine, state.builtin.clone()) {
         Ok(v) => {
             prep(app, "speaker", "ok", "Open");
             Some(v)

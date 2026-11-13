@@ -276,6 +276,8 @@ pub struct VoiceStatus {
     pub models: Vec<crate::voice::models::ModelInfo>,
     /// The shipped interviewer voices.
     pub voices: Vec<BuiltinVoice>,
+    /// This machine's measured tier ("fast", "okay", "slow"), once a round has measured it.
+    pub tier: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -289,7 +291,8 @@ pub struct BuiltinVoice {
 pub fn voice_status(state: State<'_, AppState>) -> VoiceStatus {
     let models = crate::voice::models::status(&state.data_dir);
     let voices = crate::voice::builtin::VOICES.iter().map(|v| BuiltinVoice { id: v.0, name: v.1, accent: v.2 }).collect();
-    VoiceStatus { up: models.iter().all(|m| m.installed), models, voices }
+    let tier = state.builtin.tier().map(|t| t.label());
+    VoiceStatus { up: models.iter().all(|m| m.installed), models, voices, tier }
 }
 
 /// Downloads one built-in voice model (progress arrives as `voice_model` events). Returns when it is installed.

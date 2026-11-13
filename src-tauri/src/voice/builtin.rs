@@ -5,6 +5,7 @@
 
 use super::health::Health;
 use super::models::{self, Pin};
+use super::tier::Tier;
 use crate::error::{AppError, Result};
 use serde_json::json;
 use sherpa_onnx::{
@@ -357,6 +358,8 @@ impl ParakeetStt {
 pub struct Cache {
     tts: Mutex<Option<Arc<Supertonic>>>,
     stt: Mutex<Option<Arc<ParakeetStt>>>,
+    /// This machine's tier, measured at the first warm-up and kept for later rounds.
+    tier: Mutex<Option<Tier>>,
 }
 
 fn not_installed(p: &Pin) -> AppError {
@@ -395,10 +398,19 @@ impl Cache {
         Ok(s)
     }
 
-    /// Drops the loaded models (after a delete, or "Reload models").
+    /// Drops the loaded models (after a delete, or "Reload models"). The tier is measured again.
     pub fn unload(&self) {
         *self.tts.lock().unwrap() = None;
         *self.stt.lock().unwrap() = None;
+        *self.tier.lock().unwrap() = None;
+    }
+
+    pub fn tier(&self) -> Option<Tier> {
+        *self.tier.lock().unwrap()
+    }
+
+    pub fn set_tier(&self, t: Tier) {
+        *self.tier.lock().unwrap() = Some(t);
     }
 }
 

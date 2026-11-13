@@ -17,6 +17,7 @@ numbers were measured with throwaway probes that were deleted; the Supertonic nu
 | `engine.rs` | `PersonaVoice {name, clip}`, `Engine {tts, stt, lexicon}` (`load(state)` loads both models and `prompts/pronounce.json`, `voice(&settings)` -> `Tts`), `Tts` (`name`, `rate`, `speak(text, speed, steps, max_piece_words, health, on_piece)`: `to_speech` first, nothing said when empty) |
 | `builtin.rs` | `Supertonic::{load, load_with, synth, speak_piece}` (`synth` = one raw sherpa call; `speak_piece` = guarded: `judge` length check, one retry at +2 steps when too short, cut + 30 ms fade when too long, `trim_silence`, 10 ms edge fades, `gap_ms` after), `Synth {sid, speed, steps}`, `Piece {pcm, ends_sentence}`, `pieces(text, max_words)` (sentences via `splitter::first_sentence_len`), `ParakeetStt::{load, load_with, transcribe, transcribe_f32, caption}`, `Cache`, `VOICES`, `speaker_id`, `clip_for_gender`, `known_clip` |
 | `speech_text.rs` | `to_speech(text, &Lexicon)`: written -> spoken text for the voice only (markdown, links, long values, lexicon, big-O, brackets, operators, numbers/units/codes, identifiers). `Lexicon::load` reads `prompts/pronounce.json` (empty + warning on error) |
+| `tier.rs` | `Tier {Fast, Ok, Slow}` from warm-up RTF (< 0.35, < 0.7): steps 8/6/5, piece words 40/24/14, captions 0.5 s/1 s/off, prebuffer 300/500/800 ms. Measured once per app run (`TIER_LINE` twice, second run timed; kept in `Cache`, cleared by Reload models). `Drift` lowers it mid-round when the median RTF of the last 5 calls is over the bound x 1.2. Settings > Voice shows "This laptop: ..." |
 | `health.rs` | `Health` counters per round (replies, pieces, dry spells, cap hits, retries, RTF p50/p90); `Voice::end` logs one `voice health` line |
 | `score.rs` | Bench scoring: `words`, `wer` (with missing words), `term_recall` |
 | `audio.rs` | `Mic`, `Player` (one lock over the sample queue + `Jitter` + `streaming` flag), `Jitter::next` (prebuffer and dry-spell rule, testable), `set_streaming`, `take_underruns`, `Vad`, `LowPass` (windowed sinc), `Downsampler` (->16 kHz), `Resampler`, `on_audio_thread`, `set_devices`, `list_devices` |
@@ -32,7 +33,7 @@ numbers were measured with throwaway probes that were deleted; the Supertonic nu
   Only github.com and `*.githubusercontent.com` (GitHub's release CDN redirect) over https; redirect policy enforces it.
   Disk check: (download + unpacked) x 1.1 free, else "Needs X GB free to install ...". Network error: "Couldn't reach GitHub. Check your connection and press Retry."
 - TTS: Supertonic 3 int8, CPU, threads = logical CPUs / 2 clamped 1-4 (`threads()`, also Parakeet; all cores starved the audio threads),
-  `lang: "en"` in `extra`, steps 8 (`STEPS`, mod.rs), `speed` = persona pace x user speed. No reference clip: the voice is a preset speaker id.
+  `lang: "en"` in `extra`, steps and piece size from the machine tier (`tier.rs`), `speed` = persona pace x user speed. No reference clip: the voice is a preset speaker id.
   Output 44.1 kHz (read from the model). Two voices: Ethan (`ethan_brooks`, speaker 5, male) and Charlotte (`priya_shah`, speaker 0, female).
   Speaker ids are inferred from median pitch of the model's own output (0-4 female, 5-9 male, 2026-11-02): not yet checked by ear.
   The model reads raw characters, so `Tts::speak` runs `speech_text::to_speech` first ("1.5 ms" -> "one point five milliseconds",
@@ -124,7 +125,7 @@ voice · R11 typed fallback · R12 device switch + lost-mic message · R13 Engli
 
 ## Change recipes
 
-- Tune latency: `WAIT_IDLE/WAIT_BUSY/SHORT_*/MAX_BATCH_CHARS` (mod.rs), `PIECE_WORDS` and `STEPS` (mod.rs), `SEG_*` (stt.rs).
+- Tune latency: `WAIT_IDLE/WAIT_BUSY/SHORT_*/MAX_BATCH_CHARS` (mod.rs), `Tier` settings (tier.rs), `SEG_*` (stt.rs).
   Measure via `voice latency` events and the `tts` log line (`audio_ms`, `rtf`; > 1 = pauses mid-reply). `builtin_check` compares whole vs pieces.
 - New persona voice: set `voice.gender` in `panels.json`; the clip follows it.
 - A term said wrong: add `{"term", "as"}` to `prompts/pronounce.json` and check with `voice_bench tts --set tech`.

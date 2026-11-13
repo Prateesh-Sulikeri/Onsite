@@ -2632,6 +2632,9 @@ function renderBuiltin(){
   if (err) msg("#biMsg", esc(err.message), "err");
   else if (!(VS.models || []).every(m => m.installed)) msg("#biMsg", "Until both models are downloaded, spoken rounds are typed.");
   else msg("#biMsg", "");
+  const tierText = {fast: "This laptop: fast.", okay: "This laptop: okay.", slow: "This laptop: slow. Replies may take longer to start."}[VS.tier];
+  $("#voiceTier").textContent = tierText || "";
+  $("#voiceTier").hidden = !tierText;
   $("#biVoices").innerHTML = (VS.voices || []).map(v => `<div class="row-item vm">
       <span class="row-ic">${esc(v.name[0])}</span><span class="row-tx"><b>${esc(v.name)}</b><span>${esc(v.accent)}</span></span>
       <button class="btn sm" data-play-voice="${esc(v.id)}" ${VS.up ? "" : "disabled"}>${icon("speaker")}Play</button></div>`).join("");

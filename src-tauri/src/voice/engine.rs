@@ -3,6 +3,7 @@
 
 use super::builtin::{self, ParakeetStt, Piece, Supertonic, Synth};
 use super::health::Health;
+use super::tier::Tier;
 use super::speech_text::{to_speech, Lexicon};
 use super::VoiceSettings;
 use crate::error::{AppError, Result};
@@ -23,6 +24,8 @@ pub struct Engine {
     pub stt: Arc<ParakeetStt>,
     /// How tech terms are said (`prompts/pronounce.json`).
     pub lexicon: Arc<Lexicon>,
+    /// This machine's tier; `Tier::Ok` until the first warm-up measures it.
+    pub tier: Tier,
 }
 
 impl Engine {
@@ -30,13 +33,13 @@ impl Engine {
     pub async fn load(state: &AppState) -> Result<Self> {
         let (tts, stt) = tokio::try_join!(state.builtin.tts(&state.data_dir), state.builtin.stt(&state.data_dir))?;
         let lexicon = Arc::new(Lexicon::load(&state.prompts_dir));
-        Ok(Self { tts, stt, lexicon })
+        Ok(Self { tts, stt, lexicon, tier: state.builtin.tier().unwrap_or(Tier::Ok) })
     }
 
     /// The voice for a round: a panel interviewer's, else the one chosen in Settings.
     pub fn voice(&self, v: &VoiceSettings) -> Tts {
         let clip = v.persona.as_ref().map_or(v.builtin_voice.as_str(), |p| p.clip.as_str());
-        Tts::new(&self.tts, clip, self.lexicon.clone())
+        Tts::new(&self.tts, clip, self.lexicon.clone(), self.tier)
     }
 }
 
@@ -44,11 +47,13 @@ pub struct Tts {
     tts: Arc<Supertonic>,
     clip: &'static str,
     lexicon: Arc<Lexicon>,
+    /// Steps and piece size for one-off lines (previews).
+    pub tier: Tier,
 }
 
 impl Tts {
-    pub fn new(tts: &Arc<Supertonic>, clip: &str, lexicon: Arc<Lexicon>) -> Self {
-        Self { tts: tts.clone(), clip: builtin::known_clip(clip), lexicon }
+    pub fn new(tts: &Arc<Supertonic>, clip: &str, lexicon: Arc<Lexicon>, tier: Tier) -> Self {
+        Self { tts: tts.clone(), clip: builtin::known_clip(clip), lexicon, tier }
     }
 
     pub fn name(&self) -> String {
