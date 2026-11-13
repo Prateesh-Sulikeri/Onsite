@@ -4,7 +4,7 @@ use crate::error::{AppError, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -303,21 +303,48 @@ fn fatal(e: &cpal::Error) -> bool {
     matches!(e.kind(), cpal::ErrorKind::StreamInvalidated | cpal::ErrorKind::DeviceNotAvailable)
 }
 
+/// A queue the jitter buffer can read: the device ring in the app, a `VecDeque` in tests.
+pub trait Source {
+    fn len(&self) -> usize;
+    fn pop(&mut self) -> Option<f32>;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl Source for VecDeque<f32> {
+    fn len(&self) -> usize {
+        VecDeque::len(self)
+    }
+    fn pop(&mut self) -> Option<f32> {
+        self.pop_front()
+    }
+}
+
+impl Source for rtrb::Consumer<f32> {
+    fn len(&self) -> usize {
+        self.slots()
+    }
+    fn pop(&mut self) -> Option<f32> {
+        rtrb::Consumer::pop(self).ok()
+    }
+}
+
 /// Playback smoothing for one reply. While the reply is still being generated, the device waits until
 /// `prebuffer` samples are queued, and waits again after any dry spell. Without this, each short part
 /// plays out before the next one is generated, and the candidate hears a gap after almost every sentence.
 #[derive(Default)]
 pub struct Jitter {
-    /// Samples to queue before (re)starting. Set when the stream opens: about 300 ms.
+    /// Samples to queue before (re)starting (from the tier's prebuffer, read each callback).
     pub prebuffer: usize,
     rebuffering: bool,
-    /// Dry spells during the reply so far (taken for the log).
+    /// Dry spells not yet reported to [`Shared::underruns`].
     pub underruns: u32,
 }
 
 impl Jitter {
     /// The next sample for the device, or silence while waiting.
-    pub fn next(&mut self, q: &mut VecDeque<f32>, streaming: bool) -> f32 {
+    pub fn next(&mut self, q: &mut impl Source, streaming: bool) -> f32 {
         if self.rebuffering {
             // Once the reply is complete, play whatever is left.
             if q.len() < self.prebuffer && (streaming || q.is_empty()) {
@@ -325,7 +352,7 @@ impl Jitter {
             }
             self.rebuffering = false;
         }
-        match q.pop_front() {
+        match q.pop() {
             Some(v) => v,
             None => {
                 if streaming {
@@ -338,24 +365,51 @@ impl Jitter {
     }
 }
 
-/// The sample queue and the playback state for it. One lock: the device callback and the speaker both use it.
-#[derive(Default)]
-struct Queue {
-    samples: VecDeque<f32>,
+/// Playback state shared by the producer side and the device callback. Atomics only: the callback never locks.
+struct Shared {
     /// A reply is still being generated: more samples will come.
-    streaming: bool,
-    jitter: Jitter,
+    streaming: AtomicBool,
+    /// Drop everything queued (set by `clear`, done by the callback).
+    flush: AtomicBool,
+    /// Wait for the prebuffer again before playing (a new reply started).
+    rebuffer: AtomicBool,
+    /// Samples written and not yet played.
+    queued: AtomicUsize,
+    prebuffer_ms: AtomicU32,
+    underruns: AtomicU32,
 }
 
-/// Default output device, fed from a sample queue at the device rate. Rebuilds its stream
+impl Default for Shared {
+    fn default() -> Self {
+        Self {
+            streaming: AtomicBool::new(false),
+            flush: AtomicBool::new(false),
+            rebuffer: AtomicBool::new(false),
+            queued: AtomicUsize::new(0),
+            prebuffer_ms: AtomicU32::new(300),
+            underruns: AtomicU32::new(0),
+        }
+    }
+}
+
+/// Seconds of audio the ring holds.
+const RING_SECS: usize = 30;
+/// How long `push` waits for room in a full ring before dropping the rest.
+const PUSH_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Output device fed from a lock-free ring at the device rate. Rebuilds its stream
 /// when Windows invalidates it (headphones plugged in, Bluetooth connecting).
 pub struct Player {
     stream: Mutex<Option<cpal::Stream>>,
-    queue: Arc<Mutex<Queue>>,
+    /// Only producers lock this; the device callback owns the consumer end.
+    producer: Mutex<Option<rtrb::Producer<f32>>>,
+    shared: Arc<Shared>,
     rate: AtomicU32,
     dead: Arc<AtomicBool>,
     /// The `OUTPUT` choice the stream was built for.
     built_for: Mutex<String>,
+    /// A full ring dropped audio during this reply (warn once per reply).
+    overflow_warned: AtomicBool,
     pub level: Arc<Level>,
 }
 
@@ -363,10 +417,12 @@ impl Player {
     pub fn open() -> Result<Self> {
         let p = Self {
             stream: Mutex::new(None),
-            queue: Default::default(),
+            producer: Mutex::new(None),
+            shared: Default::default(),
             rate: AtomicU32::new(0),
             dead: Arc::new(AtomicBool::new(true)),
             built_for: Default::default(),
+            overflow_warned: AtomicBool::new(false),
             level: Default::default(),
         };
         p.ensure()?;
@@ -379,42 +435,64 @@ impl Player {
         if !self.dead.load(Ordering::SeqCst) && *self.built_for.lock().unwrap() == want {
             return Ok(());
         }
-        let (queue, level, dead) = (self.queue.clone(), self.level.clone(), self.dead.clone());
+        let (shared, level, dead) = (self.shared.clone(), self.level.clone(), self.dead.clone());
         let chosen = want.clone();
-        let (stream, rate) = on_audio_thread(move || build_output(&chosen, queue, level, dead))?;
+        let (stream, rate, producer) = on_audio_thread(move || build_output(&chosen, shared, level, dead))?;
         *self.built_for.lock().unwrap() = want;
-        {
-            // Samples queued for the old device were resampled for its rate.
-            let mut q = self.queue.lock().unwrap();
-            q.samples.clear();
-            q.jitter.rebuffering = q.streaming;
-            q.jitter.prebuffer = rate as usize * 3 / 10;
-        }
+        // Samples queued for the old device were resampled for its rate; the new ring starts empty.
+        *self.producer.lock().unwrap() = Some(producer);
+        self.shared.queued.store(0, Ordering::SeqCst);
         self.rate.store(rate, Ordering::SeqCst);
         *self.stream.lock().unwrap() = Some(stream);
         self.dead.store(false, Ordering::SeqCst);
         Ok(())
     }
 
-    /// Queues mono PCM recorded at `sr`.
+    /// Queues mono PCM, resampled to the device rate. A full ring waits up to 2 s for room, then drops the rest.
     pub fn push(&self, resampler: &mut Resampler, pcm: &[i16]) {
         let out = resampler.process(&i16_to_f32(pcm));
-        self.queue.lock().unwrap().samples.extend(out);
+        let mut guard = self.producer.lock().unwrap();
+        let Some(prod) = guard.as_mut() else { return };
+        let mut rest = &out[..];
+        let waited = std::time::Instant::now();
+        while !rest.is_empty() {
+            let n = prod.slots().min(rest.len());
+            if n == 0 {
+                if waited.elapsed() >= PUSH_WAIT || self.dead.load(Ordering::SeqCst) {
+                    if !self.overflow_warned.swap(true, Ordering::SeqCst) {
+                        tracing::warn!(dropped = rest.len(), "speaker queue full; audio dropped");
+                    }
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            }
+            for &v in &rest[..n] {
+                let _ = prod.push(v);
+            }
+            self.shared.queued.fetch_add(n, Ordering::SeqCst);
+            rest = &rest[n..];
+        }
     }
 
     /// Marks the start (`true`) or end (`false`) of a reply that is still being generated. While it is on,
     /// playback prebuffers and waits out dry spells; turning it off plays the rest and stops waiting.
     pub fn set_streaming(&self, on: bool) {
-        let mut q = self.queue.lock().unwrap();
-        q.streaming = on;
+        self.shared.streaming.store(on, Ordering::SeqCst);
         if on {
-            q.jitter.rebuffering = true;
+            self.shared.rebuffer.store(true, Ordering::SeqCst);
+            self.overflow_warned.store(false, Ordering::SeqCst);
         }
+    }
+
+    /// Audio the speaker waits for before starting a reply, and after a dry spell.
+    pub fn set_prebuffer_ms(&self, ms: u32) {
+        self.shared.prebuffer_ms.store(ms, Ordering::SeqCst);
     }
 
     /// Dry spells since the last call (the log wants them per reply).
     pub fn take_underruns(&self) -> u32 {
-        std::mem::take(&mut self.queue.lock().unwrap().jitter.underruns)
+        self.shared.underruns.swap(0, Ordering::SeqCst)
     }
 
     /// A resampler to the device rate. Reopens a dead stream first, so each reply after a
@@ -428,35 +506,68 @@ impl Player {
 
     /// Drops everything queued and ends the reply (barge-in, or the round is over).
     pub fn clear(&self) {
-        let mut q = self.queue.lock().unwrap();
-        q.samples.clear();
-        q.streaming = false;
-        q.jitter.rebuffering = false;
+        self.shared.streaming.store(false, Ordering::SeqCst);
+        self.shared.flush.store(true, Ordering::SeqCst);
     }
 
     /// Idle when nothing is queued, or when the stream died (the queue would never drain).
     pub fn is_idle(&self) -> bool {
-        self.dead.load(Ordering::SeqCst) || self.queue.lock().unwrap().samples.is_empty()
+        self.dead.load(Ordering::SeqCst) || self.shared.queued.load(Ordering::SeqCst) == 0
     }
 }
 
-fn build_output(chosen: &str, queue: Arc<Mutex<Queue>>, lv: Arc<Level>, dead: Arc<AtomicBool>) -> Result<(cpal::Stream, u32)> {
+/// The device callback's own state: the consumer end of the ring and the jitter buffer.
+struct Feed {
+    ring: rtrb::Consumer<f32>,
+    jitter: Jitter,
+    shared: Arc<Shared>,
+    rate: u32,
+    level: Arc<Level>,
+}
+
+impl Feed {
+    /// Fills `frames` frames through `out(frame, sample)`. No allocation, lock or logging.
+    fn fill(&mut self, out: &mut dyn FnMut(usize, f32), frames: usize) {
+        let sh = &*self.shared;
+        if sh.flush.swap(false, Ordering::SeqCst) {
+            let n = self.ring.slots();
+            if let Ok(chunk) = self.ring.read_chunk(n) {
+                chunk.commit_all();
+            }
+            sh.queued.store(0, Ordering::SeqCst);
+            self.jitter.rebuffering = sh.streaming.load(Ordering::SeqCst);
+        }
+        if sh.rebuffer.swap(false, Ordering::SeqCst) {
+            self.jitter.rebuffering = true;
+        }
+        self.jitter.prebuffer = self.rate as usize * sh.prebuffer_ms.load(Ordering::Relaxed) as usize / 1000;
+        let streaming = sh.streaming.load(Ordering::SeqCst);
+        let before = self.ring.slots();
+        let mut sum = 0.0;
+        for f in 0..frames {
+            let v = self.jitter.next(&mut self.ring, streaming);
+            sum += v * v;
+            out(f, v);
+        }
+        let popped = before.saturating_sub(self.ring.slots());
+        let _ = sh.queued.try_update(Ordering::SeqCst, Ordering::SeqCst, |q| Some(q.saturating_sub(popped)));
+        if self.jitter.underruns > 0 {
+            sh.underruns.fetch_add(std::mem::take(&mut self.jitter.underruns), Ordering::SeqCst);
+        }
+        self.level.set(if frames > 0 { (sum / frames as f32).sqrt() } else { 0.0 });
+    }
+}
+
+fn build_output(chosen: &str, shared: Arc<Shared>, lv: Arc<Level>, dead: Arc<AtomicBool>) -> Result<(cpal::Stream, u32, rtrb::Producer<f32>)> {
     let device = pick_device(&cpal::default_host(), chosen, false).ok_or_else(|| err("no speaker found"))?;
     let supported = device.default_output_config().map_err(err)?;
     let format = supported.sample_format();
     let config: cpal::StreamConfig = supported.into();
     let channels = config.channels as usize;
-    let fill = move |out: &mut dyn FnMut(usize, f32), frames: usize| {
-        let mut guard = queue.lock().unwrap();
-        let q = &mut *guard;
-        let mut sum = 0.0;
-        for f in 0..frames {
-            let v = q.jitter.next(&mut q.samples, q.streaming);
-            sum += v * v;
-            out(f, v);
-        }
-        lv.set(if frames > 0 { (sum / frames as f32).sqrt() } else { 0.0 });
-    };
+    let rate = config.sample_rate;
+    let (producer, ring) = rtrb::RingBuffer::<f32>::new(rate as usize * RING_SECS);
+    let streaming = shared.streaming.load(Ordering::SeqCst);
+    let mut feed = Feed { ring, jitter: Jitter { rebuffering: streaming, ..Default::default() }, shared, rate, level: lv };
     let on_err = move |e: cpal::Error| {
         tracing::warn!("speaker stream: {e}");
         if fatal(&e) {
@@ -468,7 +579,7 @@ fn build_output(chosen: &str, queue: Arc<Mutex<Queue>>, lv: Arc<Level>, dead: Ar
             config,
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 let frames = data.len() / channels;
-                fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill(v), frames)
+                feed.fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill(v), frames)
             },
             on_err,
             None,
@@ -477,7 +588,7 @@ fn build_output(chosen: &str, queue: Arc<Mutex<Queue>>, lv: Arc<Level>, dead: Ar
             config,
             move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                 let frames = data.len() / channels;
-                fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill((v * 32767.0) as i16), frames)
+                feed.fill(&mut |f, v| data[f * channels..(f + 1) * channels].fill((v * 32767.0) as i16), frames)
             },
             on_err,
             None,
@@ -486,8 +597,8 @@ fn build_output(chosen: &str, queue: Arc<Mutex<Queue>>, lv: Arc<Level>, dead: Ar
     }
     .map_err(err)?;
     stream.play().map_err(err)?;
-    tracing::info!(rate = config.sample_rate, channels, device = %device, "speaker open");
-    Ok((stream, config.sample_rate))
+    tracing::info!(rate, channels, device = %device, "speaker open");
+    Ok((stream, rate, producer))
 }
 
 pub const MIC_RATE: u32 = 16_000;
@@ -745,6 +856,21 @@ mod tests {
         assert_eq!(pull(&mut j, &mut q, true, 2).1, 2, "2 of 4 prebuffered: still waiting");
         q.extend([0.5; 2]);
         assert_eq!(pull(&mut j, &mut q, true, 4).1, 0, "prebuffer reached: plays on");
+        assert_eq!(j.underruns, 1);
+    }
+
+    #[test]
+    fn ring_source_reports_len_and_pops_in_order() {
+        let (mut p, mut c) = rtrb::RingBuffer::<f32>::new(8);
+        for v in [0.1, 0.2, 0.3] {
+            p.push(v).unwrap();
+        }
+        assert_eq!(Source::len(&c), 3);
+        assert_eq!(Source::pop(&mut c), Some(0.1));
+        let mut j = Jitter { prebuffer: 2, ..Default::default() };
+        assert_eq!(j.next(&mut c, true), 0.2);
+        assert_eq!(j.next(&mut c, true), 0.3);
+        assert_eq!(j.next(&mut c, true), 0.0, "dry: silence and an underrun");
         assert_eq!(j.underruns, 1);
     }
 

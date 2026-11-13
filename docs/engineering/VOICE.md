@@ -20,7 +20,7 @@ numbers were measured with throwaway probes that were deleted; the Supertonic nu
 | `tier.rs` | `Tier {Fast, Ok, Slow}` from warm-up RTF (< 0.35, < 0.7): steps 8/6/5, piece words 40/24/14, captions 0.5 s/1 s/off, prebuffer 300/500/800 ms. Measured once per app run (`TIER_LINE` twice, second run timed; kept in `Cache`, cleared by Reload models). `Drift` lowers it mid-round when the median RTF of the last 5 calls is over the bound x 1.2. Settings > Voice shows "This laptop: ..." |
 | `health.rs` | `Health` counters per round (replies, pieces, dry spells, cap hits, retries, RTF p50/p90); `Voice::end` logs one `voice health` line |
 | `score.rs` | Bench scoring: `words`, `wer` (with missing words), `term_recall` |
-| `audio.rs` | `Mic`, `Player` (one lock over the sample queue + `Jitter` + `streaming` flag), `Jitter::next` (prebuffer and dry-spell rule, testable), `set_streaming`, `take_underruns`, `Vad`, `LowPass` (windowed sinc), `Downsampler` (->16 kHz), `Resampler`, `on_audio_thread`, `set_devices`, `list_devices` |
+| `audio.rs` | `Mic`, `Player` (lock-free `rtrb` ring, 30 s at the device rate; the callback owns the consumer + `Jitter` and reads atomics only; `push` waits up to 2 s for room then drops), `Jitter::next` over a `Source` (ring or `VecDeque`), `set_streaming`, `set_prebuffer_ms`, `take_underruns`; cpal `realtime` feature = audio-priority speaker thread, `Vad`, `LowPass` (windowed sinc), `Downsampler` (->16 kHz), `Resampler`, `on_audio_thread`, `set_devices`, `list_devices` |
 | `models.rs` | pinned list `PINS` (id, url, bytes, sha256, unpacked), `install` (also deletes the retired Pocket folder), `delete`, `status`, `installed`, `allowed_host`, `Progress` (`voice_model` event) |
 | `stt.rs` | `listen`/`listen_with`/`run`: mic -> VAD -> segments -> Parakeet -> `ListenEnd {Text{text,stt_ms}, Cancelled{heard}, NoSpeech}`; `spawn_decode` (finished segment), `spawn_caption` (every 500 ms); `SttState`; `clean_transcript` (`collapse_repeats`, `fix_vocab` Levenshtein); `domain_vocab` |
 | `mod.rs` | `VoiceSettings`, `VoiceEvent`, `Voice` (player + current `RoundVoice`), `begin` (round loop task), `say`, `turn_done`, `answer_sent`, `end`, mute/listen/interrupt, `Batch`, `coalesce_wait`, `listen_once`, `speak_into` |
@@ -84,7 +84,7 @@ Blobs saved by older versions also hold `engine`, `base_url`, `voice`, `steps`; 
 - `Cmd::Say`: drop if `cut`. Short sentence (< 4 words or < 24 chars) waits for more: ≤ 150 ms if player idle, ≤ 300 ms if
   playing; merge ≤ 220 chars (`MAX_BATCH_CHARS`). Generate next batch while current plays.
 - Playback smoothing (`audio.rs` `Jitter`): `Cmd::Say` sets `Player::set_streaming(true)` when a reply starts; the device waits for
-  300 ms of audio before it starts, and again after any dry spell while the reply is still generating. `TurnDone` clears the flag
+  the prebuffer (300 ms by default) before it starts, and again after any dry spell while the reply is still generating. `TurnDone` clears the flag
   first, then waits for the queue to drain. A `reply playback ran dry` info line counts the dry spells per reply.
 - `Cmd::TurnDone{ended}`: wait for player idle (or cut) → always emit `speaking false` → `awaiting_answer = !ended` →
   listen unless muted.
