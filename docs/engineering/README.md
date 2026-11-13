@@ -11,7 +11,7 @@ Humans: read `pdf/` (snapshot of tag `docs-human-2026-10-30`).
 | [PRODUCT.md](PRODUCT.md) | scope decisions: non-negotiables, users, feature status, open questions |
 | [AI.md](AI.md) | model calls: `brain/`, providers, Claude Code flags, sessions, one-shot jobs, splitter, JSON parsing |
 | [INTERVIEW.md](INTERVIEW.md) | loops/rounds: `interview/`, catalog, panels, prompt assembly, loader, turns, reports, verdict, dashboard rules |
-| [VOICE.md](VOICE.md) | `voice/`, VoiceStudio, Whisper sidecar, VAD, TTS batching, barge-in, mute |
+| [VOICE.md](VOICE.md) | `voice/`, voice models, VAD, TTS batching, barge-in, mute |
 | [RESEARCH.md](RESEARCH.md) | `research.rs`, `dossier.rs`, company-specific loops |
 | [RESUME-CHECK.md](RESUME-CHECK.md) | `ats/`: extraction, checks, ATS profiles, AI screen |
 | [CODING.md](CODING.md) | `bank.rs`, `runner/`, `questions.csv`, workspace (editor/whiteboard/notes), Run/Submit |

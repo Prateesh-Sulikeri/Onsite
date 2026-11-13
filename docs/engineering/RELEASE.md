@@ -25,7 +25,7 @@ Code: `.github/workflows/release.yml` (tags), `build.yml` (shared build matrix +
    (ad-hoc signed `signingIdentity "-"`, not notarized, min macOS 11) · ubuntu-22.04 `--bundles appimage,deb` (deb depends
    `libasound2`). Each: install deps → `cargo test` → `tauri-apps/tauri-action`.
 3. `publish` (needs all builds): add `SHA256SUMS.txt`, un-draft.
-`workflow_dispatch` = dry run (artifacts uploaded, nothing published). Bundled resources: `prompts/ dossiers/ sidecar/`.
+`workflow_dispatch` = dry run (artifacts uploaded, nothing published). Bundled resources: `prompts/ projects/ dossiers/`.
 NSIS hooks: `src-tauri/windows/hooks.nsh` (uninstall clean-up, `/PURGE`; see STORAGE.md). Only the Windows CI build compiles them.
 
 
@@ -56,8 +56,6 @@ NSIS hooks: `src-tauri/windows/hooks.nsh` (uninstall clean-up, `/PURGE`; see STO
   with `update_progress` events → Nsis: run installer with `/P /R /UPDATE` (passive progress bar, no wizard pages,
   no old uninstaller, relaunch when done; same flags as Tauri's updater) + quit · Dmg: open · AppImage: replace `$APPIMAGE` + restart · Deb:
   copy to Downloads. Any version installable (downgrade allowed; UI warns older may not read newer data).
-- VoiceStudio: installed version from `/health.version` else `resources/pyproject.toml` in its install dir; latest from
-  `debpalash/VoiceStudio` releases. Never updated by Onsite.
 
 ## Code signing
 

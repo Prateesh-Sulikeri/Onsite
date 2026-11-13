@@ -40,7 +40,7 @@ Candidate sees `problem_view` (statement, examples, constraints, hidden count, r
   `Report::summary("Run"|"Submit")` → one line stored in `ActiveRound.pending_run`, sent with next answer as `[Code run] …`.
 - Run = example tests; Submit = all tests + `stress_tests(q, 1)` (Python `stress` + `reference`, kept only if it passes
   `q.check`; built once per round outside the lock, 120 s limit).
-- Python: PATH, else VoiceStudio's bundled Python; skips WindowsApps stub (`runner::python`). TypeScript/Go: editable, not runnable.
+- Python: PATH only; skips WindowsApps stub (`runner::python`). TypeScript/Go: editable, not runnable.
 - `set_round_lang`: switches language, returns starter + runnable; starter not sent until edited.
 
 ## Workspace (UI)

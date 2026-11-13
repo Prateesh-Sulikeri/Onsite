@@ -75,7 +75,7 @@ body:
     id: voice
     attributes:
       label: How you ran the round
-      description: "One of: [Typed, Spoken (built-in voice), Spoken (VoiceStudio), Not in a round]"
+      description: "One of: [Typed, Spoken (built-in voice), Not in a round]"
       placeholder: Typed
     validations:
       required: true

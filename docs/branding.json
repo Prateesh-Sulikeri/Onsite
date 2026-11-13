@@ -1,0 +1,759 @@
+{
+  "$schema": "Firecrawl-style branding profile, extended for Onsite",
+  "generatedFrom": [
+    "ui/app.css (:root tokens, components)",
+    "ui/themes.css",
+    "ui/index.html",
+    "site/src/style.css",
+    "site/src/*.html",
+    "src-tauri/tauri.conf.json",
+    "src-tauri/Cargo.toml",
+    "README.md",
+    "LICENSE",
+    "CLAUDE.md (copy rules)",
+    "public/images/* (logo and backdrop pixels sampled)"
+  ],
+  "generatedAt": "2026-11-03",
+  "url": "https://prateesh-sulikeri.github.io/Onsite/",
+  "identity": {
+    "name": "Onsite",
+    "tagline": "Practise the interview loop. Out loud.",
+    "taglineAccentPart": "Out loud.",
+    "oneLiner": "Onsite runs realistic software-engineering interviews on your own computer. You talk, write code and draw the design. The interviewer pushes back, and you get honest written feedback.",
+    "shortDescription": "Local AI mock-interview loops",
+    "metaDescription": "Onsite runs realistic software-engineering interviews on your own computer. Talk, code and draw, then get honest feedback. Free and open source.",
+    "ogTitle": "Onsite",
+    "ogDescription": "Practise software-engineering interview loops out loud, on your own machine. Free and open source.",
+    "category": "Desktop app: AI mock interviews for software engineers",
+    "platforms": [
+      "Windows 10/11",
+      "macOS 11+",
+      "Linux (AppImage, deb)"
+    ],
+    "license": "MIT",
+    "price": "Free and open source",
+    "author": "Prateesh Sulikeri",
+    "repository": "https://github.com/Prateesh-Sulikeri/Onsite",
+    "appIdentifier": "dev.onsite.app",
+    "pillars": [
+      {
+        "title": "Runs on your machine",
+        "detail": "No account, no server. Speech runs locally; interviews, reports and keys stay on your computer."
+      },
+      {
+        "title": "Bring your own AI",
+        "detail": "Claude Code, or your own key for Claude API, OpenAI, Gemini or Groq."
+      },
+      {
+        "title": "Out loud",
+        "detail": "Spoken calls with a built-in voice engine; every round also works typed."
+      },
+      {
+        "title": "Honest feedback",
+        "detail": "Rubric scores with evidence, \"Fix this first\", stronger answers and a hiring-committee verdict."
+      }
+    ],
+    "features": [
+      "Whole loops",
+      "Company loops",
+      "Spoken calls",
+      "A real workspace",
+      "Honest feedback",
+      "Resume check"
+    ]
+  },
+  "colorScheme": "dark",
+  "themeName": "Night violet",
+  "themeOrigin": "Every color token is sampled from the twilight mountain backdrop: navy neutrals at hue 266, violet accent at hue 290, sun peach and horizon magenta used sparingly.",
+  "colors": {
+    "primary": "#7b55e7",
+    "primaryHighlight": "#9d7ffc",
+    "accentText": "#c2aeff",
+    "secondary": "#b658a0",
+    "accentWarm": "#feb390",
+    "background": "#04091b",
+    "surface": "#0a122a",
+    "textPrimary": "#f3f4fc",
+    "textSecondary": "#cdcfe5",
+    "textMuted": "#a4a9c8",
+    "link": "#c2aeff",
+    "success": "#41ce90",
+    "warning": "#f9b96c",
+    "error": "#fa5f6d",
+    "border": "#2c336180",
+    "themeColorMeta": "#0c0d21"
+  },
+  "palette": {
+    "neutrals": [
+      {
+        "token": "--bg",
+        "hex": "#04091b",
+        "oklch": "oklch(0.145 0.042 266)",
+        "role": "page background"
+      },
+      {
+        "token": "--side",
+        "hex": "#020617",
+        "oklch": "oklch(0.13 0.04 266)",
+        "role": "sidebar"
+      },
+      {
+        "token": "--surface",
+        "hex": "#0a122a",
+        "oklch": "oklch(0.19 0.05 268)",
+        "role": "cards"
+      },
+      {
+        "token": "--panel",
+        "hex": "#081027c7",
+        "oklch": "oklch(0.18 0.05 268 / .78)",
+        "role": "glass panels over the backdrop"
+      },
+      {
+        "token": "--surface-2",
+        "hex": "#121a39",
+        "oklch": "oklch(0.23 0.06 270)",
+        "role": "raised surface"
+      },
+      {
+        "token": "--surface-3",
+        "hex": "#1e244d",
+        "oklch": "oklch(0.28 0.075 274)",
+        "role": "chips, scrollbar, pills"
+      },
+      {
+        "token": "--field",
+        "hex": "#040b1fe6",
+        "oklch": "oklch(0.155 0.045 266 / .9)",
+        "role": "inputs"
+      },
+      {
+        "token": "--line",
+        "hex": "#2c336180",
+        "oklch": "oklch(0.34 0.08 275 / .5)",
+        "role": "hairline border"
+      },
+      {
+        "token": "--line-2",
+        "hex": "#494b88a6",
+        "oklch": "oklch(0.44 0.1 280 / .65)",
+        "role": "strong border"
+      }
+    ],
+    "text": [
+      {
+        "token": "--ink",
+        "hex": "#f3f4fc",
+        "oklch": "oklch(0.97 0.01 280)",
+        "role": "primary text"
+      },
+      {
+        "token": "--ink-2",
+        "hex": "#cdcfe5",
+        "oklch": "oklch(0.86 0.03 280)",
+        "role": "secondary text"
+      },
+      {
+        "token": "--muted",
+        "hex": "#a4a9c8",
+        "oklch": "oklch(0.74 0.045 278)",
+        "role": "muted text"
+      },
+      {
+        "token": "--placeholder",
+        "hex": "#8d90a8",
+        "oklch": "oklch(0.66 0.035 280)",
+        "role": "placeholder"
+      }
+    ],
+    "accent": [
+      {
+        "token": "--accent",
+        "hex": "#7b55e7",
+        "oklch": "oklch(0.57 0.21 290)",
+        "role": "brand violet"
+      },
+      {
+        "token": "--accent-hi",
+        "hex": "#9d7ffc",
+        "oklch": "oklch(0.68 0.18 292)",
+        "role": "hover, focus ring, highlights"
+      },
+      {
+        "token": "--accent-ink",
+        "hex": "#fcfcfc",
+        "oklch": "oklch(0.99 0 0)",
+        "role": "text on accent"
+      },
+      {
+        "token": "--accent-soft",
+        "hex": "#33226bbf",
+        "oklch": "oklch(0.32 0.12 288 / .75)",
+        "role": "selected chip background"
+      },
+      {
+        "token": "--accent-text",
+        "hex": "#c2aeff",
+        "oklch": "oklch(0.8 0.12 294)",
+        "role": "accent text and links"
+      }
+    ],
+    "warm": [
+      {
+        "token": "--warm",
+        "hex": "#feb390",
+        "oklch": "oklch(0.83 0.1 46)",
+        "role": "sun peach, sparingly"
+      },
+      {
+        "token": "--warm-2",
+        "hex": "#b658a0",
+        "oklch": "oklch(0.6 0.15 337)",
+        "role": "horizon magenta, sparingly"
+      }
+    ],
+    "status": [
+      {
+        "token": "--ok",
+        "hex": "#41ce90",
+        "oklch": "oklch(0.76 0.15 160)",
+        "role": "success"
+      },
+      {
+        "token": "--warn",
+        "hex": "#f9b96c",
+        "oklch": "oklch(0.83 0.12 70)",
+        "role": "warning"
+      },
+      {
+        "token": "--bad",
+        "hex": "#fa5f6d",
+        "oklch": "oklch(0.69 0.19 18)",
+        "role": "error"
+      }
+    ]
+  },
+  "gradients": {
+    "primary": {
+      "css": "linear-gradient(135deg, #9762ec, #544ce2)",
+      "use": "primary buttons, step numbers, icon buttons"
+    },
+    "primaryHover": {
+      "css": "linear-gradient(135deg, #a878fc, #6362f2)"
+    },
+    "tint": {
+      "css": "linear-gradient(135deg, #42277f8c, #13195073)",
+      "use": "active nav item"
+    },
+    "selection": {
+      "css": "linear-gradient(135deg, #361f77b3, #0d1a49cc)"
+    },
+    "chip": {
+      "css": "linear-gradient(145deg, #3c2e77cc, #131f43e6)"
+    },
+    "tip": {
+      "css": "linear-gradient(135deg, #461b3c73, #0a122ad9 70%)",
+      "use": "\"Fix this first\" and tips"
+    },
+    "bubbleCandidate": {
+      "css": "linear-gradient(135deg, #4a3191d9, #222673d9)",
+      "use": "your messages in the call"
+    },
+    "headlineAccent": {
+      "css": "linear-gradient(100deg, var(--accent-hi), var(--warm-2) 60%, var(--warm))",
+      "resolved": "linear-gradient(100deg, #9d7ffc, #b658a0 60%, #feb390)",
+      "use": "gradient text for \"Out loud.\" on the website"
+    },
+    "sidebar": {
+      "css": "linear-gradient(180deg, #03081a, var(--side) 45%, #0a0523)"
+    }
+  },
+  "effects": {
+    "glow": "0 10px 32px -10px #7c52ecbf",
+    "glowSmall": "0 0 0 1px #8663e68c, 0 6px 22px -8px #7c52ecb3",
+    "shadow": "0 1px 0 #ffffff0a inset, 0 18px 40px -24px #000006e6",
+    "focusRing": "2px solid #9d7ffc, offset 2px (inputs: 0 0 0 3px #795dff47)",
+    "glass": "Translucent navy panels over the backdrop; the website header uses backdrop-filter: blur(14px).",
+    "logoGlow": "drop-shadow(0 4px 12px #7c52ec8c)",
+    "statusDotGlow": "Status dots carry a soft ring and glow in their own status color."
+  },
+  "fonts": [
+    {
+      "family": "Segoe UI Variable Display",
+      "role": "headings",
+      "fallback": "\"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Roboto, sans-serif"
+    },
+    {
+      "family": "Segoe UI Variable Text",
+      "role": "body",
+      "fallback": "\"Segoe UI\", system-ui, -apple-system, \"Helvetica Neue\", Roboto, sans-serif"
+    },
+    {
+      "family": "Cascadia Code",
+      "role": "code, timers, numbers",
+      "fallback": "\"Cascadia Mono\", Consolas, ui-monospace, \"SF Mono\", Menlo, monospace"
+    }
+  ],
+  "fontPolicy": "System fonts only. No web fonts and no third-party font requests.",
+  "typography": {
+    "fontFamilies": {
+      "heading": "Segoe UI Variable Display",
+      "body": "Segoe UI Variable Text",
+      "code": "Cascadia Code"
+    },
+    "fontStacks": {
+      "heading": "\"Segoe UI Variable Display\", \"Segoe UI\", system-ui, sans-serif",
+      "body": "\"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif",
+      "code": "\"Cascadia Code\", \"Cascadia Mono\", Consolas, ui-monospace, monospace"
+    },
+    "app": {
+      "body": {
+        "size": "14px",
+        "lineHeight": 1.55,
+        "weight": 400
+      },
+      "h1": {
+        "size": "32px",
+        "lineHeight": 1.15,
+        "weight": 700,
+        "letterSpacing": "-0.02em"
+      },
+      "h2": {
+        "size": "16.5px",
+        "lineHeight": 1.3,
+        "weight": 650
+      },
+      "h3": {
+        "size": "14px",
+        "lineHeight": 1.3,
+        "weight": 650
+      },
+      "small": {
+        "size": "12px"
+      },
+      "wordmark": {
+        "size": "20px",
+        "weight": 700,
+        "letterSpacing": "-0.015em",
+        "family": "display"
+      },
+      "navItem": {
+        "weight": 550
+      },
+      "button": {
+        "weight": 600
+      }
+    },
+    "website": {
+      "body": {
+        "size": "16px",
+        "lineHeight": 1.6
+      },
+      "h1": {
+        "size": "clamp(2.3rem, 5.6vw, 4rem)",
+        "weight": 700,
+        "letterSpacing": "-0.025em"
+      },
+      "h2": {
+        "size": "clamp(1.6rem, 3.2vw, 2.25rem)",
+        "weight": 700
+      },
+      "h3": {
+        "size": "1.1rem",
+        "weight": 650
+      },
+      "lead": {
+        "size": "clamp(1.05rem, 1.8vw, 1.25rem)",
+        "color": "ink-2",
+        "maxWidth": "40rem"
+      },
+      "eyebrow": {
+        "size": ".78rem",
+        "weight": 700,
+        "letterSpacing": ".14em",
+        "transform": "uppercase",
+        "color": "accent-text"
+      }
+    },
+    "fontWeights": [
+      400,
+      500,
+      550,
+      600,
+      650,
+      700
+    ],
+    "headingRules": "text-wrap: balance; letter-spacing -0.01em or tighter",
+    "numerals": "tabular-nums for timers, minutes and scores"
+  },
+  "spacing": {
+    "baseUnit": 4,
+    "borderRadius": {
+      "sm": "9px",
+      "md": "12px",
+      "lg": "16px",
+      "xl": "20px",
+      "button": "11px",
+      "input": "11px",
+      "pill": "999px"
+    },
+    "panelPadding": "22px (tight: 16px)",
+    "websiteMaxWidth": "1140px (narrow: 860px)",
+    "websiteGutter": "16px mobile, 32px from 720px",
+    "sectionSpacing": "clamp(64px, 10vw, 112px)"
+  },
+  "components": {
+    "buttonPrimary": {
+      "background": "linear-gradient(135deg, #9762ec, #544ce2)",
+      "textColor": "#fcfcfc",
+      "borderColor": "#8365ffe6",
+      "borderRadius": "11px",
+      "padding": "9px 15px",
+      "fontWeight": 600,
+      "shadow": "0 10px 32px -10px #7c52ecbf",
+      "hover": "linear-gradient(135deg, #a878fc, #6362f2)"
+    },
+    "buttonSecondary": {
+      "background": "#1b1c36cc",
+      "textColor": "#f3f4fc",
+      "borderColor": "#494b88a6",
+      "borderRadius": "11px",
+      "hoverBackground": "#1e244d",
+      "hoverBorder": "#6050b373"
+    },
+    "buttonGhost": {
+      "background": "transparent",
+      "hoverBackground": "#1d1e3999"
+    },
+    "buttonPill": {
+      "background": "#070e2299",
+      "borderRadius": "999px",
+      "padding": "10px 18px"
+    },
+    "buttonSizes": {
+      "sm": "6px 11px, 13px, radius 9px",
+      "lg": "12px 22px, 15px, radius 13px",
+      "xl": "min-height 64px, 16.5px, radius 15px"
+    },
+    "input": {
+      "background": "#040b1fe6",
+      "borderColor": "#2c336180",
+      "hoverBorder": "#494b88a6",
+      "focusBorder": "#9d7ffc",
+      "focusRing": "0 0 0 3px #795dff47",
+      "borderRadius": "11px",
+      "padding": "10px 13px"
+    },
+    "panel": {
+      "background": "#081027c7",
+      "borderColor": "#2c336180",
+      "borderRadius": "16px",
+      "padding": "22px",
+      "shadow": "0 1px 0 #ffffff0a inset, 0 18px 40px -24px #000006e6"
+    },
+    "chip": {
+      "background": "#040b1fe6",
+      "borderColor": "#2c336180",
+      "borderRadius": "10px",
+      "selected": {
+        "background": "#33226bbf",
+        "borderColor": "#7b55e7"
+      }
+    },
+    "pill": {
+      "background": "#1e244d",
+      "textColor": "#cdcfe5",
+      "borderRadius": "999px",
+      "fontSize": "12px",
+      "fontWeight": 600
+    },
+    "tag": {
+      "background": "#33226bbf",
+      "textColor": "#c2aeff",
+      "borderRadius": "7px"
+    },
+    "stepNumber": {
+      "size": "40px",
+      "shape": "circle",
+      "background": "linear-gradient(135deg, #9762ec, #544ce2)",
+      "font": "700 16px display",
+      "shadow": "glow"
+    },
+    "navItemActive": {
+      "background": "linear-gradient(135deg, #42277f8c, #13195073)",
+      "borderColor": "#6050b373",
+      "iconColor": "#c2aeff"
+    },
+    "callBubbles": {
+      "interviewer": "#12192feb",
+      "candidate": "linear-gradient(135deg, #4a3191d9, #222673d9)"
+    }
+  },
+  "icons": {
+    "style": "Outline, 24px grid, stroke 1.8 (website 1.9 to 2.2), round caps and joins, no fill, currentColor",
+    "defaultSize": "18px (buttons 16px)",
+    "roundIcons": {
+      "resume": "doc-check",
+      "project": "folder",
+      "fundamentals": "gear",
+      "coding": "code",
+      "comprehension": "search",
+      "lld": "layers",
+      "sysdesign": "network",
+      "behavioral": "user",
+      "hm": "chart"
+    }
+  },
+  "motion": {
+    "easing": "cubic-bezier(.22,1,.36,1)",
+    "durations": {
+      "hover": "0.15s to 0.2s",
+      "press": "0.1s (translateY 1px)"
+    },
+    "reducedMotion": "Website turns off transitions and smooth scroll under prefers-reduced-motion."
+  },
+  "logo": {
+    "description": "A rounded \"A\" made of two overlapping glossy capsules: a sky-to-cobalt blue leg on the left and a lilac-to-violet leg on the right, with a translucent ribbon fold between them. Glassy, soft lighting, glows on dark.",
+    "wordmark": "Onsite, in Segoe UI Variable Display, weight 700, letter-spacing -0.015em, set to the right of the mark (gap 11px).",
+    "gradientStops": {
+      "skyBlue": "#6bb4fd",
+      "blue": "#438ffd",
+      "cobalt": "#2927eb",
+      "indigoFold": "#160872",
+      "electricViolet": "#422afb",
+      "lavender": "#ce9dfb",
+      "lilac": "#e9a7fc"
+    },
+    "background": "Always on dark navy (#0c0d21 or darker). Add a violet drop-shadow glow.",
+    "files": [
+      {
+        "path": "public/images/onsite-logo.png",
+        "size": "823x823",
+        "use": "master mark, transparent"
+      },
+      {
+        "path": "public/images/Glossy Purple Ribbon Emblem.png",
+        "size": "1315x1197",
+        "use": "mark on its dark glow background (hero/social art)"
+      },
+      {
+        "path": "ui/assets/logo.png",
+        "size": "256x256",
+        "use": "app sidebar, favicon, website header"
+      },
+      {
+        "path": "src-tauri/icons/icon.png",
+        "size": "512x512",
+        "use": "app icon source"
+      },
+      {
+        "path": "src-tauri/icons/icon.ico",
+        "use": "Windows icon"
+      },
+      {
+        "path": "src-tauri/icons/icon.icns",
+        "use": "macOS icon"
+      },
+      {
+        "path": "src-tauri/icons/32x32.png, 128x128.png, 128x128@2x.png",
+        "use": "Linux and tray sizes"
+      }
+    ]
+  },
+  "images": {
+    "logo": "ui/assets/logo.png",
+    "favicon": "ui/assets/logo.png",
+    "ogImage": {
+      "path": "site/src/img/hero-room.jpg",
+      "size": "2160x1350",
+      "alt": "An Onsite coding round: the problem, the conversation and the code editor."
+    },
+    "backdrop": {
+      "path": "public/images/Twilight Mountains and Glowing Horizon.png",
+      "appCopy": "ui/assets/twilight.webp",
+      "size": "1702x924",
+      "description": "Dusk mountain range in deep navy and violet, with a peach sun and magenta glow on the horizon at the right. Used as the fixed app background, anchored right top.",
+      "sampledColors": {
+        "skyTop": "#08122d",
+        "midSky": "#1c2168",
+        "ridgeGlow": "#483393",
+        "horizonMagenta": "#974989",
+        "sunRim": "#c46384",
+        "sun": "#fdb292",
+        "foreground": "#030716"
+      }
+    },
+    "guideScreenshots": "site/src/img/guides/*.jpg"
+  },
+  "themes": {
+    "default": "onsite-dark",
+    "onsite-dark": {
+      "bg": "#04091b",
+      "surface": "#0a122a",
+      "ink": "#f3f4fc",
+      "muted": "#a4a9c8",
+      "accent": "#7b55e7",
+      "accentHi": "#9d7ffc",
+      "ok": "#41ce90",
+      "warn": "#f9b96c",
+      "bad": "#fa5f6d",
+      "backdrop": "twilight image"
+    },
+    "onsite-light": {
+      "bg": "#f3f1fa",
+      "surface": "#ffffff",
+      "ink": "#1c1633",
+      "muted": "#6b6487",
+      "accent": "#6a3de8",
+      "accentHi": "#8b63f2",
+      "ok": "#1f8a5b",
+      "warn": "#a86a00",
+      "bad": "#c8323f"
+    },
+    "nord-dark": {
+      "bg": "#2e3440",
+      "surface": "#3b4252",
+      "ink": "#eceff4",
+      "muted": "#a7b1c2",
+      "accent": "#88c0d0",
+      "accentHi": "#8fbcbb",
+      "ok": "#a3be8c",
+      "warn": "#ebcb8b",
+      "bad": "#e08a92"
+    },
+    "nord-light": {
+      "bg": "#eceff4",
+      "surface": "#f8f9fb",
+      "ink": "#2e3440",
+      "muted": "#5b6579",
+      "accent": "#4f6f9a",
+      "accentHi": "#5e81ac",
+      "ok": "#4c7337",
+      "warn": "#80600f",
+      "bad": "#b0484f"
+    },
+    "rosepine-dark": {
+      "bg": "#191724",
+      "surface": "#1f1d2e",
+      "ink": "#e0def4",
+      "muted": "#908caa",
+      "accent": "#c4a7e7",
+      "accentHi": "#ebbcba",
+      "ok": "#9ccfd8",
+      "warn": "#f6c177",
+      "bad": "#eb6f92"
+    },
+    "rosepine-light": {
+      "bg": "#faf4ed",
+      "surface": "#fffaf3",
+      "ink": "#575279",
+      "muted": "#797593",
+      "accent": "#907aa9",
+      "accentHi": "#d7827e",
+      "ok": "#286983",
+      "warn": "#c47e1e",
+      "bad": "#b4637a"
+    },
+    "gruvbox-dark": {
+      "bg": "#282828",
+      "surface": "#32302f",
+      "ink": "#ebdbb2",
+      "muted": "#a89984",
+      "accent": "#fe8019",
+      "accentHi": "#fabd2f",
+      "ok": "#b8bb26",
+      "warn": "#fabd2f",
+      "bad": "#fb4934"
+    },
+    "gruvbox-light": {
+      "bg": "#fbf1c7",
+      "surface": "#f9f5d7",
+      "ink": "#3c3836",
+      "muted": "#7c6f64",
+      "accent": "#af3a03",
+      "accentHi": "#d65d0e",
+      "ok": "#79740e",
+      "warn": "#b57614",
+      "bad": "#9d0006"
+    },
+    "note": "Only Onsite dark and Onsite light are brand themes. Nord, Rose Pine and Gruvbox are user options that follow their own published palettes."
+  },
+  "syntaxColors": {
+    "kw": "#ba93fb",
+    "type": "#8cc3fc",
+    "fn": "#fcb999",
+    "str": "#83d494",
+    "num": "#e58ace",
+    "comment": "#797f99",
+    "meta": "#e1ac6e",
+    "gutter": "#646780",
+    "line": "#10132c99",
+    "select": "#4b39998c",
+    "match": "#3b326e80"
+  },
+  "personality": {
+    "tone": "Plain, direct, honest. Short sentences. Technical content is never watered down.",
+    "energy": "Calm and focused, with quiet confidence. Night-time study session, not a hype launch.",
+    "targetAudience": "Software engineers preparing for interview loops (backend, DSA, system design), including people without a paid AI plan.",
+    "values": [
+      "Privacy: no account, no tracking, local by default",
+      "Honesty: real feedback with evidence",
+      "Realism: whole loops, company styles, spoken calls",
+      "Openness: free, MIT, bring your own AI"
+    ]
+  },
+  "voice": {
+    "rules": [
+      "Write plain, short sentences.",
+      "Never use em or en dashes. Use a comma, colon or hyphen.",
+      "UI option labels are \"Name: description\".",
+      "Say what happens and what to do; no marketing filler.",
+      "British spelling in headlines (\"Practise\").",
+      "Arrows (→) for paths through the UI, e.g. Settings → AI model."
+    ],
+    "sampleCopy": [
+      "Practise the interview loop. Out loud.",
+      "Bring your own AI. Keep your voice local.",
+      "Your interviews stay with you.",
+      "Onsite has no account and no server. The AI is the one you connect. Speech runs on your computer.",
+      "Fix this first"
+    ],
+    "fixedStrings": {
+      "borderlineVerdict": "Borderline, more data needed"
+    },
+    "appNavigation": [
+      "Dashboard",
+      "Interviews",
+      "Resume check",
+      "Company research",
+      "Past rounds",
+      "Settings"
+    ],
+    "websiteNavigation": [
+      "GitHub",
+      "Guides",
+      "How it works",
+      "Changelog",
+      "Report a bug",
+      "Privacy",
+      "Security",
+      "MIT licence"
+    ]
+  },
+  "app": {
+    "windowTitle": "Onsite",
+    "defaultWindow": "1280x820 (min width 900)",
+    "layout": "Left sidebar (236px; 68px icons-only during a call) with the logo, nav and system status; main area over the twilight backdrop.",
+    "product": {
+      "stack": "Tauri 2, Rust core, plain HTML/CSS/JS UI",
+      "voice": "Built-in Supertonic 3 + Parakeet TDT, or VoiceStudio; Whisper large-v3 accuracy pass",
+      "aiProviders": [
+        "Claude Code",
+        "Claude API",
+        "OpenAI",
+        "Gemini",
+        "Groq"
+      ]
+    }
+  }
+}

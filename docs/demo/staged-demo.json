@@ -1,0 +1,28 @@
+{
+  "resume": {
+    "questions": [
+      "Your resume says you cut interviewer reply latency from about 4.1 seconds to 1.6. Walk me through what was slow and what you changed.",
+      "Your Outbox Relay project claims at-least-once delivery. What happens if the relay crashes after publishing to Kafka but before it marks the row as sent?"
+    ]
+  },
+  "coding": {
+    "question_id": "two-sum",
+    "questions": [
+      "Let's code. The problem is Two Sum, it's in your editor. Talk me through your approach first, then write it.",
+      "What's the time and space complexity, and how would you change it if the array were already sorted?"
+    ]
+  },
+  "sysdesign": {
+    "questions": [
+      "Design a rate limiter for a public payments API: 100 requests per minute per API key, across many servers. Sketch the main pieces and walk me through one request.",
+      "Say Redis goes down for two minutes. Does your limiter fail open or fail closed, and why?"
+    ]
+  },
+  "comprehension": {
+    "project_id": "orders-consumer-java",
+    "questions": [
+      "Start with EventConsumer.java. Finance says some paid orders show too little paid. Where can a payment event get lost?",
+      "Now some orders show too much paid. What in PaymentEventHandler causes that, and how would you fix it?"
+    ]
+  }
+}

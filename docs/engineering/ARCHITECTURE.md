@@ -1,7 +1,7 @@
 # ARCHITECTURE
 
 Onsite: Tauri 2 desktop app. Rust core (`src-tauri/src`) + plain-JS UI (`ui/`) in the system WebView. Runs spoken
-mock interviews; AI = one user-chosen provider; speech = local built-in engine (Supertonic 3 + Parakeet via sherpa-onnx, in-process) or VoiceStudio; Whisper sidecar runs only with VoiceStudio.
+mock interviews; AI = one user-chosen provider; speech = local engine (Supertonic 3 + Parakeet via sherpa-onnx, in-process).
 
 ## Processes
 
@@ -11,10 +11,8 @@ mock interviews; AI = one user-chosen provider; speech = local built-in engine (
 | `claude -p` (interviewer) | `brain::session::ClaudeSession::start` | one round; empty temp cwd `onsite-round-*` | stream-json over stdin/stdout |
 | `claude -p` (one-shot job) | `brain::oneshot::run_cli` | one job; temp cwd `onsite-job-*` | prompt on stdin, stream-json out |
 | `wsl.exe -e bash -lc "cd … && exec claude …"` | same, when Claude Code is only in WSL | same | same |
-| `sidecar/whisper_server.py` | `voice::whisper::start` | app (restarted at round start if dead) | JSON lines stdin/stdout |
 | python/node/java/main.exe | `runner::run` | one Run/Submit | `\x1e`-prefixed JSON lines |
-| built-in voice (`voice::builtin`) | in-process | app | sherpa-onnx; models in `<app data>/models` |
-| VoiceStudio (optional engine) | user (or `voice_launch`) | external | HTTP + WS on `127.0.0.1:3900` |
+| voice engine (`voice::builtin`) | in-process | app | sherpa-onnx; models in `<app data>/models` |
 
 Network leaves the machine only for: model calls (provider), research web search (provider-side tools), update
 checks (GitHub, on user click). UI CSP allows only `self` + IPC → the UI cannot fetch.
@@ -29,7 +27,7 @@ checks (GitHub, on user click). UI CSP allows only `self` + IPC → the UI canno
 | `interview/{mod,live,report}.rs` | loop setup, prompt assembly, live rounds, reports, verdict | INTERVIEW.md |
 | `catalog.rs`, `panels.rs` | `prompts/catalog.json`, `prompts/panels.json` | INTERVIEW.md |
 | `brain/*` | providers, sessions, one-shot jobs, splitter, stream parsing, JSON extraction, prompt render, CLI location | AI.md |
-| `voice/*` | audio devices, VAD, STT, TTS, Whisper sidecar, round voice loop | VOICE.md |
+| `voice/*` | audio devices, VAD, STT, TTS, round voice loop | VOICE.md |
 | `research.rs`, `dossier.rs` | research jobs, dossier validation/storage | RESEARCH.md |
 | `ats/*` | resume check | RESUME-CHECK.md |
 | `bank.rs`, `runner/*` | question bank, code runner | CODING.md |
@@ -76,7 +74,7 @@ Commands (registered in `lib.rs::run`, `generate_handler!`):
 | voice | `voice_status voice_launch voice_test_speak voice_test_listen voice_finish voice_mute voice_cancel_listen voice_interrupt voice_set_devices audio_devices mic_monitor_start mic_monitor_stop voice_persona_preview voice_model_download voice_model_delete voice_models_reload voice_builtin_preview` |
 | research | `research_start research_cancel research_retry research_dismiss research_jobs list_dossiers delete_dossier import_dossier export_dossier` |
 | resume | `read_document ats_check ats_screen ats_last` |
-| app | `app_version check_updates install_update voicestudio_version storage_info set_storage_limits clear_log clear_temp vacuum_db open_folder get_backdrop set_backdrop clear_backdrop` |
+| app | `app_version check_updates install_update storage_info set_storage_limits clear_log clear_temp vacuum_db open_folder get_backdrop set_backdrop clear_backdrop` |
 
 Events (core → UI):
 
@@ -96,14 +94,12 @@ Events (core → UI):
 ```mermaid
 sequenceDiagram
     participant Mic as voice::stt (VAD+segments)
-    participant W as Whisper sidecar
     participant UI as app.js
     participant L as interview::live
     participant S as brain::Session
     participant V as voice::Voice
     Mic->>UI: voice partial (Parakeet)
-    Mic->>W: closed segment wav + vocab prompt
-    Mic->>UI: voice final (Whisper text, else Parakeet)
+    Mic->>UI: voice final (Parakeet, cleaned)
     UI->>L: send_answer(text, workspace)
     L->>S: text + [Workspace] diff + [Code run] + [Elapsed: x of y min]
     S-->>L: Sentence… (splitter) / Code… / TurnDone
@@ -115,8 +111,7 @@ sequenceDiagram
 ## Startup (`lib.rs::run`)
 
 `init_logging` → (unix) `path_from_login_shell` → open `onsite.db` → `delete_unanswered_rounds` → `fail_running_jobs` →
-load catalog/panels/bank → `manage(AppState)` → `research::seed` (once) → `storage::enforce` → spawn warm-up (if voice
-enabled: `whisper::start`; engine = voicestudio also `commands::warm_voice` + prebuild every persona voice profile; built-in loads models at round start).
+load catalog/panels/bank → `manage(AppState)` → `research::seed` (once) → `storage::enforce` → set audio devices (voice models load at round start, not here).
 
 ## Concurrency
 
@@ -136,14 +131,14 @@ are user-facing: short, plain, include the fix. UI shows them via `errText(e)` +
 `prompts/catalog.json` (ROUNDS, COMPANIES, LEVELS, LEVEL_BAR, NAMES, TEMPER) · `prompts/panels.json` · `prompts/questions.csv` ·
 `prompts/{interviewer,persona_block,dossier_block,report,verdict,research,ats_job,ats_screen}.md` · `dossiers/*.json`.
 Dev builds read the repo copies (edit → next round uses it, no rebuild); release reads Tauri resources
-(`prompts/`, `dossiers/`, `sidecar/`).
+(`prompts/`, `dossiers/`, `projects/`).
 
 ## Repo layout
 
 `src-tauri/` (core, `examples/api_e2e.rs`, `examples/ats_check.rs`, `tests/ats_files.rs`) · `ui/` (+ `vendor/` built by
-`ui-vendor/`) · `prompts/` · `dossiers/` · `sidecar/` · `docs/` · `.github/workflows/release.yml`.
+`ui-vendor/`) · `prompts/` · `dossiers/` · `projects/` · `docs/` · `.github/workflows/release.yml`.
 
 ## Platforms
 
 Windows 11: primary, daily use. macOS (universal dmg, ad-hoc signed) and Linux (AppImage, deb): CI-built, not run by a
-person yet (2026-10-29). The built-in voice needs no VoiceStudio and runs on the CPU; it has been run on Windows only so far. VoiceStudio is optional and Windows-first. Without any voice engine, rounds are typed.
+person yet (2026-10-29). The voice engine runs on the CPU; it has been run on Windows only so far. Without the voice models, rounds are typed.

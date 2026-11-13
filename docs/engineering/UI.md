@@ -77,7 +77,7 @@ Whiteboard is always dark.
 | `dashboard` | start / review last round, weekly goal, this week ring, skill performance, score trend (bar 70), practise next, calendar + streak, highlights, recent |
 | `interviews` | mode cards (general/company) · steps 1-5: context (company style or dossier, temperament, panel, level, language) · round tiles · resume + JD drops · notes · round length → Start; right: loop timeline, what to expect |
 | `ready` | mic/speaker pickers, live meter, Test speaker/mic, resume-check result, Join; "Check before every round" (`onsite.readyEvery`; else next rounds skip to loader) |
-| `prep` | checklist from `prep` events (`PREP_STEPS`: AI model, First question, VoiceStudio, Interviewer's voice, Live captions, Accurate transcript, Speaker, Microphone; Waiting/Ready/Fallback/Failed/Off); Cancel; Start typed on voice failure |
+| `prep` | checklist from `prep` events (`PREP_STEPS`: AI model, Code project, First question, Voice models, Interviewer's voice, Live captions, Speaker, Microphone; Waiting/Ready/Fallback/Failed/Off); Cancel; Start typed on voice failure |
 | `room` | header (company, round, level, minutes, round x/n, interviewer, mic picker, countdown timer, Context, Terminate) · left: problem panel + split + transcript + closed banner + composer · controls: Mute, orb (phases: thinking, speaking "tap to cut in", listening, hearing, transcribing, muted, closed, idle), End · right: Editor/Whiteboard/Notes/From interviewer · rail: context chips, round plan (`PLANS`), tips. Typed round hides orb/mic controls |
 | `report` | round report (score ring, decision, dimensions + evidence, went well/held back, fix first, moments, practise next, transcript) or loop feedback (verdict + rounds) |
 | `feedback` | history grouped by loop, scores by band, delete round |
@@ -97,10 +97,10 @@ Flow: dashboard → interviews → (resume check) → ready → prep → room �
 6. Retake screenshots if the human PDFs get refreshed (`docs/engineering/tools`: `npm run shots`).
 
 ## Voice visibility (which engine runs a round)
-- Helpers near `builtinVoice` in app.js: `clipFor/bvClip/bvName` (built-in voice per interviewer by gender; id `priya_shah` is shown as Charlotte), `needsVS(panel)` (any interviewer `voice` string mentions "indian"; data-driven, no ids), `panelBlocked(panel)` (voice enabled + engine builtin + needsVS), `modeLine(who)` ("Spoken · Built-in voice (Ethan)" / "Spoken · VoiceStudio" / "Typed").
-- Room: `#voiceChip` in `.room-meta` and `#voiceWarn` banner under `.room-head`, both drawn by `renderVoiceChip()` (called from `applyVoiceUi`, so it follows `s.voiceOn` after `start_round`). Banner shows when `s.wanted && !s.voiceOn`; reason = first warn/fail `prep` detail for voicestudio/voice/speaker/mic (`s.voiceWhy`); dismiss sets `s.warnOff`. Not shown when voice is off in Settings.
-- Setup: `syncPanels()` (run at end of `refreshStatus`) disables blocked `<option>`s, relabels them, moves a blocked selection to the first allowed panel or Mixed (`panelNote`), shows `#panelWarn`.
-- Get ready: `#readyMode` line and `#readyPanelWarn` (loop already made with a blocked panel; does not block). Loader subtitle includes `modeLine`. Persona cards in Settings show the built-in voice, or "VoiceStudio only", when engine is builtin.
+- Helpers in app.js: `clipFor/bvClip/bvName` (voice per interviewer by gender; id `priya_shah` is shown as Charlotte), `modeLine(who)` ("Spoken · Voice: Ethan" / "Typed").
+- Room: `#voiceChip` in `.room-meta` and `#voiceWarn` banner under `.room-head`, both drawn by `renderVoiceChip()` (called from `applyVoiceUi`, so it follows `s.voiceOn` after `start_round`). Banner shows when `s.wanted && !s.voiceOn`; reason = first warn/fail `prep` detail for models/voice/speaker/mic (`s.voiceWhy`); dismiss sets `s.warnOff`. Not shown when voice is off in Settings.
+- Setup: `syncPanels()` (run at end of `refreshStatus`) hides the panel field and keeps it on Mixed: two voices, so no panel to pick.
+- Get ready: `#readyMode` line (`#readyPanelWarn` stays hidden). Loader subtitle includes `modeLine`. The Interviewers grid in Settings is hidden.
 
 ## Send feedback (Settings › Send feedback, `data-sec="share"`)
 - Also linked from the sidebar foot. `renderFeedbackForm()` builds the choices from `FB` (app.js); `send_feedback` →
@@ -109,7 +109,7 @@ Flow: dashboard → interviews → (resume check) → ready → prep → room �
   form, re-read ids/labels from `FB_PUBLIC_LOAD_DATA_` in the viewform HTML. Google answers 400 to unknown labels.
 - The survey attaches nothing but the answers. Bugs and ideas use the report view below, not the survey.
 - Report view `#view-issue` (`openIssue(cat, err)`; not `openReport`, which is the round report. In a round it asks "Leave the call?" first (`leaveCall`, shared with `data-nav`); reopening keeps the typed text. Entry points: sidebar "Report a bug" (`#sideReport`), About "Report a bug", error toast "Report this", a link atop the survey): Bug|Idea, editable fields, "Added by Onsite" fields with Remove, a live preview from `report_preview` (debounced 300 ms), then `open_issue`. `lastErr` (set by `toast`) and `issueFrom` (set by `nav`) fill the error and screen fields. Clipboard is written inside the click, before the browser opens. Backend and rules: `REPORT.md`.
-- `open_link(which)` opens fixed https links (form, site, guides, repo, issues, issues_search, discussions, releases, license, privacy, security, notices, author, resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw) in the browser; the UI never passes a URL.
+- `open_link(which)` opens fixed https links (form, site, guides, repo, issues, issues_search, discussions, releases, license, privacy, security, notices, author, resume_matcher, ats_screener, sherpa_onnx, codemirror, excalidraw) in the browser; the UI never passes a URL.
 
 ## Gaps
 

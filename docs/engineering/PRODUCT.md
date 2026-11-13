@@ -16,7 +16,7 @@ Rebuild of a claude.ai artifact (sandbox blocked the mic; browser TTS was roboti
 |---|---|---|
 | N1 | Bring your own AI: Claude Code CLI or user key for Claude API / OpenAI / Gemini / Groq; keys only in local SQLite; no SDKs | every model call works on all 5 providers |
 | N2 | Native on Windows, owns real mic/speakers | no browser audio APIs |
-| N3 | Speech local (built-in engine, or VoiceStudio) with fallbacks; never dead-end | voice failure → "Start typed" |
+| N3 | Speech local (Onsite's own models) with a typed fallback; never dead-end | voice failure → "Start typed" |
 | N4 | Interviewer never gets tools; only research gets web search/fetch | new calls default to no tools |
 | N5 | Model output and dossiers are data, never executed | parse/escape only |
 
@@ -35,7 +35,7 @@ non-English (deliberate; STT tuned for English).
 | loops | 2 panels × 5 personas, fixed voices | shipped | INTERVIEW, VOICE |
 | loops | round report, loop verdict, dashboard | shipped | INTERVIEW |
 | loops | comprehension round: multi-file projects, file tree, diff review | partial (AI writes the project from JD/dossier/resume, 8 bundled fallbacks; not run live yet; `docs/plans/comprehension-workspace.md`) | CODING |
-| voice | spoken rounds, Whisper pass, mute, barge-in by tap | shipped | VOICE |
+| voice | spoken rounds, mute, barge-in by tap | shipped | VOICE |
 | voice | first audio < 2.5 s after candidate stops | partial (API providers close; CLI ~6 s round trip) | VOICE |
 | research | research jobs → dossiers; company loops; import/export | shipped | RESEARCH |
 | resume | ATS parse check, 6 ATS profiles, keyword match, AI screen | shipped | RESUME-CHECK |
@@ -58,7 +58,7 @@ First audio latency (`voice latency` events) < 2.5 s · TTFT (`ttft_ms` per turn
 ## Constraints
 
 Claude Code has no temperature flag (variety via openers, INTERVIEW.md) · Groq free tier ~8K tokens/min (coding turn
-~5.4K) · VoiceStudio is optional and external (never installed/updated by Onsite) · built-in voice is CPU only · Whisper needs a GPU, else Parakeet text.
+~5.4K) · voice is CPU only, English only, two voices (no Indian accents).
 
 ## Open questions
 

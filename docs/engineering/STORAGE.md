@@ -10,7 +10,7 @@ need no migration).
 | `onsite.db` | `%APPDATA%\dev.onsite.app\` (Tauri app data, identifier `dev.onsite.app`) | `~/Library/Application Support/dev.onsite.app/` · `~/.local/share/dev.onsite.app/` |
 | `dossiers/<id>.json`, `backdrop.{jpg,png,webp}` | app data | app data |
 | `onsite.log` | `%LOCALAPPDATA%\Onsite\` | `~/Library/Logs/Onsite/` · `$XDG_STATE_HOME/Onsite/` or `~/.local/state/Onsite/` |
-| temp | `onsite-round-*`, `onsite-job-*` (auto-deleted), `onsite-stt/` (Whisper wavs), `onsite-update/` (installers) | system temp |
+| temp | `onsite-round-*`, `onsite-job-*` (auto-deleted), `onsite-stt/` (left by versions with the Whisper sidecar; still cleared), `onsite-update/` (installers) | system temp |
 | UI prefs | WebView localStorage `onsite.*` | same |
 
 ## Schema (`store/schema.sql`; `PRAGMA user_version` = `SCHEMA_VERSION` = 1; WAL; foreign_keys ON)
@@ -72,11 +72,10 @@ state, prefs plist) goes unless the user keeps it.
   In-app updates run the setup with `/UPDATE`, so the old uninstaller (and the hook) never runs on update. A manual
   setup where the user picks "uninstall first" does run it: models re-download (~580 MB).
 - Settings → Storage → Uninstall (`uninstall_app {keepData}`), refused while a round/research runs
-  (`updates::ensure_idle`): deletes `Onsite · *` profiles in VoiceStudio (best effort, 20 s), then Windows runs
+  (`updates::ensure_idle`): Windows runs
   `uninstall.exe /P [/PURGE]`; macOS/AppImage spawn a detached `sh` that waits for the pid, then `rm -rf` the files
   and the .app / AppImage; .deb first runs `pkexec apt-get remove -y <dpkg -S pkg>`, then the same `sh` for files.
   Keep the two residue lists (Rust `residue()`, hooks.nsh) in step.
-- Not removed: anything VoiceStudio owns; the Windows uninstaller path doesn't touch VoiceStudio voices.
 - macOS and Linux paths not yet run by a person (2026-10-30). The NSIS hook is checked only by the CI build.
 
 ## Concurrency

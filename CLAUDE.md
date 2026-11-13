@@ -17,8 +17,8 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
    (`api_keys`), never sent back to the UI, never logged. No SDKs: plain `reqwest` (native-tls/SChannel).
 2. **The app runs natively on Windows.** It must own the real microphone and speakers.
    Claude Code may be installed on Windows or only in WSL; support both (see "Locating Claude Code").
-3. **Speech is local.** VoiceStudio (already installed, desktop app, backend on `127.0.0.1:3900`)
-   is the primary speech engine for both directions. Fallbacks must exist so the app never dead-ends.
+3. **Speech is local, run by Onsite's own models** (Supertonic 3 TTS + Parakeet TDT STT through `sherpa-onnx`,
+   downloaded once into `<app data>/models`). Without the models a round runs typed, so the app never dead-ends.
 4. **The interviewer never gets tools.** Only the research job may use web search and web fetch
    (CLI: `--tools "WebSearch,WebFetch"`; Claude API: `web_search`/`web_fetch` server tools; OpenAI: `web_search`;
    Gemini: `google_search` grounding; Groq: `browser_search`, gpt-oss only). Interviewer, report, verdict and ATS calls send no tools on every provider.
@@ -29,8 +29,7 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
 - **Tauri 2** desktop shell. Rust core in `src-tauri/`. UI in `ui/` (plain HTML/CSS/JS, no framework,
   ported from the artifact). Rust ↔ UI via Tauri commands and events.
 - **Tokio** for async, **serde/serde_json**, **rusqlite** (bundled) for storage, **tracing** for logs.
-- Audio: **cpal** (capture + playback), simple energy VAD first (webrtc-vad crate optional later),
-  **tokio-tungstenite** for VoiceStudio WebSockets, **reqwest** for its HTTP API.
+- Audio: **cpal** (capture + playback), simple energy VAD; speech models through **sherpa-onnx**.
 
 ## Modules (src-tauri/src/)
 
@@ -142,84 +141,22 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   problem whose title matches a reported question (`Bank::match_reported`), else the usual pick.
 - Export writes `<Downloads>/<id>.json`; Import takes any such file.
 
-### stt/: speech to text
-- Primary: VoiceStudio live STT over `ws://127.0.0.1:3900/v1/audio/transcriptions/stream?pcm=1&sr=16000`.
-  Send raw signed 16-bit mono PCM frames; finish with `{"type":"input_audio.end"}`; read
-  `partial` and `final` JSON frames (`final_kind: "summary"` is authoritative).
-- Fallback: `POST :3900/v1/audio/transcriptions` (OpenAI-compatible) with a WAV of the utterance.
-- Accuracy pass: Whisper large-v3 kept loaded on the GPU in a Python sidecar (`sidecar/whisper_server.py`,
-  driven by `voice/whisper.rs`). Parakeet gives the live caption; Whisper's text is what gets sent.
-  If Whisper is missing or fails, Parakeet's text is used.
-
-### Built-in voice engine (2026-10-30)
-Speech can also run inside Onsite (Supertonic 3 TTS + Parakeet TDT through the `sherpa-onnx` crate, models downloaded from
-github.com into `<app data>/models`), selected in Settings > Voice; VoiceStudio stays as the other engine. Details,
-files, pins and TODOs: `docs/engineering/VOICE.md`; plan: `docs/plans/voice-without-voicestudio.md`.
-
-### tts/: text to speech
-- Trait `Speaker { speak(text), stop(), is_busy() }` with a queue and barge-in support.
-- Primary: VoiceStudio streaming TTS over `ws://127.0.0.1:3900/ws/tts`:
-  send JSON `{"text": "...", "voice": "<profile_id>", ...}`; receive binary PCM16 @ 24 kHz mono
-  chunks, then `{"type":"done",...}` or `{"type":"error","detail":...}`. Play chunks as they arrive.
-- Fallback 1: `POST :3900/v1/audio/speech` (OpenAI-compatible) or `POST :3900/generate`
-  (multipart form: `text`, `num_step`, `speed`, optional `profile_id`, `language`, `instruct`; returns WAV).
-- Fallback 2: Windows SAPI (e.g. via the `tts` crate).
-- Voices: `GET :3900/profiles` for the voice picker. Health: `GET :3900/health`.
-- VoiceStudio is loopback-only and unauthenticated by default. If `OMNIVOICE_API_KEY` is set,
-  send `Authorization: Bearer <key>`. Read field names from the live backend (`/docs` OpenAPI)
-  before coding against them; the notes above came from reading its source, not from a live test.
-
-- **Verified live (VoiceStudio 0.5.6, 2026-10-26, RTX 5050):**
-  - Cold start: backend up ~70 s after launching the app; the first speech call then takes ~60 s
-    (weights). Onsite warms it up at launch with one short line.
-  - TTS used: `POST /v1/audio/speech` JSON `{model:"omnivoice", input, voice:<profile id>,
-    response_format:"pcm", stream_format:"audio", num_step, speed}` → raw PCM16 24 kHz mono.
-    It arrives in one burst after generation, so latency = generation time. `num_step` 8: ~1.0 s for a
-    short sentence, ~1.2 s for a 5 s sentence; 16: ~1.6 s. Default 8.
-  - STT used: `ws://127.0.0.1:3900/v1/audio/transcriptions/stream?pcm=1&sr=16000`. Events seen:
-    `session.started`, `status` (stage loading/ready), `partial {text}`; then `final` (`final_kind`
-    utterance|summary). Send `{"type":"input_audio.end"}` to finish. Capabilities doc:
-    `GET /v1/audio/capabilities`.
-  - English only: Parakeet v3 auto-detects among 25 languages and turned accented English into Spanish.
-    Onsite asks for v2 (English-only) and, if missing, installs it via `POST /models/install
-    {repo_id:"csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"}` (0.66 GB; progress in
-    `GET /models/install/status`). v3 is used only until that finishes. TTS always sends `language:"English"`.
-  - STT stream runs VoiceStudio's *dictation* engine. Default here is `sherpa-whisper-tiny`: it drops
-    audio after ~30 s and loops ("for the MQ for the MQ"). Onsite passes `&model=` (parakeet-tdt v2, else
-    v3), cuts long answers into segments at short pauses, collapses repeats and fixes tech terms.
-    The stream takes no language or prompt. Batch `/v1/audio/transcriptions` honours both but reloads
-    large-v3 on every call (~8 s idle, ~38 s once the voice model fills the GPU), so it is not used.
-    Last-segment latency ~3.4 s on CPU Parakeet.
-  - Parakeet v2 still mangles tech terms ("Postgres Creole", "reddish" for Redis, "identity case" for
-    idempotency key). Measured 2026-10-26 on 8 accented tech answers: Whisper large-v3 int8 kept loaded
-    on the GPU is word-perfect at 1.1-1.5 s per answer (CPU int8: ~12 s). Onsite runs it as a sidecar
-    with VoiceStudio's bundled Python (`%APPDATA%/VoiceStudio/runtime/project/.venv`, has faster-whisper
-    + CUDA) and the weights VoiceStudio downloaded (`%LOCALAPPDATA%/OmniVoice/hf_cache`). It loads at
-    app start (~10 s); each finished segment goes to it with the tech vocabulary as the prompt.
-  - Mic audio goes through a windowed-sinc low-pass before 48→16 kHz downsampling (aliasing hurt ASR).
-  - `/ws/tts` is not used; the HTTP stream is simpler and documented in `/openapi.json`.
-  - `voice` must be a profile id. `"default"` gives a different random speaker on every call (this
-    made the interviewer change voice mid-reply). Design profiles clone a fixed sample rendered at
-    creation, so one profile id = one stable voice. Do not lock profiles: unlock deletes the seed.
-  - `/model/status` reports `loaded:false` even when speech works; only `loading` is meaningful.
-    VoiceStudio unloads after ~15 min idle; the next call takes ~10 s, so Onsite warms up at round start.
-  - Persona design profiles: pass `ref_text` on `POST /profiles` and VoiceStudio renders that line as the
-    sample (ours ~10.5 s; the default line gave ~3.8 s and voices drifted, e.g. Neha going male). If the
-    engine isn't loaded, the profile is saved with *no* sample and speech falls back to instruct-only:
-    a new speaker per call. Onsite rebuilds persona profiles lacking a sample or our current line.
-    Current code (`vs.rs::render_persona_sample`): Onsite renders the sample line itself via `/v1/audio/speech` with the
-    persona's `instruct` over a few seeds/step counts, scores each take (voiced share, hiss, median pitch vs the
-    instruction, noise floor), keeps the first passing or closest take, and creates a clone profile from it.
-  - VoiceStudio permanently *demotes* a sherpa dictation model after one session where it decoded
-    nothing (`prefs.json` `dictation.silent_models`), then serves whisper-tiny even when `&model=` asks
-    for Parakeet. Not exposed in the API; choosing the model via `POST /dictation/prefs` clears it.
-    Onsite does that at round start and restores the owner's own pick.
+### voice/: speech (built-in engine only)
+- TTS: Supertonic 3, two shipped voices (Ethan, Charlotte); a panel interviewer's voice is picked by gender.
+  STT: Parakeet TDT v2 (English only) on the CPU. Both run in-process through `sherpa-onnx`; models come from
+  github.com into `<app data>/models` (Settings > Voice > Download). `engine.rs` = `Engine` (both models) and `Tts`.
+- `stt.rs`: energy VAD, 400 ms pre-roll, segments cut at short pauses (3-20 s), each finished segment decoded while
+  the candidate keeps talking; the open segment is re-decoded every 0.5 s for the live caption. Tech terms are fixed
+  against a vocabulary and repetition loops collapsed.
+- Mic audio goes through a windowed-sinc low-pass before 48->16 kHz downsampling (aliasing hurt ASR).
+- VoiceStudio was the speech engine until 2026-11-11 and has been removed (plan: `docs/plans/voice-without-voicestudio.md`).
+  Old settings blobs still carry `engine`, `base_url`, `voice`, `steps`; serde ignores them.
+- Details, files, pins and TODOs: `docs/engineering/VOICE.md`.
 
 ### Loader (start_round)
 - Join opens a "Getting the room ready" view; `start_round` returns only when the room is ready, emitting `prep`
   events `{step, state: run|ok|warn|fail|off, detail}` for: claude (system/init seen), question (first sentence
-  written), voicestudio, voice (persona profile resolved and warm-up spoken), stt (Parakeet picked/un-demoted),
-  whisper (sidecar Ready, waits up to 60 s), speaker, mic (3 s of real audio). Voice playback is held (`go`) until
+  written), models (voice models installed), voice (models loaded and warm-up spoken), stt, speaker, mic (3 s of real audio). Voice playback is held (`go`) until
   then, and the round clock restarts. Voice or mic failure → the UI offers "Start typed". `cancel_start` stops it.
 - Start runs the resume check (`ats_check`) first; no resume or an unreadable file blocks the loop. The result
   is shown on Get ready.
@@ -298,16 +235,15 @@ rest with `color-mix`. app.css has no color literals left except status glows: *
 `--accent-line`, `--sel-bg`, `--pane`, … on `:root`), or the new rule won't follow the theme. The page background is
 `--backdrop`; a custom image (Settings → Appearance) is shrunk to ≤2560×1600 JPEG in JS and saved by Rust as
 `<app data>/backdrop.{jpg,png,webp}` (type checked from bytes). The whiteboard's Excalidraw theme is compiled in as dark.
-Settings is one view with sections (Appearance, AI model, VoiceStudio, Updates, Privacy, Storage, Send feedback, About); `data-sec` on a
+Settings is one view with sections (Appearance, AI model, Voice, Updates, Privacy, Storage, Send feedback, About); `data-sec` on a
 `data-nav="settings"` link opens a section. About (`setSection('about')` fills the live version from `app_version`): why Onsite exists, free + MIT, author, credits, roadmap.
 Its links are `data-link` buttons; `open_link` (commands.rs) takes only fixed keys, never a URL: feedback_form, site, guides, repo, issues, issues_search, discussions, releases, license, privacy, security, notices, author,
-resume_matcher, ats_screener, voicestudio, sherpa_onnx, codemirror, excalidraw. Add a key there before adding a link. Persona cards come from `get_panels` (traits, strictness, backstory,
-voice, rounds); "Play voice" = `voice_persona_preview` (builds the profile once, then speaks one line).
+resume_matcher, ats_screener, sherpa_onnx, codemirror, excalidraw. Add a key there before adding a link. Persona cards come from `get_panels` (traits, strictness, backstory,
+voice, rounds); "Play voice" = `voice_persona_preview` (speaks one line in their voice).
 Updates (`updates.rs`): GitHub releases of Prateesh-Sulikeri/Onsite, only when the user presses Check. Install =
 download that tag's `*-setup.exe` (github.com URLs only) to %TEMP%\onsite-update, run it with `/UPDATE` (never runs the old
 uninstaller, which would delete the models), quit. Works for older tags
-(NSIS allows downgrades). Refused while a round or research job runs. VoiceStudio: installed version from `/health`
-`version`, else `resources/pyproject.toml` in its install folder; latest from its GitHub; never updated by Onsite.
+(NSIS allows downgrades). Refused while a round or research job runs.
 Storage (`storage.rs`): sizes + counts, limits in settings `storage_limits` {keep_rounds, keep_days, log_max_mb},
 enforced at startup and on save (finished rounds only); clear log, delete temp, VACUUM, open data/log folder.
 Uninstall (`uninstall.rs`, NSIS hooks `src-tauri/windows/hooks.nsh`): every real uninstall removes models, log and temp;
@@ -349,7 +285,7 @@ hard-coded in JS.
 - Acceptance: a new company dossier is produced without touching a chat window.
 
 ### M3: Voice
-- VoiceStudio STT + TTS with fallbacks, VAD turn-taking, pause setting, voice picker, mic test screen.
+- Local STT + TTS (built-in engine), VAD turn-taking, pause setting, voice picker, mic test screen.
 - Acceptance: a full spoken round with no typing; first audio of each reply < 2.5 s after the user stops
   talking on the owner's machine (measure; tune model choice and sentence chunking).
 
@@ -373,8 +309,8 @@ hard-coded in JS.
   unsigned. `SECURITY.md` ("aren't code-signed yet") is the true state; `CODE_SIGNING.md` is the policy page
   SignPath asks for. When signing goes live, wire it into `release.yml` and update `SECURITY.md` and the
   release-notes warnings table.
-- Friends' machines: Python for Run/Submit falls back to VoiceStudio's bundled Python (`runner::python()`,
-  skips the `WindowsApps` Store stub). Java, g++ and Node must be installed to Run in those languages.
+- Friends' machines: Python for Run/Submit comes from PATH (`runner::python()`, skips the `WindowsApps` Store stub).
+  Python, Java, g++ and Node must be installed to Run in those languages.
 
 ## Working rules for Claude Code in this repo
 - Build folders: the dev build uses `D:\cargo-target\onsite`. When the running app locks it, every agent and check uses the one shared
@@ -383,8 +319,8 @@ hard-coded in JS.
 - Small commits per step with clear messages. Run `cargo clippy -- -D warnings` and `cargo test` before
   committing Rust changes.
 - Do not add a provider SDK dependency. API keys come only from Settings (`api_keys`), never from env vars or files.
-- When a fact about an external tool (Claude Code flags, VoiceStudio endpoints) is uncertain, check it
-  live (`claude --help`, `curl 127.0.0.1:3900/openapi.json`) and update this file.
+- When a fact about an external tool (Claude Code flags, provider APIs) is uncertain, check it
+  live (`claude --help`) and update this file.
 - Keep user-facing text short and plain.
 - Never use em or en dashes in code, docs, UI copy or prompts. Use a comma, colon or hyphen. If such a character is functionally required, write it as a `\u` escape
   (`feedback.rs` MODES keeps a real em dash that way because it must match the Google Form options). UI option labels are `Name: description`; `app.js` splits them on `:`.
@@ -404,5 +340,5 @@ hard-coded in JS.
   `/graphify . --update`, which re-reads the changed docs with the LLM.
 - `.graphifyignore` leaves out `ui/vendor/`, test fixtures, icons, images, license texts and the artifact
   reference. Keep vendored or generated files out of it, or they swamp the graph.
-- Hubs to know: `AppState` (bridges 11 groups), `ClaudeSession`, `Store`, `Question`, `ApiClient`, `VoiceStudio`.
+- Hubs to know: `AppState` (bridges 11 groups), `ClaudeSession`, `Store`, `Question`, `ApiClient`.
   Weakest groups (cohesion ~0.05): `commands.rs` and ATS job keywords/scoring.
