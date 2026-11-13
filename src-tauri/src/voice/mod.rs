@@ -8,6 +8,7 @@ pub mod engine;
 pub mod health;
 pub mod models;
 pub mod score;
+pub mod speech_text;
 pub mod stt;
 
 use crate::error::{AppError, Result};

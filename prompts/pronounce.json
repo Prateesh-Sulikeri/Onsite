@@ -1,0 +1,22 @@
+{ "say": [
+  { "term": "PostgreSQL", "as": "Postgres Q L" },
+  { "term": "gRPC", "as": "G R P C" },
+  { "term": "nginx", "as": "engine x" },
+  { "term": "k8s", "as": "kubernetes" },
+  { "term": "OAuth", "as": "oh auth" },
+  { "term": "SQL", "as": "sequel" },
+  { "term": "MySQL", "as": "my sequel" },
+  { "term": "NoSQL", "as": "no sequel" },
+  { "term": "JWT", "as": "J W T" },
+  { "term": "C++", "as": "C plus plus" },
+  { "term": "C#", "as": "C sharp" },
+  { "term": "I/O", "as": "I O" },
+  { "term": "TCP/IP", "as": "T C P I P" },
+  { "term": "CI/CD", "as": "C I C D" },
+  { "term": "24/7", "as": "twenty four seven" },
+  { "term": "e.g.", "as": "for example" },
+  { "term": "i.e.", "as": "that is" },
+  { "term": "etc.", "as": "et cetera" },
+  { "term": "vs", "as": "versus" },
+  { "term": "vs.", "as": "versus" }
+] }
