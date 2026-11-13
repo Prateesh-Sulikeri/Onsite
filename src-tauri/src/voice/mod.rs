@@ -5,6 +5,7 @@
 pub mod audio;
 pub mod builtin;
 pub mod engine;
+pub mod health;
 pub mod models;
 pub mod score;
 pub mod stt;
@@ -20,6 +21,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::oneshot;
 use engine::{Engine, PersonaVoice, Tts};
+use health::{Health, Summary};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -168,6 +170,8 @@ struct RoundVoice {
     /// An answer was sent for the turn in progress. Set at once by `answer_sent`, so a turn end that is still
     /// queued (audio still playing) doesn't open the mic after the answer is already in.
     sent: Arc<AtomicBool>,
+    /// Counters for the end-of-round `voice health` log line.
+    health: Arc<Health>,
 }
 
 #[derive(Default)]
@@ -228,6 +232,8 @@ impl Voice {
         let (task_speaking, task_cut) = (speaking_flag.clone(), cut.clone());
         let sent: Arc<AtomicBool> = Default::default();
         let task_sent = sent.clone();
+        let health: Arc<Health> = Default::default();
+        let task_health = health.clone();
         let task = tokio::spawn(async move {
             // One concrete voice for the whole round, so every sentence is the same speaker.
             let voice = engine.voice(&settings);
@@ -292,12 +298,13 @@ impl Voice {
                             // The reply is still being generated: playback prebuffers and waits out dry spells.
                             player.set_streaming(true);
                             task_speaking.store(true, Ordering::SeqCst);
+                            task_health.reply();
                             emit(VoiceEvent::Speaking { active: true });
                         }
                         // Playback runs from the Player queue, so the next batch is generated
                         // while this one plays. A cut-in abandons the call still generating.
                         tokio::select! {
-                            _ = speak_into(&player, &voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &emit) => {}
+                            _ = speak_into(&player, &voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &task_health, &emit) => {}
                             _ = until_set(&task_cut) => {}
                         }
                     }
@@ -308,6 +315,7 @@ impl Voice {
                             tokio::time::sleep(Duration::from_millis(50)).await;
                         }
                         let dry = player.take_underruns();
+                        task_health.dry_spells(dry);
                         if dry > 0 {
                             tracing::info!(dry, "reply playback ran dry");
                         }
@@ -341,7 +349,7 @@ impl Voice {
             player.clear();
         });
 
-        *self.current.lock().unwrap() = Some(RoundVoice { round_id, tx, ctl, muted, hold, task, alive, speaking: speaking_flag, cut, sent });
+        *self.current.lock().unwrap() = Some(RoundVoice { round_id, tx, ctl, muted, hold, task, alive, speaking: speaking_flag, cut, sent, health });
         Ok(VoiceStart { ready, go })
     }
 
@@ -425,6 +433,11 @@ impl Voice {
 
     pub fn end(&self) {
         if let Some(r) = self.current.lock().unwrap().take() {
+            let h = r.health.summary();
+            if h.pieces > 0 {
+                let Summary { replies, pieces, dry_spells, cap_hits, retries, rtf_p50, rtf_p90 } = h;
+                tracing::info!(replies, pieces, dry_spells, cap_hits, retries, rtf_p50, rtf_p90, "voice health");
+            }
             r.alive.store(false, Ordering::SeqCst);
             r.task.abort();
             r.hold.store(false, Ordering::SeqCst);
@@ -466,6 +479,7 @@ async fn speak_into(
     answered_at: &Mutex<Option<Instant>>,
     alive: &AtomicBool,
     cut: &AtomicBool,
+    health: &Health,
     emit: &impl Fn(VoiceEvent),
 ) {
     let mut rs = player.resampler_from(voice.rate());
@@ -491,7 +505,11 @@ async fn speak_into(
         .await;
     // rtf > 1 = speech is made slower than it plays: the reply will pause between parts.
     let (total_ms, audio_ms) = (started.elapsed().as_millis() as u64, samples as u64 * 1000 / voice.rate().max(1) as u64);
-    let rtf = format!("{:.2}", total_ms as f32 / audio_ms.max(1) as f32);
+    let rtf_value = total_ms as f32 / audio_ms.max(1) as f32;
+    if audio_ms > 0 {
+        health.piece(rtf_value);
+    }
+    let rtf = format!("{rtf_value:.2}");
     tracing::info!(chars = text.chars().count(), first_ms, total_ms, audio_ms, rtf, "tts");
     if let Err(e) = res {
         tracing::warn!("tts failed: {e}");
