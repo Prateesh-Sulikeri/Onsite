@@ -201,8 +201,9 @@ fn tts(engine: &str, o: &Opts) {
 
     let lines: Vec<String> =
         std::fs::read_to_string(fixtures().join("tts_lines.txt")).unwrap().lines().filter(|l| !l.trim().is_empty()).map(str::to_string).collect();
-    // The text spoken in every persona clip (`vs.rs::PERSONA_SAMPLE`).
-    let ref_text = onsite_lib::voice::vs::PERSONA_SAMPLE;
+    // The text spoken in every persona clip (they were rendered from this line).
+    let ref_text = "Hi, thanks for joining today. We'll start with a quick introduction, \
+and then move on to the main problem. Take your time, think out loud, and ask me anything that is unclear.";
     let out = root().join("out").join(o.tag.clone().unwrap_or_else(|| engine.to_string()));
     let mut rows = Vec::new();
     for persona in &o.personas {

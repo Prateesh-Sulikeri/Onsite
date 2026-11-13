@@ -7,8 +7,6 @@ pub mod builtin;
 pub mod engine;
 pub mod models;
 pub mod stt;
-pub mod vs;
-pub mod whisper;
 
 use crate::error::{AppError, Result};
 use audio::Player;
@@ -20,7 +18,7 @@ use stt::{ListenCtl, ListenEnd};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::oneshot;
-use engine::{Engine, Tts, VoiceEngine};
+use engine::{Engine, PersonaVoice, Tts};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -31,26 +29,17 @@ pub struct VoiceSettings {
     /// Unmuting still opens the mic.
     #[serde(default)]
     pub listen_only: bool,
-    /// Built-in (default for new installs) or VoiceStudio (kept by installs that had no choice yet).
-    #[serde(default = "engine::legacy_engine")]
-    pub engine: VoiceEngine,
-    /// Built-in engine: the voice for rounds without a panel interviewer (a clip id from `builtin::VOICES`).
+    /// The voice for rounds without a panel interviewer (a clip id from `builtin::VOICES`).
     pub builtin_voice: String,
-    pub base_url: String,
-    /// VoiceStudio profile id, or "" for the first profile. VoiceStudio's own "default"
-    /// voice is never used: it picks a new random speaker on every call.
-    pub voice: String,
-    /// 8 = fast, 16 = balanced, 32 = best.
-    pub steps: u32,
     pub speed: f32,
     /// Silence that ends an answer. 0 = I press Done.
     pub pause_ms: u32,
     /// cpal device ids; "" = the Windows default.
     pub input_device: String,
     pub output_device: String,
-    /// Set per round for panel interviewers; overrides `voice`. Never saved.
+    /// Set per round for panel interviewers; overrides `builtin_voice`. Never saved.
     #[serde(skip)]
-    pub persona: Option<vs::PersonaVoice>,
+    pub persona: Option<PersonaVoice>,
 }
 
 impl Default for VoiceSettings {
@@ -58,11 +47,7 @@ impl Default for VoiceSettings {
         Self {
             enabled: true,
             listen_only: false,
-            engine: VoiceEngine::Builtin,
             builtin_voice: builtin::DEFAULT_VOICE.into(),
-            base_url: "http://127.0.0.1:3900".into(),
-            voice: String::new(),
-            steps: 8,
             speed: 1.0,
             pause_ms: 3000,
             input_device: String::new(),
@@ -90,8 +75,7 @@ pub enum VoiceEvent {
 }
 
 /// Sentences shorter than this ("Okay.", "Got it.", "Hey Prateesh.") wait briefly for
-/// the next one and go to VoiceStudio together. Fewer tiny calls means less drift and
-/// fewer gaps.
+/// the next one and go to the TTS together. Fewer tiny calls means fewer gaps.
 const SHORT_WORDS: usize = 4;
 const SHORT_CHARS: usize = 24;
 /// Never merge past this, so one call never gets slow.
@@ -158,7 +142,7 @@ fn should_listen(awaiting_answer: bool, muted: bool) -> bool {
     awaiting_answer && !muted
 }
 
-/// From [`Voice::begin`]: `ready` gives the interviewer's voice name once VoiceStudio has spoken
+/// From [`Voice::begin`]: `ready` gives the interviewer's voice name once the engine has spoken
 /// with it (or why it couldn't); sending `go` lets queued speech play.
 pub struct VoiceStart {
     pub ready: oneshot::Receiver<std::result::Result<String, String>>,
@@ -206,9 +190,6 @@ impl Voice {
     /// plays until `go` is sent (or dropped), so the loader can finish first.
     pub fn begin(&self, app: &AppHandle, round_id: i64, settings: VoiceSettings, engine: Engine) -> Result<VoiceStart> {
         self.end();
-        stt::reset_model_choice();
-        // Normally already loaded at app start; restarts it if it died.
-        whisper::start();
         let player = self.player()?;
         let (tx, mut rx) = unbounded_channel::<Cmd>();
         let (ready_tx, ready) = oneshot::channel();
@@ -248,39 +229,21 @@ impl Voice {
         let task_sent = sent.clone();
         let task = tokio::spawn(async move {
             // One concrete voice for the whole round, so every sentence is the same speaker.
-            let resolved = engine.voice(&settings).await;
+            let voice = engine.voice(&settings);
+            tracing::info!(name = %voice.name(), "interviewer voice");
+            // Warm up while Claude writes its first reply (loads the voice clip, ~1 s); sentences queue meanwhile.
             // Sent to the loader once the voice has spoken (or can't).
-            let mut warm = resolved.as_ref().map(|v| v.name()).map_err(|e| e.to_string());
-            let voice = match resolved {
-                Ok(v) => {
-                    tracing::info!(name = %v.name(), "interviewer voice");
-                    Some(v)
+            let t = Instant::now();
+            let warm = match voice.speak("Okay, let's begin.", settings.speed, |_| {}).await {
+                Ok(()) => {
+                    tracing::info!(ms = t.elapsed().as_millis() as u64, "voice warm for the round");
+                    Ok(voice.name())
                 }
                 Err(e) => {
-                    tracing::warn!("no interviewer voice: {e}");
-                    None
+                    tracing::warn!("voice warm-up failed: {e}");
+                    Err(e.to_string())
                 }
             };
-            // VoiceStudio drops its weights after ~15 min idle (next call ~10 s, else ~1 s), and
-            // `/model/status` can't tell us which. Warm up while Claude writes its first reply;
-            // sentences queue meanwhile.
-            // Skipped when VoiceStudio spoke recently (app start, last round): it adds ~1-2 s
-            // before the first line. The built-in engine always warms up (it loads the voice clip, ~1 s).
-            let warm_up = match &voice {
-                Some(Tts::Studio { .. }) => !vs::spoke_within(Duration::from_secs(300)),
-                Some(Tts::Builtin { .. }) => true,
-                None => false,
-            };
-            if let Some(v) = voice.as_ref().filter(|_| warm_up) {
-                let t = Instant::now();
-                match v.speak("Okay, let's begin.", settings.steps, settings.speed, |_| {}).await {
-                    Ok(()) => tracing::info!(ms = t.elapsed().as_millis() as u64, "voice warm for the round"),
-                    Err(e) => {
-                        tracing::warn!("voice warm-up failed: {e}");
-                        warm = Err(e.to_string());
-                    }
-                }
-            }
             let _ = ready_tx.send(warm);
             let _ = go_rx.await;
             let mut speaking = false;
@@ -320,7 +283,6 @@ impl Voice {
                                 Ok(None) | Err(_) => break,
                             }
                         }
-                        let Some(voice) = voice.as_ref() else { continue };
                         if batch.0.is_empty() {
                             continue;
                         }
@@ -334,7 +296,7 @@ impl Voice {
                         // Playback runs from the Player queue, so the next batch is generated
                         // while this one plays. A cut-in abandons the call still generating.
                         tokio::select! {
-                            _ = speak_into(&player, voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &emit) => {}
+                            _ = speak_into(&player, &voice, &settings, &batch.0, &task_answered, &task_alive, &task_cut, &emit) => {}
                             _ = until_set(&task_cut) => {}
                         }
                     }
@@ -474,8 +436,7 @@ impl Voice {
 
     /// Speaks `text` once in the voice chosen in `settings`.
     pub async fn test_speak(&self, engine: &Engine, settings: &VoiceSettings, text: &str) -> Result<u64> {
-        let voice = engine.voice(settings).await?;
-        self.speak_as(&voice, settings, text).await
+        self.speak_as(&engine.voice(settings), settings, text).await
     }
 
     /// Speaks `text` once in a given voice (a panel interviewer's preview). Returns ms to first audio.
@@ -485,7 +446,7 @@ impl Voice {
         let mut first_ms = None;
         let mut rs = player.resampler_from(voice.rate());
         voice
-            .speak(text, settings.steps, settings.speed, |pcm| {
+            .speak(text, settings.speed, |pcm| {
                 first_ms.get_or_insert(started.elapsed().as_millis() as u64);
                 player.push(&mut rs, pcm);
             })
@@ -511,7 +472,7 @@ async fn speak_into(
     let mut first_ms: Option<u64> = None;
     let mut samples = 0usize;
     let res = voice
-        .speak(text, settings.steps, settings.speed, |pcm| {
+        .speak(text, settings.speed, |pcm| {
             samples += pcm.len();
             if !alive.load(Ordering::SeqCst) || cut.load(Ordering::SeqCst) {
                 return;
@@ -629,15 +590,17 @@ mod tests {
     }
 
     #[test]
-    fn engine_default_depends_on_saved_blob() {
-        // Fresh install: no saved settings, so Default (built-in). Older install: a blob without the field keeps VoiceStudio.
-        assert_eq!(VoiceSettings::default().engine, VoiceEngine::Builtin);
-        let old: VoiceSettings = serde_json::from_str(r#"{"enabled":true,"steps":16,"base_url":"http://127.0.0.1:3900"}"#).unwrap();
-        assert_eq!(old.engine, VoiceEngine::Voicestudio);
-        assert_eq!(old.builtin_voice, "ethan_brooks");
+    fn old_voicestudio_settings_still_load() {
+        // Installs from the VoiceStudio days saved engine, base_url, voice and steps. They are ignored now.
+        let old: VoiceSettings =
+            serde_json::from_str(r#"{"enabled":true,"engine":"voicestudio","steps":16,"base_url":"http://127.0.0.1:3900","voice":"f34","speed":1.1}"#).unwrap();
+        assert!(old.enabled);
+        assert_eq!(old.builtin_voice, builtin::DEFAULT_VOICE);
+        assert_eq!(old.speed, 1.1);
         let chosen: VoiceSettings = serde_json::from_str(r#"{"engine":"builtin","builtin_voice":"priya_shah"}"#).unwrap();
-        assert_eq!((chosen.engine, chosen.builtin_voice.as_str()), (VoiceEngine::Builtin, "priya_shah"));
-        assert_eq!(serde_json::to_value(VoiceSettings::default()).unwrap()["engine"], "builtin");
+        assert_eq!(chosen.builtin_voice, "priya_shah");
+        let saved = serde_json::to_value(VoiceSettings::default()).unwrap();
+        assert!(saved.get("engine").is_none() && saved.get("base_url").is_none());
     }
 
     #[test]

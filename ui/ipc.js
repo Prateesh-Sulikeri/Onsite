@@ -10,7 +10,7 @@
   const SILENT = new Set(["ui_log", "voice_status", "start_round", "send_answer", "end_round", "run_code", "project_diff",
     "generate_report", "research_start", "research_jobs", "research_cancel", "research_retry", "research_dismiss",
     "ats_check", "ats_screen", "ats_last", "voice_model_download", "voice_builtin_preview", "voice_finish",
-    "voice_interrupt", "voice_mute", "voice_cancel_listen", "voice_launch", "voice_models_reload", "cancel_start"]);
+    "voice_interrupt", "voice_mute", "voice_cancel_listen", "voice_models_reload", "cancel_start"]);
   let active = 0, timer = null;
   const pill = () => document.getElementById("busy");
   const show = () => { timer = null; const p = pill(); if (p && active > 0) p.hidden = false; };

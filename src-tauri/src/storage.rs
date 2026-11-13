@@ -64,7 +64,7 @@ pub struct Item {
     pub label: String,
     pub path: String,
     pub bytes: u64,
-    /// Onsite's own data; the rest belongs to VoiceStudio or the system.
+    /// Onsite's own data; the rest belongs to the system.
     pub ours: bool,
     pub note: String,
 }
@@ -87,7 +87,6 @@ pub fn info(state: &AppState) -> Result<StorageInfo> {
     let d = &state.data_dir;
     let db = d.join("onsite.db");
     let db_bytes = file_size(&db) + file_size(&d.join("onsite.db-wal")) + file_size(&d.join("onsite.db-shm"));
-    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
     let tmp = std::env::temp_dir();
     let backdrop = backdrop_file(d);
     let item = |label: &str, path: &Path, bytes: u64, ours: bool, note: &str| Item {
@@ -97,7 +96,7 @@ pub fn info(state: &AppState) -> Result<StorageInfo> {
         ours,
         note: note.into(),
     };
-    let mut items = vec![
+    let items = vec![
         item("Database", &db, db_bytes, true, "Interviews, transcripts, feedback, dossiers, settings, API keys."),
         item("Dossier files", &d.join("dossiers"), dir_size(&d.join("dossiers")), true, "A JSON copy of each dossier."),
         item("Background image", backdrop.as_deref().unwrap_or(&d.join("backdrop.jpg")), backdrop.as_deref().map_or(0, file_size), true, "Your custom background, if set."),
@@ -105,10 +104,6 @@ pub fn info(state: &AppState) -> Result<StorageInfo> {
         item("Voice models", &crate::voice::models::root(d), dir_size(&crate::voice::models::root(d)), true, "Built-in voice engine models (Supertonic 3, Parakeet). Delete them in Settings > Voice."),
         item("Temporary files", &tmp.join("onsite-update"), dir_size(&tmp.join("onsite-update")) + dir_size(&tmp.join("onsite-stt")), true, "Downloaded installers and speech scratch files."),
     ];
-    if let Some(l) = &local {
-        let cache = l.join("OmniVoice").join("hf_cache");
-        items.push(item("VoiceStudio models", &cache, dir_size(&cache), false, "Voice and speech models. Managed by VoiceStudio."));
-    }
     let total = items.iter().filter(|i| i.ours).map(|i| i.bytes).sum();
     let counts = state.store.lock().unwrap().counts()?;
     Ok(StorageInfo { data_dir: d.display().to_string(), items, counts, limits: limits(state), total })

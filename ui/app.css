@@ -991,7 +991,6 @@ select.lang-pick{font:600 12.5px/1.2 var(--mono); padding:5px 28px 5px 10px; bac
 .proj-note p{margin:0 0 8px}
 .ready-mode{font-weight:600; color:var(--ink)}
 .ready-card .form-msg{text-align:left}
-.persona .meta .vs-only{color:var(--warn)}
 @media (max-width: 720px){ .room-meta{flex-wrap:wrap} .voice-warn{padding:10px 16px} }
 
 /* ---- send feedback ---- */

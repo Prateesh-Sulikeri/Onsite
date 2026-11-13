@@ -24,7 +24,7 @@ const E_WOULD_USE: &str = "entry.1845437555";
 const E_EMAIL: &str = "entry.1938927202";
 
 pub const OS: &[&str] = &["Windows", "macOS", "Linux"];
-pub const MODES: &[&str] = &["Spoken \u{2014} built-in voice", "Spoken \u{2014} VoiceStudio", "Typed", "I didn't finish a round"];
+pub const MODES: &[&str] = &["Spoken \u{2014} built-in voice", "Typed", "I didn't finish a round"];
 pub const FEATURES: &[&str] = &[
     "Mock interview rounds",
     "Coding editor / Run code",

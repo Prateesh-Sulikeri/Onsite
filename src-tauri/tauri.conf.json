@@ -41,8 +41,7 @@
     "resources": {
       "../prompts/": "prompts/",
       "../projects/": "projects/",
-      "../dossiers/": "dossiers/",
-      "../sidecar/": "sidecar/"
+      "../dossiers/": "dossiers/"
     }
   }
 }

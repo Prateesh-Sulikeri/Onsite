@@ -1,8 +1,7 @@
 //! Settings → Storage → Uninstall Onsite: removes the app and everything it left behind.
 //! Windows hands off to the NSIS uninstaller; its hook (`windows/hooks.nsh`) deletes the files
 //! once the app has closed. macOS and Linux have no uninstaller, so a shell waits for Onsite to
-//! quit, then deletes the files and the app itself. VoiceStudio is never touched, only the
-//! interviewer voices Onsite made in it.
+//! quit, then deletes the files and the app itself.
 
 use crate::error::{AppError, Result};
 use crate::updates::{self, Package};
@@ -80,16 +79,6 @@ fn delete_after_exit(paths: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-/// Removes the interviewer voices Onsite made in VoiceStudio, if it's running. Best effort.
-async fn remove_voicestudio_voices(state: &AppState) {
-    let vs = crate::voice::vs::VoiceStudio::new(&state.settings().voice.base_url);
-    match tokio::time::timeout(Duration::from_secs(20), vs.delete_persona_profiles()).await {
-        Ok(Ok(n)) => tracing::info!(n, "uninstall: removed interviewer voices from VoiceStudio"),
-        Ok(Err(e)) => tracing::info!("uninstall: VoiceStudio voices left: {e}"),
-        Err(_) => tracing::info!("uninstall: VoiceStudio didn't answer; its voices are left"),
-    }
-}
-
 /// Uninstalls Onsite. `keep_data` keeps interviews, feedback and settings for a later reinstall;
 /// models, the log and temp files go either way. Returns what happens next; Onsite then quits.
 pub async fn run(app: &AppHandle, keep_data: bool) -> Result<String> {
@@ -118,7 +107,6 @@ pub async fn run(app: &AppHandle, keep_data: bool) -> Result<String> {
             return Err(AppError::Invalid(format!("Couldn't remove the package. Try again, or run: sudo apt remove {name}")));
         }
     }
-    remove_voicestudio_voices(&state).await;
 
     let msg = match pkg {
         Package::Nsis => {

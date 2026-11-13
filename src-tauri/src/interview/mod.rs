@@ -1,5 +1,6 @@
 //! Loop setup, interviewer prompt, and candidate message composition. All pure.
 
+pub mod demo;
 pub mod live;
 pub mod report;
 

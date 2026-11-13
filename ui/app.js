@@ -15,7 +15,7 @@ const LS = {
 
 let CAT = null;          // catalog from prompts/catalog.json
 let SETTINGS = null;     // Rust Settings
-let VS = {up:false, loaded:false, profiles:[], models:[], voices:[]};
+let VS = {up:false, models:[], voices:[]};
 let AIKEYS = {};         // provider id → a key is saved
 let loop = null;         // {id, setup, count}
 let session = null;      // the live round
@@ -163,17 +163,13 @@ const PROVIDERS = {
   groq: {name: "Groq", key: "Groq API key", hint: "Get a free key at console.groq.com, under API Keys. It starts with gsk_. The free tier has low per-minute limits, so long rounds may hit them.",
     models: {"qwen/qwen3.8-27b": "Qwen 3.8 27B: best interviewer", "openai/gpt-oss-120b": "GPT-OSS 120B: has web search", "openai/gpt-oss-20b": "GPT-OSS 20B"}},
 };
-const builtinVoice = () => !!(VS && VS.engine === "builtin");
-/* Which voice speaks for an interviewer. The built-in engine has two voices, picked by gender. */
+/* Which voice speaks for an interviewer. There are two voices, picked by gender. */
 const clipFor = voice => /^\s*f/i.test(voice || "") ? "priya_shah" : "ethan_brooks";
 /* A panel interviewer's voice comes from their gender. A round without a panel is named after its voice (catalogName),
    so the name decides the voice here too. */
 const bvClip = who => who && who.voice ? clipFor(who.voice) : ((CAT.FEMALE_NAMES || []).includes(who && who.name) ? "priya_shah" : "ethan_brooks");
 const bvName = id => ((VS.voices || []).find(v => v.id === id) || {}).name || (id === "priya_shah" ? "Charlotte" : "Ethan");
-/* A panel needs VoiceStudio when any of its people has an Indian accent (the built-in voices are English, not Indian). */
-const needsVS = p => !!p && p.interviewers.some(iv => /indian/i.test(iv.voice || ""));
 const wantsVoice = () => !!(SETTINGS && SETTINGS.voice.enabled);
-const panelBlocked = p => wantsVoice() && builtinVoice() && needsVS(p);
 /* How the candidate answers: spoken (both talk), listen (the interviewer talks, the candidate types), typed (chat only).
    Saved in settings, so it holds when Get ready is skipped. */
 const talkMode = () => !SETTINGS || !SETTINGS.voice.enabled ? "typed" : SETTINGS.voice.listen_only ? "listen" : "spoken";
@@ -198,18 +194,16 @@ document.addEventListener("click", async e => {
   else try{ await api.invoke("save_settings", {settings: SETTINGS}); }catch(err){ toast(`Couldn’t save: ${errText(err)}`, "err"); }
   if (!$("#view-ready").hidden) renderAudioCheck();
 });
-const voiceSettingsLink = `<button type="button" class="linkbtn" data-nav="settings" data-sec="voice">Voice settings</button>`;
-/* "Spoken · Built-in voice (Ethan)" / "Spoken · VoiceStudio" / "Typed" for a round that has not started. */
+/* "Spoken · Voice: Ethan" / "Typed" for a round that has not started. */
 function modeLine(who){
   if (!(wantsVoice() && VS.up)) return "Typed";
   const how = talkMode() === "listen" ? "Interviewer speaks, you type" : "Spoken";
-  return builtinVoice() ? `${how} · Built-in voice (${bvName(bvClip(who))})` : `${how} · VoiceStudio`;
+  return `${how} · Voice: ${bvName(bvClip(who))}`;
 }
 const provider = () => (SETTINGS && SETTINGS.provider) || "claude_code";
 function aiReady(){ const p = provider(); return p === "claude_code" ? !!(SETTINGS && SETTINGS.claude) : !!AIKEYS[p]; }
 
-/* Settings and keys are local and fast. Voice status asks VoiceStudio over HTTP, which can be slow or down,
-   so startup paints the AI status first and fills the voice chip in when it arrives. */
+/* Startup paints the AI status first and fills the voice chip in when it arrives. */
 async function refreshStatus(){
   await refreshAiStatus();
   await refreshVoiceStatus();
@@ -223,35 +217,33 @@ async function refreshAiStatus(){
   cl.title = aiReady() ? `${name} connected` : `${name} isn’t set up. Open Settings.`;
 }
 async function refreshVoiceStatus(){
-  try{ VS = await api.invoke("voice_status"); }catch(e){ VS = {up:false, loaded:false, profiles:[]}; }
-  const vs = $("#sysVoice"), bi = builtinVoice(); vs.className = "sys " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
-  vs.querySelector("span").textContent = bi ? "Voice" : "VoiceStudio";
-  vs.title = bi ? (VS.up ? "Built-in voice ready" : "Voice models aren’t downloaded. Open Settings.")
-    : !VS.up ? "VoiceStudio is not running" : VS.loaded ? "VoiceStudio ready" : "VoiceStudio is loading its voice model";
+  try{ VS = await api.invoke("voice_status"); }catch(e){ VS = {up:false, models:[], voices:[]}; }
+  const vs = $("#sysVoice"); vs.className = "sys " + (VS.up ? "ok" : "bad");
+  vs.querySelector("span").textContent = "Voice";
+  vs.title = VS.up ? "Voice ready" : "Voice models aren’t downloaded. Open Settings.";
   syncPanels();
 }
 setInterval(async () => {
   if (session) return;
   const was = VS && VS.up;
   await refreshStatus();
-  // Voice came up or went away (VoiceStudio started, a model folder changed): redraw an open Settings page.
+  // Voice came up or went away (a model folder changed): redraw an open Settings page.
   if (VS.up !== was && !$("#view-settings").hidden && !testing) renderSettings();
 }, 15000);
 
-/* Once per app run: opening Interviews with no way to speak (built-in models missing, VoiceStudio not running)
-   offers the model download. Skipped when spoken rounds are off. */
+/* Once per app run: opening Interviews with the voice models missing offers the download.
+   Skipped when spoken rounds are off. */
 let voiceNudged = false;
 async function voiceNudge(){
   if (voiceNudged || !wantsVoice()) return;
   await refreshStatus();
   const models = VS.models || [];
-  if (!models.length || models.every(m => m.installed) || VS.studio_up || session || $("#view-interviews").hidden) return;
+  if (!models.length || models.every(m => m.installed) || session || $("#view-interviews").hidden) return;
   voiceNudged = true;
   const size = fmtBytes(models.filter(m => !m.installed).reduce((n, m) => n + m.bytes, 0));
   const d = $("#voiceDlg");
-  $("#voiceDlgBody").textContent = `Spoken rounds need a voice. Download the built-in voice models once (${size}) and they work offline, with no other app.`
-    + (VS.installed ? " Or start VoiceStudio." : "") + " Or use typed interviews: chat only, no voice needed.";
-  $("#voiceDlgStudio").hidden = !VS.installed;
+  $("#voiceDlgBody").textContent = `Spoken rounds need a voice. Download the voice models once (${size}) and they work offline, with no other app.`
+    + " Or use typed interviews: chat only, no voice needed.";
   d.returnValue = ""; d.showModal();
   d.querySelector(".btn.primary").focus();
   const pick = await new Promise(r => d.addEventListener("close", () => r(d.returnValue), {once: true}));
@@ -261,18 +253,7 @@ async function voiceNudge(){
     catch(e){ toast(`Couldn’t save: ${errText(e)}`, "err"); }
     return;
   }
-  if (pick !== "models" && pick !== "studio") return;
-  const engine = pick === "models" ? "builtin" : "voicestudio";
-  if (SETTINGS.voice.engine !== engine){
-    const s = {...SETTINGS, voice: {...SETTINGS.voice, engine}};
-    try{ await api.invoke("save_settings", {settings: s}); SETTINGS = s; }catch(e){ toast(`Couldn’t save: ${errText(e)}`, "err"); return; }
-    await refreshStatus();
-  }
-  if (pick === "studio"){
-    try{ await api.invoke("voice_launch"); toast("Starting VoiceStudio. Spoken rounds work once it’s ready."); waitForVoice(); }
-    catch(e){ toast(errText(e), "err"); }
-    return;
-  }
+  if (pick !== "models") return;
   SET_SEC = "voice";
   nav("settings");
   // Settings render async; bring the download buttons into view once they're there.
@@ -561,7 +542,7 @@ function initSetup(){
   setMode(c.mode === "company" ? "company" : "general", false);
   loadDossiers();
   renderPanelPeople();
-  $("#panel").addEventListener("change", () => { panelNote = ""; renderPanelPeople(); });
+  $("#panel").addEventListener("change", renderPanelPeople);
   $("#roundList").onclick = e => {
     const b = e.target.closest(".chip"); if (!b) return;
     b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true");
@@ -763,47 +744,24 @@ function catalogName(i){
   return pool[(i*5+3) % pool.length];
 }
 function persona(i){ return interviewerFor(i, selectedRounds()[i], $("#panel").value).name; }
-/* With the built-in voice, a panel of Indian-accent people can't be spoken. Grey it out and say why. */
-let panelNote = "";
 function syncPanels(){
   const sel = $("#panel"); if (!sel || !PANELS.length) return;
-  // The built-in engine has two international voices, so there is no panel to choose: always "Mixed".
+  // There are two international voices, so there is no panel to choose: always "Mixed".
   const field = sel.closest("label.field");
-  if (field) field.hidden = builtinVoice();
-  if (builtinVoice() && sel.value){ sel.value = ""; saveCfg(); }
-  [...sel.options].forEach(o => {
-    const p = PANELS.find(x => x.id === o.value); if (!p) return;
-    const bad = panelBlocked(p);
-    o.disabled = bad;
-    o.textContent = `${p.name}: ${bad ? "needs VoiceStudio voices" : "the same five people every time"}`;
-  });
-  const cur = PANELS.find(p => p.id === sel.value);
-  if (cur && panelBlocked(cur)){
-    const alt = PANELS.find(p => !panelBlocked(p));
-    sel.value = alt ? alt.id : "";
-    panelNote = `Switched to ${alt ? alt.name : "Mixed"}. `;
-    saveCfg();
-  }
-  if (!PANELS.some(panelBlocked)) panelNote = "";
+  if (field) field.hidden = true;
+  if (sel.value){ sel.value = ""; saveCfg(); }
   renderPanelPeople();
 }
 function renderPanelPeople(){
   const panel = PANELS.find(p => p.id === $("#panel").value);
-  const w = $("#panelWarn");
-  if (w){
-    w.hidden = !PANELS.some(panelBlocked);
-    w.textContent = `${panelNote}The built-in voice has English voices only. Switch to VoiceStudio in Settings › Voice to use the Indian panel.`;
-  }
   $("#panelPeople").textContent = panel ? panel.interviewers.map(iv => `${iv.name} (${iv.role})`).join(" · ") : "Names rotate. Pick a panel to meet the same people every time.";
   syncMore();
 }
 /* The folded "More options": its title shows the current choices, and it opens by itself when a warning needs to be seen. */
 function syncMore(){
   const d = $("#moreOpts"); if (!d) return;
-  const t = $("#temper"), p = $("#panel");
-  const style = t.selectedOptions[0] ? t.selectedOptions[0].text.split(":")[0] : "";
-  const who = builtinVoice() ? "" : p.value ? (p.selectedOptions[0].text.split(":")[0]) : "Mixed interviewers";
-  d.querySelector("summary small").textContent = [style, who].filter(Boolean).join(" · ");
+  const t = $("#temper");
+  d.querySelector("summary small").textContent = t.selectedOptions[0] ? t.selectedOptions[0].text.split(":")[0] : "";
   const w = $("#panelWarn");
   if (w && !w.hidden) d.open = true;
 }
@@ -915,7 +873,7 @@ async function openRoom(index){
   const voiceOn = !!(SETTINGS && SETTINGS.voice.enabled && VS.up);
   const s = session = {roundId: null, index, key: k, name: loopRound(index).name, persona: name, minutes: loopRound(index).minutes, startedAt: Date.now(),
              shared: [], closed: false, busy: true, pendingEl: null, live: "", draftEl: null,
-             who, engine: builtinVoice() ? "builtin" : "voicestudio", wanted: wantsVoice(), voiceWhy: "", warnOff: false,
+             who, wanted: wantsVoice(), voiceWhy: "", warnOff: false,
              voiceOn, muted: voiceOn && talkMode() === "listen", phase: "thinking", heldBase: null, fromHeld: false, transcribeT: null, abandoned: false};
   // The room fills in behind the loader, so the first question streams in while voice loads.
   openPrep(index, who);
@@ -983,8 +941,8 @@ function enterRoom(s){
 /* Every line is a real check reported by Rust (`prep` events); the call opens when they're done. */
 const PREP_STEPS = [
   ["claude", "AI model"], ["project", "Code project"], ["question", "First question"],
-  ["voicestudio", "VoiceStudio"], ["voice", "Interviewer’s voice"],
-  ["stt", "Live captions"], ["whisper", "Accurate transcript"],
+  ["models", "Voice models"], ["voice", "Interviewer’s voice"],
+  ["stt", "Live captions"],
   ["speaker", "Speaker"], ["mic", "Microphone"],
 ];
 const PREP_WORD = {wait: "Waiting", ok: "Ready", warn: "Fallback", fail: "Failed", off: "Off"};
@@ -995,7 +953,7 @@ function openPrep(index, who){
   $("#prepTitle").textContent = "Getting the room ready";
   $("#prepSub").textContent = `${loopRound(index).name} with ${who.full || who.name}. ${modeLine(who)}. The call opens when everything below is ready.`;
   // The code project step is only for the comprehension round.
-  $("#prepList").innerHTML = PREP_STEPS.filter(([id]) => id !== "project" || loopRound(index).key === "comprehension").map(([id, name]) => [id, id === "voicestudio" && builtinVoice() ? "Voice models" : name]).map(([id, name]) =>
+  $("#prepList").innerHTML = PREP_STEPS.filter(([id]) => id !== "project" || loopRound(index).key === "comprehension").map(([id, name]) =>
     `<li class="wait" data-step="${id}"><i class="dot"></i><div><b>${esc(name)}</b><small></small></div><span>Waiting</span></li>`).join("");
   msg("#prepMsg", "");
   prepButtons(`<button class="btn ghost" data-prep="cancel">Cancel</button>`, {cancel: cancelPrep});
@@ -1009,7 +967,7 @@ function prepButtons(html, actions){
 }
 api.listen("prep", ev => {
   if ($("#view-prep").hidden) return;
-  if (session && !session.voiceWhy && ["warn", "fail"].includes(ev.state) && ["voicestudio", "voice", "speaker", "mic"].includes(ev.step) && ev.detail) session.voiceWhy = ev.detail.replace(/\.?$/, ".");
+  if (session && !session.voiceWhy && ["warn", "fail"].includes(ev.state) && ["models", "voice", "speaker", "mic"].includes(ev.step) && ev.detail) session.voiceWhy = ev.detail.replace(/\.?$/, ".");
   if (session && ev.step === "project") session.writing = ev.state === "run";
   const li = $(`#prepList li[data-step="${ev.step}"]`); if (!li) return;
   if (ev.state === "run" && !li.classList.contains("run")) li.dataset.since = Date.now();
@@ -1062,15 +1020,15 @@ function applyVoiceUi(){
 /* The chip and the warning show what this round really does, not just what Settings says. */
 function renderVoiceChip(){
   const s = session; if (!s) return;
-  const bi = s.engine === "builtin", fell = s.wanted && !s.voiceOn;
+  const fell = s.wanted && !s.voiceOn;
   const chip = $("#voiceChip");
   chip.className = "voice-chip" + (fell ? " warn" : s.voiceOn ? "" : " off");
-  chip.querySelector("b").textContent = s.voiceOn ? (bi ? `Built-in voice · ${bvName(bvClip(s.who))}` : `VoiceStudio · ${s.persona}`) : "Typed";
-  chip.title = s.voiceOn ? (bi ? "Speech runs inside Onsite. Change the engine in Settings > Voice." : "Speech comes from the VoiceStudio app. Change the engine in Settings > Voice.")
+  chip.querySelector("b").textContent = s.voiceOn ? `Voice · ${bvName(bvClip(s.who))}` : "Typed";
+  chip.title = s.voiceOn ? "Speech runs inside Onsite, on this computer."
     : fell ? "Voice didn’t start, so you type your answers." : "Voice is off, so you type your answers.";
   const w = $("#voiceWarn");
   w.hidden = !fell || s.warnOff;
-  if (!w.hidden) $("#voiceWarnText").textContent = `Voice isn’t working, so this round is typed. ${s.voiceWhy || (bi ? "The built-in voice isn’t ready." : "VoiceStudio isn’t ready.")}`;
+  if (!w.hidden) $("#voiceWarnText").textContent = `Voice isn’t working, so this round is typed. ${s.voiceWhy || "The voice isn’t ready."}`;
 }
 $("#voiceWarnX").onclick = () => { if (session) session.warnOff = true; renderVoiceChip(); };
 
@@ -1240,7 +1198,7 @@ api.listen("round", ev => {
   }
 });
 
-/* events from the voice loop (VoiceStudio + mic) */
+/* events from the voice loop (speech + mic) */
 api.listen("voice", ev => {
   const s = session;
   if (!s || !s.voiceOn) return;
@@ -2642,47 +2600,18 @@ async function renderSettings(){
   $("#clPath").textContent = describe(s.claude);
   renderAi();
   showTalk();
-  $("#vSteps").value = String(s.voice.steps); $("#vSpeed").value = String(s.voice.speed); $("#vPause").value = String(s.voice.pause_ms);
-  const bi = builtinVoice();
-  $("#vEngine").value = bi ? "builtin" : "voicestudio";
-  $("#biBlock").hidden = !bi; $("#vsBlock").hidden = bi;
-  $("#vVoiceField").hidden = bi; $("#vStepsField").hidden = bi; $("#biVoices").hidden = !bi;
-  $("#vEngineInfo").textContent = bi ? "Speech runs inside Onsite on your CPU. Download the voice models once; after that it works offline, with no other app."
-    : "VoiceStudio is a separate app that speaks and transcribes locally. Start it before a spoken round.";
+  $("#vSpeed").value = String(s.voice.speed); $("#vPause").value = String(s.voice.pause_ms);
   const vp = $("#vsPill");
-  vp.className = "pill " + (!VS.up ? "bad" : VS.loaded ? "ok" : "warn");
-  vp.textContent = bi ? (VS.up ? "Ready" : "Models needed") : !VS.up ? "Not running" : VS.loaded ? "Ready" : "Loading voice model";
-  if (bi) renderBuiltin();
-  $("#vsInfo").textContent = VS.up ? `VoiceStudio is running${VS.device ? " on " + VS.device : ""}. It speaks for the interviewer and transcribes your answers, locally.` : "VoiceStudio isn’t running. Interviews fall back to typing until it is.";
-  $("#vsLaunchRow").hidden = VS.up || !VS.installed;
-  $("#vsVer").textContent = VS.version ? `${VS.version}${VS.up ? "" : " (installed, not running)"}` : (VS.installed ? "Installed" : "Not installed");
-  // Only real profiles: VoiceStudio's "default" is a random speaker on every call.
-  const profiles = VS.profiles || [];
-  let saved = s.voice.voice;
-  // The saved voice was deleted in VoiceStudio: show and keep the one Rust falls back to.
-  if (saved && VS.up && profiles.length && !profiles.some(p => p.id === saved)){
-    const used = profiles.find(p => !p.name.startsWith("Onsite · ")) || profiles[0];
-    msg("#vResult", `Your saved voice is no longer in VoiceStudio, so Onsite uses ${esc(used.name)}. Pick another below if you like.`);
-    saved = s.voice.voice = used.id;
-    $("#vVoice").innerHTML = `<option value="${esc(used.id)}"></option>`; $("#vVoice").value = used.id;
-    saveSettings();
-  }
-  let opts = profiles.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("");
-  if (saved && !profiles.some(p => p.id === saved)) opts += `<option value="${esc(saved)}">${VS.up ? "Saved voice (missing in VoiceStudio)" : "Saved voice"}</option>`;
-  if (!opts) opts = `<option value="" disabled>${VS.up ? "No voices in VoiceStudio: create one there" : "Start VoiceStudio to pick a voice"}</option>`;
+  vp.className = "pill " + (VS.up ? "ok" : "bad");
+  vp.textContent = VS.up ? "Ready" : "Models needed";
+  renderBuiltin();
   await loadDevices();
   fillDevice($("#vMic"), DEVICES.inputs, s.voice.input_device);
   fillDevice($("#vSpk"), DEVICES.outputs, s.voice.output_device);
   showLang("#vLang");
-  const vv = $("#vVoice");
-  vv.innerHTML = opts;
-  vv.value = saved || (profiles[0] || {}).id || "";
-  vv.disabled = !profiles.length;
-  // Persist the voice actually in use, so it can't change between rounds.
-  if (!saved && profiles.length && !bi) saveSettings();
   setTesting(false);
 }
-/* ---- built-in voice engine ---- */
+/* ---- voice models ---- */
 const modelState = {};   // id -> latest `voice_model` event while a download runs
 function renderBuiltin(){
   const dl = m => modelState[m.id] || (m.downloading ? {state: "downloading", done: 0, total: m.bytes} : null);
@@ -2724,7 +2653,7 @@ api.listen("voice_model", ev => {
   const prev = modelState[ev.id];
   modelState[ev.id] = ev;
   if (ev.state === "done") delete modelState[ev.id];
-  if (!$("#view-settings").hidden && builtinVoice()) {
+  if (!$("#view-settings").hidden) {
     if (ev.state === "done" || ev.state === "error") renderSettings();
     else if (!(prev && prev.state === ev.state && patchModelProgress(ev))) renderBuiltin();
   }
@@ -2784,7 +2713,7 @@ $("#setNav").onclick = e => { const b = e.target.closest("button[data-sec]"); if
 /* Choice labels must match feedback.rs and the live form exactly. */
 const FB = {
   os: ["Windows", "macOS", "Linux"],
-  mode: ["Spoken \u2014 built-in voice", "Spoken \u2014 VoiceStudio", "Typed", "I didn't finish a round"],
+  mode: ["Spoken \u2014 built-in voice", "Typed", "I didn't finish a round"],
   features: ["Mock interview rounds", "Coding editor / Run code", "Whiteboard", "Round report & feedback", "Resume check", "Company research (dossiers)"],
   would: ["Definitely", "Maybe", "Depends on the company", "Probably not"],
 };
@@ -2812,7 +2741,7 @@ async function renderFeedbackForm(){
     $("#fbMode").onchange = () => { $("#fbMode").dataset.touched = "1"; };
   }
   const s = SETTINGS || {};
-  if (s.voice && !$("#fbMode").dataset.touched) $("#fbMode").value = !s.voice.enabled ? "Typed" : s.voice.engine === "voicestudio" ? FB.mode[1] : FB.mode[0];
+  if (s.voice && !$("#fbMode").dataset.touched) $("#fbMode").value = !s.voice.enabled ? "Typed" : FB.mode[0];
 }
 function fbScale(name){ const b = $(`#fbForm .fb-scale[data-name="${name}"] [aria-checked="true"]`); return b ? Number(b.dataset.v) : 0; }
 $("#fbForm").onsubmit = async e => {
@@ -2850,7 +2779,7 @@ const RP_REQUIRED = {bug: ["what", "steps", "expected", "actual"], idea: ["probl
 const RP_OPTS = {
   os: ["Windows", "macOS", "Linux (AppImage)", "Linux (.deb)"],
   ai: ["Claude Code", "Claude API", "OpenAI", "Gemini", "Groq"],
-  voice: ["Typed", "Spoken (built-in voice)", "Spoken (VoiceStudio)", "Not in a round"],
+  voice: ["Typed", "Spoken (built-in voice)", "Not in a round"],
 };
 const VIEW_NAMES = {dashboard: "Dashboard", interviews: "Setup", ready: "Get ready", prep: "Getting the room ready", room: "Call room", report: "Report", feedback: "Past rounds", settings: "Settings", resume: "Resume check", dossiers: "Dossiers", issue: "Dashboard"};
 let rpCat = "bug", rpLast = null, rpTimer = 0, rpSeq = 0, rpLogText = "", rpBusy = false;
@@ -3033,8 +2962,8 @@ $("#bgNone").onclick = () => dropImage(true);
 /* ---- interviewers ---- */
 function renderPersonas(){
   const el = $("#personaGrid");
-  // Built-in voice: no panels to pick, so nothing to show here.
-  el.closest(".panel").hidden = builtinVoice();
+  // No panels to pick (there are two voices), so nothing to show here.
+  el.closest(".panel").hidden = true;
   if (!PANELS.length){ el.innerHTML = `<p class="muted small">No interviewer panels found.</p>`; return; }
   const dots = n => `<span class="strict" title="Strictness ${n} of 5">${[1,2,3,4,5].map(i => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</span>`;
   el.innerHTML = PANELS.map(p => `<div class="persona-panel"><h3>${esc(p.name)}</h3><p>${esc(p.description)}</p><div class="persona-grid">${p.interviewers.map(iv => `
@@ -3043,7 +2972,7 @@ function renderPersonas(){
         <div><b>${esc(iv.name)}</b><small>${esc(iv.role)}</small></div></div>
       <div class="traits">${iv.traits.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div>
       <p title="${esc(iv.backstory)}">${esc(iv.backstory || iv.style)}</p>
-      <div class="meta">Strictness ${dots(iv.strictness)}<br>${iv.rounds.length ? `Runs: ${esc(iv.rounds.map(roundName).join(", "))}<br>` : ""}Voice: ${esc(iv.voice)}${builtinVoice() ? `<br><b class="${needsVS(p) ? "vs-only" : ""}">${needsVS(p) ? "VoiceStudio only" : `Built-in voice: ${esc(bvName(clipFor(iv.voice)))}`}</b>` : ""}</div>
+      <div class="meta">Strictness ${dots(iv.strictness)}<br>${iv.rounds.length ? `Runs: ${esc(iv.rounds.map(roundName).join(", "))}<br>` : ""}Voice: ${esc(iv.voice)}<br><b>Speaks as: ${esc(bvName(clipFor(iv.voice)))}</b></div>
       <button class="btn sm" data-play="${esc(iv.id)}">${icon("speaker")}Play voice</button>
     </article>`).join("")}</div></div>`).join("");
 }
@@ -3086,19 +3015,8 @@ $("#upChannel").onchange = async () => {
 $("#upCheck").onclick = async () => {
   const b = $("#upCheck"); b.disabled = true; b.classList.add("is-busy");
   msg("#upMsg", "Asking GitHub…");
-  const [app, vs] = await Promise.allSettled([api.invoke("check_updates"), api.invoke("voicestudio_version")]);
-  if (app.status === "fulfilled"){ UPDATES = app.value; drawReleases(); msg("#upMsg", ""); }
-  else msg("#upMsg", esc(errText(app.reason)), "err");
-  if (vs.status === "fulfilled"){
-    const v = vs.value, p = $("#vsUpPill");
-    $("#vsInstalled").textContent = v.installed ? `${v.installed}${v.running ? "" : " (not running)"}` : "Not found";
-    $("#vsLatest").textContent = v.latest ? `${v.latest}${v.latest_date ? ` · ${v.latest_date.slice(0, 10)}` : ""}` : (v.note || "Unknown");
-    p.className = "pill " + (v.update_available ? "warn" : v.installed ? "ok" : "bad");
-    p.textContent = v.update_available ? "Update in VoiceStudio" : v.installed ? "Up to date" : "Not installed";
-    $("#vsUpNote").textContent = v.update_available
-      ? `VoiceStudio ${v.latest} is out. Update it from VoiceStudio itself; Onsite doesn’t install it.`
-      : "Onsite doesn’t update VoiceStudio. When there’s a new version, update it from VoiceStudio itself.";
-  }
+  try{ UPDATES = await api.invoke("check_updates"); drawReleases(); msg("#upMsg", ""); }
+  catch(e){ msg("#upMsg", esc(errText(e)), "err"); }
   b.disabled = false; b.classList.remove("is-busy");
 };
 async function installVersion(tag){
@@ -3243,7 +3161,7 @@ $("#aiKeyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("#a
 $("#aiKeyRemove").onclick = () => saveKey("");
 
 function formVoice(){
-  return {...SETTINGS.voice, engine: $("#vEngine").value, voice: $("#vEngine").value === "builtin" ? SETTINGS.voice.voice : $("#vVoice").value, steps: Number($("#vSteps").value), speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
+  return {...SETTINGS.voice, speed: Number($("#vSpeed").value), pause_ms: Number($("#vPause").value)};
 }
 function msg(sel, text, kind = ""){ const el = $(sel); el.className = "form-msg " + kind; el.innerHTML = text; }
 
@@ -3262,9 +3180,7 @@ function saveSettings(){
   });
   return saveChain;
 }
-["#ivModel","#repModel","#vVoice","#vSteps","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
-/* Switching engine takes effect at the next round start; no restart. */
-$("#vEngine").addEventListener("change", async () => { await saveSettings(); await renderSettings(); });
+["#ivModel","#repModel","#vSpeed","#vPause"].forEach(sel => $(sel).addEventListener("change", saveSettings));
 $("#vMic").addEventListener("change", () => setDevices($("#vMic").value, null));
 $("#vSpk").addEventListener("change", () => setDevices(null, $("#vSpk").value));
 
@@ -3294,26 +3210,6 @@ $("#clHealth").onclick = async () => {
   }catch(e){ msg("#clResult", esc(errText(e)), "err"); }
   finally{ b.disabled = false; b.classList.remove("is-busy"); }
 };
-let waitingVoice = false;
-$("#vsLaunch").onclick = async () => {
-  if (waitingVoice) return;
-  const b = $("#vsLaunch"); b.disabled = true;
-  try{ await api.invoke("voice_launch"); msg("#vResult", "Starting VoiceStudio. This page updates when it’s ready."); await waitForVoice(); }
-  catch(e){ msg("#vResult", esc(errText(e)), "err"); }
-  finally{ b.disabled = false; }
-};
-async function waitForVoice(){
-  waitingVoice = true;
-  try{
-    for (let i = 0; i < 60; i++){
-      await new Promise(r => setTimeout(r, 3000));
-      await refreshStatus();
-      if (VS.up && !VS.loaded) msg("#vResult", "VoiceStudio is up. Loading its voice model…");
-      if (VS.up && VS.loaded){ if (!$("#view-settings").hidden) await renderSettings(); msg("#vResult", "VoiceStudio is ready.", "ok"); return; }
-    }
-    msg("#vResult", "VoiceStudio didn’t come up after 3 minutes. Open it yourself and check it for errors.", "err");
-  } finally { waitingVoice = false; }
-}
 /* Voice tests run from Settings and from the setup screen's audio check. One at a time. */
 const TESTERS = {
   settings: {speak: "#vTestSpeak", mic: "#vTestMic", meter: "#vMeter", out: "#vResult", voice: () => formVoice()},
@@ -3324,7 +3220,7 @@ function setTesting(on){
   testing = on;
   Object.values(TESTERS).forEach(t => [t.speak, t.mic].forEach(sel => {
     $(sel).disabled = on || !VS.up;
-    $(sel).title = !VS.up && !on ? (builtinVoice() ? "Download the voice models first" : "Start VoiceStudio first") : "";
+    $(sel).title = !VS.up && !on ? "Download the voice models first" : "";
   }));
 }
 async function testSpeak(t){
@@ -3380,21 +3276,9 @@ async function setDevices(input, output, relisten = false){
   try{ await api.invoke("voice_set_devices", {input: v.input_device, output: v.output_device, relisten}); }
   catch(e){ toast(`Couldn’t switch device: ${errText(e)}`, "err"); }
 }
-/* Where English-only speech recognition stands. */
+/* Which speech recognition runs. */
 function showLang(sel){
-  const e = VS.english, w = VS.whisper || {}, el = $(sel);
-  if (builtinVoice() && VS.up){
-    el.textContent = w.state === "ready" ? "Speech recognition: Whisper large-v3 on your GPU, English only. Parakeet writes the live captions."
-      : "Speech recognition: Parakeet TDT v2 on your CPU, English only. It may mishear some tech terms.";
-    return;
-  }
-  if (!VS.up || !e){ el.textContent = ""; return; }
-  const engine = w.state === "ready" ? "Speech recognition: Whisper large-v3 on your GPU, English only."
-    : w.state === "loading" ? "Loading Whisper onto your GPU… until then, answers use the faster but less accurate Parakeet."
-    : `Whisper is off (${w.reason || "not started"}), so answers use Parakeet, which mishears some tech terms.`;
-  el.textContent = e.state === "installing" ? `${engine} Downloading the English caption model… ${Math.round(e.pct)}%.`
-    : e.state === "missing" ? `${engine} English caption model missing (${e.reason}).`
-    : engine;
+  $(sel).textContent = VS.up ? "Speech recognition: Parakeet TDT v2 on your CPU, English only. It may mishear some tech terms." : "";
 }
 /* ---------------- get ready (before the call) ---------------- */
 /* Shown before round 1 of every loop, and before later rounds when "Check before every round" is on. */
@@ -3446,14 +3330,11 @@ async function renderAudioCheck(){
   $("#readySub").textContent = on ? "Pick your mic and speaker, then check they work. Takes ten seconds."
     : audio ? "The interviewer talks, you type. Check you can hear them." : "You type your answers. Join when you’re ready.";
   const off = mode === "typed" ? "Typed round: chat only, no mic or speaker needed."
-    : !VS.up && builtinVoice() ? "The voice models aren’t downloaded, so this round will be typed. Download them in Settings > Voice to talk."
-    : !VS.up ? "VoiceStudio isn’t running, so this round will be typed. Start it in Settings to talk." : "";
+    : !VS.up ? "The voice models aren’t downloaded, so this round will be typed. Download them in Settings > Voice to talk." : "";
   if (!testing && (off || / will be typed|^Typed round:/.test($("#acResult").textContent))) msg("#acResult", off);
   const who = interviewerFor(readyIndex, loop.setup.rounds[readyIndex], loop.setup.panel);
   $("#readyMode").textContent = modeLine(who);
-  const badPanel = audio && panelBlocked(PANELS.find(p => p.id === loop.setup.panel));
-  $("#readyPanelWarn").hidden = !badPanel;
-  if (badPanel) $("#readyPanelWarn").innerHTML = `The built-in voice can’t do Indian accents, so these interviewers will sound like the English voices. ${voiceSettingsLink}`;
+  $("#readyPanelWarn").hidden = true;
   $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";
   showLang("#acLang");
   setTesting(testing);

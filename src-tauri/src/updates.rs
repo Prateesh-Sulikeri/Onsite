@@ -2,7 +2,6 @@
 //! installed (newer or older) by downloading that release's package for this system: the NSIS
 //! installer on Windows (run, then quit), the disk image on macOS (opened for the user to drag),
 //! the AppImage on Linux (swapped in place, then restarted) or else the .deb (saved to Downloads).
-//! VoiceStudio's installed and latest versions are only shown; it updates itself.
 //! Nothing here runs unless the user opens Updates.
 
 use crate::error::{AppError, Result};
@@ -17,7 +16,6 @@ use tokio::io::AsyncWriteExt;
 
 const ONSITE_RELEASES: &str = "https://api.github.com/repos/Prateesh-Sulikeri/Onsite/releases?per_page=30";
 const ONSITE_TAG: &str = "https://api.github.com/repos/Prateesh-Sulikeri/Onsite/releases/tags/";
-const VOICESTUDIO_LATEST: &str = "https://api.github.com/repos/debpalash/VoiceStudio/releases/latest";
 
 /// (major, minor, patch, is_release, pre-release number). A pre-release sorts below its release and
 /// pre-releases of one version sort by their last number: `0.1.3-exp.2` > `0.1.3-exp.1`, `0.1.3` > `0.1.3-exp.9`.
@@ -334,37 +332,6 @@ async fn download(app: &AppHandle, tag: &str, url: &str, path: &std::path::Path)
         return Err(AppError::Invalid("The download was cut short. Try again.".into()));
     }
     Ok(())
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct VoiceStudioVersion {
-    /// From the running backend, else from its install folder.
-    pub installed: Option<String>,
-    pub running: bool,
-    pub latest: Option<String>,
-    pub latest_date: String,
-    pub update_available: bool,
-    /// Why `latest` is missing, if it is.
-    pub note: String,
-}
-
-pub fn installed_voicestudio() -> Option<String> {
-    let base = PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Programs/VoiceStudio/resources/pyproject.toml");
-    let text = std::fs::read_to_string(base).ok()?;
-    text.lines().find_map(|l| l.trim().strip_prefix("version")?.trim().strip_prefix('=').map(|v| v.trim().trim_matches('"').to_string()))
-}
-
-pub async fn voicestudio(state: &AppState) -> VoiceStudioVersion {
-    let vs = crate::voice::vs::VoiceStudio::new(&state.settings().voice.base_url);
-    let health = vs.health().await.ok();
-    let running = health.is_some();
-    let installed = health.as_ref().and_then(|h| h["version"].as_str().map(String::from)).or_else(installed_voicestudio);
-    let (latest, latest_date, note) = match get_json(VOICESTUDIO_LATEST).await {
-        Ok(v) => (v["tag_name"].as_str().map(String::from), v["published_at"].as_str().unwrap_or_default().to_string(), String::new()),
-        Err(e) => (None, String::new(), e.to_string()),
-    };
-    let update_available = matches!((installed.as_deref().and_then(version_key), latest.as_deref().and_then(version_key)), (Some(i), Some(l)) if l > i);
-    VoiceStudioVersion { installed, running, latest, latest_date, update_available, note }
 }
 
 #[cfg(test)]

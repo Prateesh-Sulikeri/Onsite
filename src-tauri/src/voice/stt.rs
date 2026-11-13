@@ -1,30 +1,15 @@
-//! One spoken answer: mic -> VAD -> VoiceStudio streaming STT -> final text.
+//! One spoken answer: mic -> VAD -> Parakeet (in this process) -> final text.
 //!
-//! VoiceStudio 0.5.6 facts (read from its backend source, checked live):
-//! - The stream endpoint runs the *dictation* engine. With no `model=` it uses the user's
-//!   dictation pref (default `sherpa-whisper-tiny`), which drops everything past ~30 s of
-//!   unbroken speech and loops ("for the MQ for the MQ ...") on long audio.
-//!   `model=sherpa-parakeet-tdt-v3` (sherpa-onnx, CPU) is far more accurate and does not loop.
-//! - The stream takes no language or prompt. Only batch `/v1/audio/transcriptions` does, and it
-//!   reloads Whisper large-v3 on every request (~8 s), which is too slow for turn-taking.
-//! - Summary final = all utterance finals joined, so they carry the same text.
-//!
-//! So we: pick the best installed model, cut long answers into segments at short pauses
-//! (one WS session each, so the tail left to decode at the end stays short), fix domain words
-//! against a vocabulary, and collapse repetition loops.
-//!
-//! Parakeet still mangles tech terms ("Postgres Creole", "reddish" for Redis), so each finished
-//! segment also goes to Whisper large-v3 on the GPU ([`super::whisper`]), with the vocabulary as
-//! its prompt. Parakeet gives the live caption; Whisper's text is what gets sent, when it works.
+//! Long answers are cut into segments at short pauses, so each finished segment decodes while the
+//! candidate keeps talking and the tail left to decode at the end stays short. The open segment is
+//! re-decoded every [`CAPTION_EVERY`] for the live caption. Domain words are fixed against a
+//! vocabulary and repetition loops are collapsed.
 
 use super::audio::{i16_to_f32, rms, Level, Mic, Vad, VadEvent, MIC_RATE};
 use super::builtin::ParakeetStt;
 use super::engine::Engine;
-use super::vs::VoiceStudio;
-use super::{whisper, VoiceEvent};
+use super::VoiceEvent;
 use crate::error::{AppError, Result};
-use futures_util::stream::{SplitSink, SplitStream};
-use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,8 +17,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Notify;
-use tokio::task::JoinHandle;
-use tokio_tungstenite::tungstenite::Message;
 
 const FRAME: usize = (MIC_RATE / 50) as usize; // 20 ms
 const PREROLL: usize = (MIC_RATE as usize * 400) / 1000;
@@ -43,14 +26,8 @@ const SEG_MIN: usize = MIC_RATE as usize * 3;
 const SEG_LONG: usize = MIC_RATE as usize * 20;
 const SEG_PAUSE_MS: u32 = 700;
 const SEG_PAUSE_LONG_MS: u32 = 300;
-/// Wait this long for the last segment's summary after the answer ends.
+/// Wait this long for the last segment's final text after the answer ends.
 const FINAL_WAIT: Duration = Duration::from_secs(15);
-
-/// Dictation models to request, best first. Only installed ones are used.
-/// v2 is English-only. v3 guesses among 25 languages and turned accented English into Spanish,
-/// so it is only a stopgap while v2 downloads.
-const MODEL_PREFERENCE: &[&str] = &[ENGLISH_MODEL, "sherpa-parakeet-tdt-v3"];
-pub const ENGLISH_MODEL: &str = "sherpa-parakeet-tdt-v2";
 
 /// Tech and payments words the recogniser often gets wrong. Matched case- and space-insensitively.
 pub const TECH_TERMS: &[&str] = &[
@@ -75,15 +52,13 @@ pub fn domain_vocab(extra: &[&str]) -> Vec<String> {
 
 #[derive(Debug, Clone)]
 pub struct SttOptions {
-    /// Dictation model id for `?model=`. `None` picks the best installed one.
-    pub model: Option<String>,
     /// Words to restore in the transcript (see [`fix_vocab`]).
     pub vocab: Vec<String>,
 }
 
 impl Default for SttOptions {
     fn default() -> Self {
-        Self { model: None, vocab: domain_vocab(&[]) }
+        Self { vocab: domain_vocab(&[]) }
     }
 }
 
@@ -102,7 +77,7 @@ pub enum ListenEnd {
     NoSpeech,
 }
 
-/// What we have heard so far from one STT stream.
+/// What we have heard so far in one segment: captions (`partial`) and the decoded text (`final`).
 #[derive(Debug, Default)]
 pub struct SttState {
     pub partial: String,
@@ -130,7 +105,7 @@ impl SttState {
             }
             Some("error") => {
                 let detail = msg["detail"].as_str().or(msg["message"].as_str()).unwrap_or("transcription failed");
-                Err(AppError::Voice(format!("VoiceStudio STT: {detail}")))
+                Err(AppError::Voice(format!("Speech recognition: {detail}")))
             }
             _ => Ok(None),
         }
@@ -160,7 +135,7 @@ fn norm(word: &str) -> String {
 }
 
 /// Removes a phrase of 1-8 words repeated 3+ times in a row, keeping one copy.
-/// Whisper-style loops ("for the MQ for the MQ for the MQ") come out as one phrase.
+/// Recogniser loops ("for the MQ for the MQ for the MQ") come out as one phrase.
 pub fn collapse_repeats(text: &str) -> String {
     let words: Vec<&str> = text.split_whitespace().collect();
     let keys: Vec<String> = words.iter().map(|w| norm(w)).collect();
@@ -271,224 +246,23 @@ pub fn clean_transcript(text: &str, vocab: &[String]) -> String {
     collapse_repeats(&fix_vocab(text, vocab))
 }
 
-// ---------- model choice ----------
-
-/// Cached model pick. `Some(None)` = probed, nothing better installed (use server default).
-static MODEL: Mutex<Option<Option<String>>> = Mutex::new(None);
-
-fn http_base(vs: &VoiceStudio) -> String {
-    let ws = vs.stt_ws_url(MIC_RATE);
-    let base = ws.split("/v1/audio/").next().unwrap_or(&ws).to_string();
-    base.replacen("ws", "http", 1)
-}
-
-/// Where the English-only model stands.
-#[derive(Debug, Clone, serde::Serialize, PartialEq)]
-#[serde(tag = "state", rename_all = "snake_case")]
-pub enum EnglishModel {
-    Ready,
-    /// Downloading through VoiceStudio; `pct` 0-100.
-    Installing { pct: f32 },
-    /// Not installed and the download could not start.
-    Missing { reason: String },
-}
-
-/// `repo_id` of the English model in `GET /dictation/models`, when it is listed but not installed.
-pub fn english_repo_to_install(models: &Value) -> Option<String> {
-    let m = models["models"].as_array()?.iter().find(|m| m["id"] == ENGLISH_MODEL)?;
-    (m["installed"].as_bool() != Some(true)).then(|| m["repo_id"].as_str().map(str::to_string)).flatten()
-}
-
-fn get(vs: &VoiceStudio, path: &str) -> reqwest::RequestBuilder {
-    let mut req = reqwest::Client::new().get(format!("{}{path}", http_base(vs))).timeout(Duration::from_secs(3));
-    if let Some(k) = std::env::var("OMNIVOICE_API_KEY").ok().filter(|k| !k.is_empty()) {
-        req = req.bearer_auth(k);
-    }
-    req
-}
-
-/// Checks the English model and starts its download in VoiceStudio (0.66 GB, once) when missing.
-pub async fn english_model(vs: &VoiceStudio) -> EnglishModel {
-    let models: Value = match get(vs, "/dictation/models").send().await {
-        Ok(r) => r.json().await.unwrap_or_default(),
-        Err(e) => return EnglishModel::Missing { reason: e.to_string() },
-    };
-    let Some(repo) = english_repo_to_install(&models) else {
-        return if pick_model(&models).as_deref() == Some(ENGLISH_MODEL) {
-            EnglishModel::Ready
-        } else {
-            EnglishModel::Missing { reason: "VoiceStudio doesn't offer Parakeet TDT v2".into() }
-        };
-    };
-    let jobs: Value = match get(vs, "/models/install/status").send().await {
-        Ok(r) => r.json().await.unwrap_or_default(),
-        Err(e) => return EnglishModel::Missing { reason: e.to_string() },
-    };
-    let job = jobs["jobs"].as_array().into_iter().flatten().find(|j| j["repo_id"] == repo.as_str());
-    if let Some(j) = job.filter(|j| !matches!(j["state"].as_str(), Some("error" | "failed" | "cancelled"))) {
-        let (done, total) = (j["bytes_done"].as_f64().unwrap_or(0.0), j["total_bytes"].as_f64().unwrap_or(0.0));
-        return EnglishModel::Installing { pct: if total > 0.0 { (done / total * 100.0) as f32 } else { 0.0 } };
-    }
-    let mut req = reqwest::Client::new().post(format!("{}/models/install", http_base(vs))).timeout(Duration::from_secs(10));
-    if let Some(k) = std::env::var("OMNIVOICE_API_KEY").ok().filter(|k| !k.is_empty()) {
-        req = req.bearer_auth(k);
-    }
-    match req.json(&serde_json::json!({ "repo_id": repo })).send().await.and_then(|r| r.error_for_status()) {
-        Ok(_) => {
-            tracing::info!(%repo, "installing the English STT model in VoiceStudio");
-            EnglishModel::Installing { pct: 0.0 }
-        }
-        Err(e) => {
-            tracing::warn!(%repo, "English STT model install: {e}");
-            EnglishModel::Missing { reason: e.to_string() }
-        }
-    }
-}
-
-/// Best installed dictation model from `GET /dictation/models`.
-pub fn pick_model(models: &Value) -> Option<String> {
-    let installed: Vec<&str> = models["models"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|m| m["installed"].as_bool() == Some(true))
-        .filter_map(|m| m["id"].as_str())
-        .collect();
-    MODEL_PREFERENCE.iter().find(|p| installed.contains(p)).map(|s| s.to_string())
-}
-
-/// Picks (and un-demotes) the dictation model before the round, so the first answer doesn't
-/// pay for it. None = VoiceStudio's own default (often Whisper Tiny).
-pub async fn prepare(vs: &VoiceStudio) -> Option<String> {
-    choose_model(vs).await
-}
-
-async fn choose_model(vs: &VoiceStudio) -> Option<String> {
-    if let Some(m) = MODEL.lock().unwrap().clone() {
-        return m;
-    }
-    let models: Value = match get(vs, "/dictation/models").send().await {
-        Ok(r) => match r.json().await {
-            Ok(v) => v,
-            Err(e) => {
-                tracing::warn!("dictation models: {e}");
-                return None;
-            }
-        },
-        Err(e) => {
-            tracing::warn!("dictation models: {e}");
-            return None;
-        }
-    };
-    let pick = pick_model(&models);
-    if pick.as_deref() != Some(ENGLISH_MODEL) {
-        // Starts the download for next time; this answer uses what is installed.
-        let vs = vs.clone();
-        tokio::spawn(async move { english_model(&vs).await });
-    }
-    if let Some(m) = &pick {
-        undemote(vs, m).await;
-    }
-    match &pick {
-        Some(m) => tracing::info!(model = %m, "STT model"),
-        None => tracing::warn!("no Parakeet dictation model installed; using VoiceStudio's default (often Whisper Tiny)"),
-    }
-    *MODEL.lock().unwrap() = Some(pick.clone());
-    pick
-}
-
-/// Forget the cached pick, so the next answer probes (and un-demotes) again. Called per round.
-pub fn reset_model_choice() {
-    *MODEL.lock().unwrap() = None;
-}
-
-/// VoiceStudio demotes a sherpa model for good after one session where it decoded nothing
-/// (a known Parakeet glitch), and then silently serves Whisper Tiny instead of the model we
-/// ask for. Choosing a model in its dictation prefs clears the demotion, so we choose ours,
-/// then put the owner's own choice back.
-async fn undemote(vs: &VoiceStudio, model: &str) {
-    let url = format!("{}/dictation/prefs", http_base(vs));
-    let key = std::env::var("OMNIVOICE_API_KEY").ok().filter(|k| !k.is_empty());
-    let client = reqwest::Client::new();
-    let req = |m: reqwest::Method| {
-        let r = client.request(m, &url).timeout(Duration::from_secs(3));
-        match &key {
-            Some(k) => r.bearer_auth(k),
-            None => r,
-        }
-    };
-    let own = match req(reqwest::Method::GET).send().await {
-        Ok(r) => r.json::<Value>().await.ok().and_then(|v| v["model_id"].as_str().map(str::to_string)),
-        Err(e) => {
-            tracing::warn!("dictation prefs: {e}");
-            return;
-        }
-    };
-    for m in std::iter::once(model.to_string()).chain(own.filter(|o| o != model)) {
-        if let Err(e) = req(reqwest::Method::POST).json(&serde_json::json!({ "model_id": m })).send().await.and_then(|r| r.error_for_status()) {
-            tracing::warn!(model = %m, "dictation prefs: {e}");
-        }
-    }
-}
-
-// ---------- streaming ----------
-
-type Ws = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+// ---------- listening ----------
 
 enum SegMsg {
     Msg(usize, Value),
     Closed(usize),
-    Failed(String),
-}
-
-/// Reader tasks for each segment's socket; aborted when the answer ends.
-#[derive(Default)]
-struct Readers(Vec<JoinHandle<()>>);
-
-impl Drop for Readers {
-    fn drop(&mut self) {
-        self.0.iter().for_each(JoinHandle::abort);
-    }
-}
-
-fn spawn_reader(idx: usize, mut stream: SplitStream<Ws>, tx: UnboundedSender<SegMsg>) -> JoinHandle<()> {
-    tokio::spawn(async move {
-        while let Some(m) = stream.next().await {
-            match m {
-                Ok(Message::Text(t)) => {
-                    let v: Value = serde_json::from_str(t.as_str()).unwrap_or_default();
-                    let _ = tx.send(SegMsg::Msg(idx, v));
-                }
-                Ok(Message::Close(_)) => break,
-                Ok(_) => {}
-                Err(e) => {
-                    let _ = tx.send(SegMsg::Failed(e.to_string()));
-                    return;
-                }
-            }
-        }
-        let _ = tx.send(SegMsg::Closed(idx));
-    })
 }
 
 struct Seg {
     st: SttState,
-    sink: Option<SplitSink<Ws, Message>>,
     done: bool,
-    /// This segment's audio, handed to Whisper when the segment ends.
+    /// This segment's audio so far.
     pcm: Vec<i16>,
-    whisper: Option<JoinHandle<Result<String>>>,
-    /// Whisper's text; preferred over Parakeet's when present.
-    fixed: Option<String>,
 }
 
 impl Seg {
-    fn new(sink: Option<SplitSink<Ws, Message>>, pcm: Vec<i16>) -> Self {
-        Self { st: SttState::default(), sink, done: false, pcm, whisper: None, fixed: None }
-    }
-
-    fn text(&self) -> String {
-        self.fixed.clone().unwrap_or_else(|| self.st.result())
+    fn new(pcm: Vec<i16>) -> Self {
+        Self { st: SttState::default(), done: false, pcm }
     }
 }
 
@@ -499,9 +273,9 @@ struct Answer {
 }
 
 impl Answer {
-    /// Best text so far: each segment's summary when it has one, else its finals and partial.
+    /// Best text so far: each segment's final text when it has one, else its caption.
     fn text(&self) -> String {
-        self.segs.iter().map(Seg::text).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" ")
+        self.segs.iter().map(|s| s.st.result()).filter(|t| !t.is_empty()).collect::<Vec<_>>().join(" ")
     }
 
     fn all_done(&self) -> bool {
@@ -516,34 +290,15 @@ impl Answer {
                 let changed = seg.st.absorb(&v)?.is_some();
                 if v["final_kind"] == "summary" {
                     seg.done = true;
-                    seg.sink = None;
                 }
                 Ok(changed)
             }
             SegMsg::Closed(i) => {
                 self.segs[i].done = true;
-                self.segs[i].sink = None;
                 Ok(false)
             }
-            SegMsg::Failed(e) => Err(AppError::Voice(format!("VoiceStudio STT: {e}"))),
         }
     }
-
-    /// Ends segment `i`: Parakeet gets end-of-audio, Whisper gets the segment's audio.
-    async fn end(&mut self, i: usize, prompt: &str) -> Result<()> {
-        let seg = &mut self.segs[i];
-        if seg.whisper.is_none() && matches!(whisper::status(), whisper::WhisperStatus::Ready { .. }) {
-            seg.whisper = Some(tokio::spawn(whisper::transcribe(std::mem::take(&mut seg.pcm), prompt.to_string())));
-        }
-        if let Some(sink) = self.segs[i].sink.as_mut() {
-            sink.send(Message::Text(r#"{"type":"input_audio.end"}"#.into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
-        }
-        Ok(())
-    }
-}
-
-fn pcm_bytes(s: &[i16]) -> Vec<u8> {
-    s.iter().flat_map(|v| v.to_le_bytes()).collect()
 }
 
 /// Pause that ends the current segment (not the answer), given its length in samples.
@@ -560,18 +315,10 @@ pub async fn listen(engine: &Engine, pause_ms: u32, ctl: &ListenCtl, emit: impl 
     listen_with(engine, pause_ms, ctl, &SttOptions::default(), emit).await
 }
 
-/// Where a segment's text comes from.
-enum Source {
-    /// VoiceStudio: one WebSocket per segment (URL).
-    Ws(String),
-    /// Built-in: Parakeet decodes the segment in this process.
-    Local(Arc<ParakeetStt>),
-}
-
-/// The built-in engine re-decodes the open segment this often to show a caption.
+/// Parakeet re-decodes the open segment this often to show a caption.
 const CAPTION_EVERY: Duration = Duration::from_millis(500);
 
-/// Decodes a finished segment off the async runtime and reports it like VoiceStudio's summary message.
+/// Decodes a finished segment off the async runtime and reports it as the segment's final text.
 fn spawn_decode(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, tx: UnboundedSender<SegMsg>) {
     tokio::task::spawn_blocking(move || {
         let text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| stt.transcribe(&pcm)));
@@ -612,43 +359,12 @@ fn spawn_caption(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, gate: Arc<Cap
     });
 }
 
-/// [`listen`] with a model and vocabulary of the caller's choice.
-pub async fn listen_with(
-    engine: &Engine,
-    pause_ms: u32,
-    ctl: &ListenCtl,
-    opts: &SttOptions,
-    mut emit: impl FnMut(VoiceEvent),
-) -> Result<ListenEnd> {
-    let src = match engine {
-        Engine::Studio(vs) => {
-            let model = match &opts.model {
-                Some(m) => Some(m.clone()).filter(|m| !m.is_empty()),
-                None => choose_model(vs).await,
-            };
-            Source::Ws(match &model {
-                Some(m) => format!("{}&model={m}", vs.stt_ws_url(MIC_RATE)),
-                None => vs.stt_ws_url(MIC_RATE),
-            })
-        }
-        Engine::Builtin(b) => Source::Local(b.stt.clone()),
-    };
-    let r = run(&src, pause_ms, ctl, opts, &mut emit).await;
-    if r.is_err() {
-        *MODEL.lock().unwrap() = None; // re-probe next time
-    }
-    r
+/// [`listen`] with a vocabulary of the caller's choice.
+pub async fn listen_with(engine: &Engine, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, mut emit: impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
+    run(&engine.stt, pause_ms, ctl, opts, &mut emit).await
 }
 
-/// Ends segment `i`: the built-in engine starts decoding it, then Whisper gets the audio too.
-async fn end_segment(ans: &mut Answer, i: usize, prompt: &str, src: &Source, tx: &UnboundedSender<SegMsg>) -> Result<()> {
-    if let Source::Local(stt) = src {
-        spawn_decode(stt.clone(), i, ans.segs[i].pcm.clone(), tx.clone());
-    }
-    ans.end(i, prompt).await
-}
-
-async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit: &mut impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
+async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, emit: &mut impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
     let (tx, mut rx) = unbounded_channel::<Vec<i16>>();
     let (seg_tx, mut seg_rx) = unbounded_channel::<SegMsg>();
     let mic = Mic::open(tx)?;
@@ -656,13 +372,11 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
     let mut frame: Vec<i16> = Vec::with_capacity(FRAME);
     let mut preroll: VecDeque<i16> = VecDeque::with_capacity(PREROLL + FRAME);
     let mut ans = Answer::default();
-    let mut readers = Readers::default();
     let mut active: Option<usize> = None;
     let mut seg_samples = 0usize;
     let mut last_level = Instant::now();
     let mut shown = String::new();
     let heard = |ans: &Answer| clean_transcript(&ans.text(), &opts.vocab);
-    let prompt = whisper::prompt_for(&opts.vocab);
     let mut health = tokio::time::interval(Duration::from_millis(500));
     let mut mic_lost = false;
     let mut caption = tokio::time::interval(CAPTION_EVERY);
@@ -685,8 +399,8 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
                 mic_lost = true;
                 break;
             },
-            _ = caption.tick(), if matches!(src, Source::Local(_)) => {
-                if let (Source::Local(stt), Some(i)) = (src, active) {
+            _ = caption.tick() => {
+                if let Some(i) = active {
                     let n = ans.segs[i].pcm.len();
                     if n >= MIC_RATE as usize / 2 && captioned != (i, n) && caption_gate.ready() {
                         captioned = (i, n);
@@ -731,35 +445,19 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
                         emit(VoiceEvent::SpeechStart);
                     }
                     let head: Vec<i16> = preroll.drain(..).collect();
-                    let idx = ans.segs.len();
-                    let sink = match src {
-                        Source::Ws(url) => {
-                            let (w, _) = tokio_tungstenite::connect_async(url.as_str())
-                                .await
-                                .map_err(|e| AppError::Voice(format!("VoiceStudio STT connect: {e}")))?;
-                            let (mut sink, stream) = w.split();
-                            sink.send(Message::Binary(pcm_bytes(&head).into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
-                            readers.0.push(spawn_reader(idx, stream, seg_tx.clone()));
-                            Some(sink)
-                        }
-                        Source::Local(_) => None,
-                    };
-                    ans.segs.push(Seg::new(sink, head.clone()));
-                    active = Some(idx);
+                    active = Some(ans.segs.len());
                     seg_samples = head.len();
+                    ans.segs.push(Seg::new(head));
                 }
                 match active {
                     Some(i) => {
-                        if let Some(sink) = ans.segs[i].sink.as_mut() {
-                            sink.send(Message::Binary(pcm_bytes(&chunk).into())).await.map_err(|e| AppError::Voice(e.to_string()))?;
-                        }
                         ans.segs[i].pcm.extend_from_slice(&chunk);
                         seg_samples += chunk.len();
                         // Short pause inside a long answer: finish this segment now, so its
                         // decode runs while the candidate keeps talking.
                         let cut = seg_pause_ms(seg_samples).is_some_and(|p| vad.quiet_ms() >= p);
                         if !ended && vad.is_speaking() && cut {
-                            end_segment(&mut ans, i, &prompt, src, &seg_tx).await?;
+                            spawn_decode(stt.clone(), i, ans.segs[i].pcm.clone(), seg_tx.clone());
                             active = None;
                             preroll.clear();
                         }
@@ -788,27 +486,13 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
     }
     let ended_at = Instant::now();
     if let Some(i) = active {
-        end_segment(&mut ans, i, &prompt, src, &seg_tx).await?;
+        spawn_decode(stt.clone(), i, ans.segs[i].pcm.clone(), seg_tx.clone());
     }
-    // Whisper first. When every segment has Whisper's text, Parakeet's summaries aren't needed.
-    for seg in ans.segs.iter_mut() {
-        let Some(job) = seg.whisper.take() else { continue };
-        tokio::select! {
-            r = job => match r {
-                Ok(Ok(t)) if !t.trim().is_empty() => seg.fixed = Some(t),
-                Ok(Ok(_)) => {}
-                Ok(Err(e)) => tracing::warn!("Whisper segment failed, using Parakeet: {e}"),
-                Err(e) => tracing::warn!("Whisper segment task: {e}"),
-            },
-            _ = ctl.cancel.notified() => return Ok(ListenEnd::Cancelled { heard: heard(&ans) }),
-        }
-    }
-    let by_whisper = ans.segs.iter().filter(|s| s.fixed.is_some()).count();
     let deadline = tokio::time::sleep(FINAL_WAIT);
     tokio::pin!(deadline);
-    while by_whisper < ans.segs.len() && !ans.all_done() {
+    while !ans.all_done() {
         tokio::select! {
-            _ = &mut deadline => { tracing::warn!("STT summary timed out; using what we have"); break; }
+            _ = &mut deadline => { tracing::warn!("STT final text timed out; using what we have"); break; }
             _ = ctl.cancel.notified() => return Ok(ListenEnd::Cancelled { heard: heard(&ans) }),
             m = seg_rx.recv() => match m {
                 Some(m) => if ans.on_msg(m)? {
@@ -822,11 +506,10 @@ async fn run(src: &Source, pause_ms: u32, ctl: &ListenCtl, opts: &SttOptions, em
             }
         }
     }
-    drop(readers);
     let raw = ans.text();
     let text = clean_transcript(&raw, &opts.vocab);
     let stt_ms = ended_at.elapsed().as_millis() as u64;
-    tracing::info!(stt_ms, segments = ans.segs.len(), by_whisper, words = text.split_whitespace().count(), "utterance transcribed");
+    tracing::info!(stt_ms, segments = ans.segs.len(), words = text.split_whitespace().count(), "utterance transcribed");
     if raw != text {
         // Lengths only: the words themselves are the candidate's speech and never go in the log.
         tracing::debug!(raw_chars = raw.chars().count(), chars = text.chars().count(), "transcript cleaned");
@@ -891,7 +574,7 @@ mod tests {
 
     #[test]
     fn cleans_real_parakeet_output() {
-        // Live VoiceStudio Parakeet v3 output for a TTS-read answer (2026-10-26).
+        // Real Parakeet output for a TTS-read answer (2026-10-26).
         let raw = "we send Swift MT 300 and MT103 messages to counterparties. We are also migrating to \
                    ISO 2022 MX messages. They talk to each other over IBM, MQ and Kafka. One of the hardest \
                    problems was idem potency. The acknowledgments from Swift.";
@@ -911,29 +594,6 @@ mod tests {
     }
 
     #[test]
-    fn picks_best_installed_model() {
-        let models = json!({"models":[
-            {"id":"sherpa-parakeet-tdt-v3","installed":true},
-            {"id":"sherpa-parakeet-tdt-v2","installed":false},
-            {"id":"sherpa-whisper-tiny","installed":true}]});
-        assert_eq!(pick_model(&models).as_deref(), Some("sherpa-parakeet-tdt-v3"));
-        assert_eq!(pick_model(&json!({"models":[{"id":"sherpa-whisper-tiny","installed":true}]})), None);
-        assert_eq!(pick_model(&json!({})), None);
-    }
-
-    #[test]
-    fn english_model_install_target() {
-        let models = json!({"models":[
-            {"id":"sherpa-parakeet-tdt-v3","repo_id":"x/v3","installed":true},
-            {"id":"sherpa-parakeet-tdt-v2","repo_id":"x/v2","installed":false}]});
-        assert_eq!(english_repo_to_install(&models).as_deref(), Some("x/v2"));
-        let ready = json!({"models":[{"id":"sherpa-parakeet-tdt-v2","repo_id":"x/v2","installed":true}]});
-        assert_eq!(english_repo_to_install(&ready), None);
-        assert_eq!(pick_model(&ready).as_deref(), Some(ENGLISH_MODEL));
-        assert_eq!(english_repo_to_install(&json!({})), None);
-    }
-
-    #[test]
     fn segments_cut_only_after_enough_audio() {
         assert_eq!(seg_pause_ms(SEG_MIN - 1), None);
         assert_eq!(seg_pause_ms(SEG_MIN), Some(SEG_PAUSE_MS));
@@ -944,7 +604,7 @@ mod tests {
     fn answer_joins_segments_in_order() {
         let mut a = Answer::default();
         for _ in 0..2 {
-            a.segs.push(Seg::new(None, Vec::new()));
+            a.segs.push(Seg::new(Vec::new()));
         }
         a.on_msg(SegMsg::Msg(1, json!({"type":"partial","text":"second"}))).unwrap();
         a.on_msg(SegMsg::Msg(0, json!({"type":"final","final_kind":"summary","text":"First."}))).unwrap();
@@ -952,8 +612,5 @@ mod tests {
         assert!(!a.all_done());
         a.on_msg(SegMsg::Closed(1)).unwrap();
         assert!(a.all_done());
-        assert!(a.on_msg(SegMsg::Failed("x".into())).is_err());
-        a.segs[1].fixed = Some("Second, from Whisper.".into());
-        assert_eq!(a.text(), "First. Second, from Whisper.", "Whisper's text wins over Parakeet's");
     }
 }

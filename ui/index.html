@@ -75,7 +75,7 @@
     </nav>
     <div class="side-foot">
       <button class="sys" id="sysClaude" data-nav="settings" data-sec="models" title="AI model"><i class="dot"></i><span id="sysClaudeName">AI model</span></button>
-      <button class="sys" id="sysVoice" data-nav="settings" data-sec="voice" title="VoiceStudio"><i class="dot"></i><span>VoiceStudio</span></button>
+      <button class="sys" id="sysVoice" data-nav="settings" data-sec="voice" title="Voice"><i class="dot"></i><span>Voice</span></button>
       <button class="sys" id="helpTour" title="A short tour of the app"><svg><use href="#i-bulb"/></svg><span>Take the tour</span></button>
       <button class="sys" id="sideReport" title="Report a bug or suggest an idea on GitHub"><svg><use href="#i-bug"/></svg><span>Report a bug</span></button>
       <button class="sys" data-nav="settings" data-sec="share" title="Send feedback"><svg><use href="#i-send"/></svg><span>Send feedback</span></button>
@@ -586,22 +586,12 @@
 
           <section class="set-sec" data-sec="voice" aria-label="Voice" hidden>
             <div class="panel">
-              <div class="panel-head"><h2>Voice engine</h2><span class="pill" id="vsPill">Checking…</span></div>
-              <div class="form-grid">
-                <label class="field"><span>Engine</span>
-                  <select id="vEngine"><option value="builtin">Built-in: runs inside Onsite</option><option value="voicestudio">VoiceStudio: separate app</option></select></label>
-              </div>
-              <p class="muted" id="vEngineInfo"></p>
+              <div class="panel-head"><h2>Voice models</h2><span class="pill" id="vsPill">Checking…</span></div>
+              <p class="muted">Speech runs inside Onsite on your CPU. Download the voice models once; after that it works offline, with no other app.</p>
               <div id="biBlock">
-                <h3 class="sub-h">Voice models</h3>
                 <div class="rows" id="biModels"></div>
                 <div class="btn-row"><button class="btn" id="biFolder"><svg><use href="#i-folder"/></svg>Open models folder</button><button class="btn" id="biReload"><svg><use href="#i-refresh"/></svg>Reload models</button></div>
                 <p class="form-msg" id="biMsg" role="status"></p>
-              </div>
-              <div id="vsBlock">
-                <dl class="kv"><dt>Version</dt><dd id="vsVer">-</dd></dl>
-                <p class="muted" id="vsInfo">VoiceStudio speaks for the interviewer and transcribes your answers, locally.</p>
-                <div class="btn-row" id="vsLaunchRow" hidden><button class="btn primary" id="vsLaunch"><svg><use href="#i-play"/></svg>Start VoiceStudio</button><span class="muted">Its backend takes about a minute to load.</span></div>
               </div>
             </div>
             <div class="panel">
@@ -614,9 +604,6 @@
               <div class="form-grid">
                 <label class="field"><span>Microphone</span><select id="vMic"></select></label>
                 <label class="field"><span>Speaker</span><select id="vSpk"></select></label>
-                <label class="field" id="vVoiceField"><span>Interviewer voice</span><select id="vVoice"></select></label>
-                <label class="field" id="vStepsField"><span>Voice quality</span>
-                  <select id="vSteps"><option value="8">Fast: about 1 s per sentence</option><option value="16">Balanced</option><option value="32">Best: slow</option></select></label>
                 <label class="field"><span>Speaking speed</span>
                   <select id="vSpeed"><option value="0.9">Slower</option><option value="1">Normal</option><option value="1.1">Faster</option></select></label>
                 <label class="field"><span>Send my answer after I stop talking for</span>
@@ -633,7 +620,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><h2>Interviewers</h2><span class="muted small">Same people, same voices, every session</span></div>
-              <p class="hint">Pick a panel on the interview screen to meet these people. With the built-in engine, women use Charlotte and everyone else uses Ethan. With VoiceStudio, a voice is built the first time you play it (5-15 s).</p>
+              <p class="hint">Pick a panel on the interview screen to meet these people. Women use Charlotte and everyone else uses Ethan.</p>
               <div id="personaGrid"></div>
             </div>
           </section>
@@ -655,11 +642,6 @@
               <div class="rows" id="upList"><p class="muted small">Check for updates to see them.</p></div>
               <p class="hint">Installing a version downloads it from GitHub. On Windows the installer runs and Onsite closes; on a Mac the disk image opens for you to drag into Applications; a Linux AppImage replaces itself and restarts. Your interviews, dossiers and settings stay. An older version may not read data saved by a newer one.</p>
             </div>
-            <div class="panel">
-              <div class="panel-head"><h2>VoiceStudio</h2><span class="pill" id="vsUpPill">Not checked</span></div>
-              <dl class="kv"><dt>Installed</dt><dd id="vsInstalled">-</dd><dt>Newest</dt><dd id="vsLatest">-</dd></dl>
-              <p class="hint" id="vsUpNote">Onsite doesn’t update VoiceStudio. When there’s a new version, update it from VoiceStudio itself.</p>
-            </div>
           </section>
 
           <section class="set-sec" data-sec="privacy" aria-label="Privacy" hidden>
@@ -668,7 +650,7 @@
               <h3>What stays on this computer</h3>
               <ul>
                 <li>Your resume, job descriptions, transcripts, code, whiteboards, feedback, dossiers and settings, in Onsite’s database in your app data folder.</li>
-                <li>Your voice. The built-in voice engine, VoiceStudio and Whisper all run on this computer; audio is never uploaded by Onsite.</li>
+                <li>Your voice. The voice engine runs on this computer; audio is never uploaded by Onsite.</li>
                 <li>API keys, stored in the same local database. They are not encrypted, so anyone with access to your Windows account can read them. Remove a key in AI model when you stop using it.</li>
                 <li>The log file, which holds errors and timings, not transcripts, speech text, your resume, job descriptions or keys.</li>
               </ul>
@@ -676,10 +658,10 @@
               <ul>
                 <li><b>To the AI you connect</b> (Claude Code, the Claude API, OpenAI, Gemini or Groq): the interview prompt, your resume and job description, what you say or type, and your code and whiteboard when you share them. Feedback, the resume check and research send the same kind of data. That provider’s own privacy policy and data settings apply.</li>
                 <li><b>Research jobs</b> ask that provider to search the web. The company, role and job description you enter are part of the request.</li>
-                <li><b>Voice models</b> (built-in engine) download once from github.com when you press Download in Settings. GitHub sees your IP address. Speech itself never leaves this computer.</li>
+                <li><b>Voice models</b> download once from github.com when you press Download in Settings. GitHub sees your IP address. Speech itself never leaves this computer.</li>
                 <li><b>Bug reports and ideas</b>: Onsite shows you the full report and opens a GitHub page with it filled in. You submit it there. Onsite itself sends nothing. The report adds your app version, system, AI provider name, how you ran the round, the screen you were on and the last error, and you can remove any of them. Keys, your home folder and file paths are removed. Recent log lines are never put in the link: if you tick the box they go to your clipboard and you paste them yourself. Anything you submit on GitHub is public and tied to your GitHub account.</li>
                 <li><b>Feedback survey</b> you write in Send feedback goes to the developer’s Google Form, only when you press Send. It holds what you typed and picked, and your email only if you enter it. Google sees your IP address.</li>
-                <li><b>Update checks</b> ask GitHub for the release lists of Onsite and VoiceStudio, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
+                <li><b>Update checks</b> ask GitHub for Onsite’s release list, only when you press Check for updates. GitHub sees your IP address, as with any website.</li>
               </ul>
               <h3>What Onsite never does</h3>
               <ul>
@@ -732,7 +714,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><h2>Uninstall Onsite</h2></div>
-              <p class="hint" style="margin-top:0">Removes the app and everything it saved here: interviews, feedback, settings, API keys, voice models, the log and temporary files, and the interviewer voices it made in VoiceStudio. VoiceStudio itself stays.</p>
+              <p class="hint" style="margin-top:0">Removes the app and everything it saved here: interviews, feedback, settings, API keys, voice models, the log and temporary files.</p>
               <label class="check"><input type="checkbox" id="unKeep"><span>Keep my interviews, feedback and settings</span></label>
               <div class="btn-row"><button class="btn danger" id="unGo">Uninstall Onsite</button></div>
               <p class="form-msg" id="unMsg" role="status"></p>
@@ -778,8 +760,7 @@
               <h3>Credits</h3>
               <ul>
                 <li><button type="button" class="linkbtn" data-link="resume_matcher">Resume-Matcher</button> (Apache-2.0) and <button type="button" class="linkbtn" data-link="ats_screener">ats-screener</button> (MIT): the resume check and match score.</li>
-                <li><button type="button" class="linkbtn" data-link="voicestudio">VoiceStudio</button>: the optional voice engine.</li>
-                <li><button type="button" class="linkbtn" data-link="sherpa_onnx">sherpa-onnx</button>: Supertonic 3 and Parakeet, the built-in voice.</li>
+                <li><button type="button" class="linkbtn" data-link="sherpa_onnx">sherpa-onnx</button>: Supertonic 3 and Parakeet, the voice engine.</li>
                 <li><button type="button" class="linkbtn" data-link="codemirror">CodeMirror 6</button>: the code editor.</li>
                 <li><button type="button" class="linkbtn" data-link="excalidraw">Excalidraw</button>: the whiteboard.</li>
               </ul>
@@ -827,10 +808,9 @@
     <dialog class="dlg" id="voiceDlg" aria-labelledby="voiceDlgTitle">
       <form method="dialog">
         <h2 id="voiceDlgTitle">Set up a voice first</h2>
-        <p class="muted" id="voiceDlgBody">Spoken rounds need a voice. Download the built-in voice models once (about 610 MB) and they work offline. Or use typed interviews: chat only, no voice needed.</p>
+        <p class="muted" id="voiceDlgBody">Spoken rounds need a voice. Download the voice models once (about 610 MB) and they work offline. Or use typed interviews: chat only, no voice needed.</p>
         <div class="btn-row">
           <button class="btn primary" value="models"><svg><use href="#i-download"/></svg>Download voice models</button>
-          <button class="btn" value="studio" id="voiceDlgStudio">Start VoiceStudio</button>
           <button class="btn ghost" value="typed">Use typed interviews</button>
         </div>
       </form>

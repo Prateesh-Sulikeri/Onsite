@@ -243,8 +243,7 @@ const PYTHON: &str = "python";
 #[cfg(not(windows))]
 const PYTHON: &str = "python3";
 
-/// Python for running code and building Submit tests: one on PATH, else the copy VoiceStudio
-/// ships, so a machine with only VoiceStudio can still Run and Submit. On Windows, PATH's
+/// Python for running code and building Submit tests: the one on PATH. On Windows, PATH's
 /// `WindowsApps\python.exe` is a Store shortcut, not Python, and is skipped.
 fn python() -> &'static std::path::PathBuf {
     static PY: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
@@ -257,7 +256,7 @@ fn python() -> &'static std::path::PathBuf {
                 .filter(|d| !d.to_string_lossy().to_lowercase().contains("windowsapps"))
                 .map(|d| d.join("python.exe"))
                 .find(|p| p.is_file());
-            if let Some(p) = on_path.or_else(crate::voice::whisper::voicestudio_python) {
+            if let Some(p) = on_path {
                 return p;
             }
         }

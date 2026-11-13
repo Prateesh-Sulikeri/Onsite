@@ -77,7 +77,7 @@ pub struct RoundInfo {
     pub company: String,
     pub level: String,
     pub lang: String,
-    /// The voice loop really started (VoiceStudio up and the speaker opened).
+    /// The voice loop really started (voice models loaded and the speaker opened).
     pub voice: bool,
     /// Coding rounds: the problem as the candidate sees it.
     pub problem: Option<Value>,
@@ -154,55 +154,36 @@ fn prep(app: &AppHandle, step: &str, state: &str, detail: &str) {
     let _ = app.emit("prep", Prep { step, state, detail });
 }
 
-/// Loader steps that need VoiceStudio.
-const VOICE_STEPS: [&str; 5] = ["voice", "stt", "whisper", "speaker", "mic"];
+/// Loader steps that need the voice models.
+const VOICE_STEPS: [&str; 4] = ["voice", "stt", "speaker", "mic"];
 
-/// Opens the speaker and starts the voice loop, if spoken interviews are on and the engine is ready
-/// (VoiceStudio up, or the built-in models installed and loaded).
+/// Opens the speaker and starts the voice loop, if spoken interviews are on and the voice models
+/// are installed and loaded.
 async fn start_voice(app: &AppHandle, round_id: i64, settings: &crate::voice::VoiceSettings) -> Option<crate::voice::VoiceStart> {
-    use crate::voice::engine::{Engine, VoiceEngine};
+    use crate::voice::engine::Engine;
     let state = app.state::<AppState>();
     let skip = |why: &str| VOICE_STEPS.iter().for_each(|s| prep(app, s, "off", why));
     if !settings.enabled {
-        prep(app, "voicestudio", "off", "Spoken interviews are off");
+        prep(app, "models", "off", "Spoken interviews are off");
         skip("Typed round");
         return None;
     }
-    let engine = match settings.engine {
-        VoiceEngine::Voicestudio => {
-            prep(app, "voicestudio", "run", "Connecting");
-            let vs = crate::voice::vs::VoiceStudio::new(&settings.base_url);
-            let health = match vs.health().await {
-                Ok(h) => h,
-                Err(_) => {
-                    prep(app, "voicestudio", "fail", "Not running. This round will be typed.");
-                    skip("Needs VoiceStudio");
-                    return None;
-                }
-            };
-            prep(app, "voicestudio", "ok", health["device"].as_str().unwrap_or("Running"));
-            Engine::Studio(vs)
-        }
-        VoiceEngine::Builtin => {
-            // The step id stays "voicestudio"; the UI labels it "Voice models" for this engine.
-            prep(app, "voicestudio", "run", "Checking the voice models");
-            if !crate::voice::models::all_installed(&state.data_dir) {
-                prep(app, "voicestudio", "fail", "Not downloaded yet. Settings > Voice > Download. This round will be typed.");
-                skip("Needs the voice models");
-                return None;
-            }
-            prep(app, "voicestudio", "ok", "Installed");
-            prep(app, "voice", "run", "Loading the voice");
-            prep(app, "stt", "run", "Loading Parakeet");
-            match Engine::from_settings(&state, settings).await {
-                Ok(e) => e,
-                Err(e) => {
-                    tracing::warn!("built-in voice models: {e}");
-                    prep(app, "voice", "fail", &e.to_string());
-                    ["stt", "whisper", "speaker", "mic"].iter().for_each(|s| prep(app, s, "off", "Needs the voice models"));
-                    return None;
-                }
-            }
+    prep(app, "models", "run", "Checking the voice models");
+    if !crate::voice::models::all_installed(&state.data_dir) {
+        prep(app, "models", "fail", "Not downloaded yet. Settings > Voice > Download. This round will be typed.");
+        skip("Needs the voice models");
+        return None;
+    }
+    prep(app, "models", "ok", "Installed");
+    prep(app, "voice", "run", "Loading the voice");
+    prep(app, "stt", "run", "Loading Parakeet");
+    let engine = match Engine::load(&state).await {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::warn!("voice models: {e}");
+            prep(app, "voice", "fail", &e.to_string());
+            ["stt", "speaker", "mic"].iter().for_each(|s| prep(app, s, "off", "Needs the voice models"));
+            return None;
         }
     };
     match state.voice.begin(app, round_id, settings.clone(), engine) {
@@ -213,7 +194,7 @@ async fn start_voice(app: &AppHandle, round_id: i64, settings: &crate::voice::Vo
         Err(e) => {
             tracing::warn!("voice off for this round: {e}");
             prep(app, "speaker", "fail", &e.to_string());
-            ["voice", "stt", "whisper", "mic"].iter().for_each(|s| prep(app, s, "off", "Needs the speaker"));
+            ["voice", "stt", "mic"].iter().for_each(|s| prep(app, s, "off", "Needs the speaker"));
             None
         }
     }
@@ -254,49 +235,22 @@ async fn wait_claude(
 /// Waits for the interviewer's voice, speech recognition and the mic. Returns `go` when the
 /// round can be spoken; None makes it a typed round.
 async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, start: Option<crate::voice::VoiceStart>) -> Option<oneshot::Sender<()>> {
-    use crate::voice::{audio, engine::VoiceEngine, stt, vs::VoiceStudio, whisper::{self, WhisperStatus}};
+    use crate::voice::audio;
     let crate::voice::VoiceStart { ready, go } = start?;
-    let builtin = settings.engine == VoiceEngine::Builtin;
-    let vs = VoiceStudio::new(&settings.base_url);
     let voice = async {
-        prep(app, "voice", "run", if builtin { "Warming up the voice" } else { "Loading the voice model. Up to a minute when VoiceStudio is cold." });
+        prep(app, "voice", "run", "Warming up the voice");
         let (state, detail) = match tokio::time::timeout(Duration::from_secs(240), ready).await {
             Ok(Ok(Ok(name))) => ("ok", name),
             Ok(Ok(Err(e))) => ("fail", e),
             Ok(Err(_)) => ("fail", "The voice loop stopped.".to_string()),
-            Err(_) => ("fail", "VoiceStudio took over four minutes.".to_string()),
+            Err(_) => ("fail", "The voice took over four minutes to load.".to_string()),
         };
         prep(app, "voice", state, &detail);
         state == "ok"
     };
-    let recognizer = async {
-        if builtin {
-            return prep(app, "stt", "ok", "Parakeet TDT v2, English, on this PC");
-        }
-        prep(app, "stt", "run", "Choosing the speech model");
-        match stt::prepare(&vs).await {
-            Some(m) if m == stt::ENGLISH_MODEL => prep(app, "stt", "ok", "Parakeet TDT v2, English"),
-            Some(m) => prep(app, "stt", "warn", &format!("{m} for now. The English model is downloading.")),
-            None => prep(app, "stt", "warn", "VoiceStudio's default model. Captions may be rough."),
-        }
-    };
-    // Listen & type: the mic stays shut, so don't wait for Whisper or block on a broken mic.
+    prep(app, "stt", "ok", "Parakeet TDT v2, English, on this PC");
+    // Listen & type: the mic stays shut, so don't block on a broken mic.
     let typing = settings.listen_only;
-    let accuracy = async {
-        if typing {
-            return prep(app, "whisper", "off", "You type your answers");
-        }
-        prep(app, "whisper", "run", "Loading Whisper large-v3 on the GPU");
-        let until = Instant::now() + Duration::from_secs(60);
-        loop {
-            match whisper::status() {
-                WhisperStatus::Ready { model } => break prep(app, "whisper", "ok", &model),
-                WhisperStatus::Off { reason } => break prep(app, "whisper", "warn", &format!("Off ({reason}). Parakeet's text is used.")),
-                WhisperStatus::Loading if Instant::now() > until => break prep(app, "whisper", "warn", "Still loading. Parakeet's text is used until it's ready."),
-                WhisperStatus::Loading => tokio::time::sleep(Duration::from_millis(300)).await,
-            }
-        }
-    };
     let mic = async {
         if typing {
             prep(app, "mic", "off", "You type your answers");
@@ -318,7 +272,7 @@ async fn prepare_voice(app: &AppHandle, settings: &crate::voice::VoiceSettings, 
         }
         heard.is_ok()
     };
-    let (voice_ok, (), (), mic_ok) = tokio::join!(voice, recognizer, accuracy, mic);
+    let (voice_ok, mic_ok) = tokio::join!(voice, mic);
     (voice_ok && mic_ok).then_some(go)
 }
 
@@ -367,14 +321,17 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize, ready_made
         dossier_block: prompts::load(&state.prompts_dir, "dossier_block.md").unwrap_or_default(),
     };
     let mut system_prompt = interviewer_prompt(&templates, cat, &state.panels, &setup, index);
+    let demo = super::demo::round(&plan.key);
+    let demo_question = demo.as_ref().and_then(|d| d.question_id.as_deref()).and_then(|id| state.bank.get(id)).cloned();
     let question = (plan.key == "coding")
-        .then(|| {
+        .then(|| demo_question.clone())
+        .flatten()
+        .or_else(|| (plan.key == "coding").then(|| {
             let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
             // A company loop asks a problem its candidates reported, when the bank has one.
             let reported = setup.dossier.as_ref().and_then(|d| d.process.get(index)).map(|r| r.questions.as_slice()).unwrap_or_default();
             state.bank.match_reported(reported, seed).or_else(|| state.bank.pick(difficulty_for(&setup.level), &[], &setup.company, &Default::default(), seed)).cloned()
-        })
-        .flatten();
+        }).flatten());
     if let Some(q) = &question {
         tracing::info!(id = %q.id, difficulty = %q.difficulty, "coding question");
         system_prompt.push_str(&problem_block(q));
@@ -403,7 +360,15 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize, ready_made
     let me = state.prep_gen.fetch_add(1, Ordering::SeqCst) + 1;
     // A comprehension round gets a code base: written by the AI for this job, else a ready-made one,
     // else (none in this language) the interviewer writes one file.
-    let project = if plan.key == "comprehension" { choose_project(app, &setup, index, &plan, opener.as_deref().unwrap_or(""), me).await? } else { None };
+    let demo_project = demo.as_ref().and_then(|d| d.project_id.as_deref()).and_then(|id| state.projects.list.iter().find(|p| p.id == id)).cloned();
+    let project = if plan.key != "comprehension" {
+        None
+    } else if let Some(p) = demo_project {
+        prep(app, "project", "ok", &p.title);
+        Some(p)
+    } else {
+        choose_project(app, &setup, index, &plan, opener.as_deref().unwrap_or(""), me).await?
+    };
     if let Some(p) = &project {
         system_prompt.push_str(&p.interviewer_block());
     }
@@ -414,12 +379,15 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize, ready_made
     };
     tracing::info!(?opener, earlier = earlier.len(), "round variety");
     // A project already sets the scenario, so the scenario starting point is dropped for it.
-    system_prompt.push_str(&session_block(if project.is_some() { None } else { opener.as_deref() }, &earlier));
+    match demo.as_ref().filter(|d| !d.questions.is_empty()) {
+        Some(d) => system_prompt.push_str(&super::demo::block(d)),
+        None => system_prompt.push_str(&session_block(if project.is_some() { None } else { opener.as_deref() }, &earlier)),
+    }
     // A panel interviewer always speaks in their own voice, at their own pace.
     if let Some(p) = state.panels.persona(&setup.panel, &plan.key) {
         settings.voice.speed *= p.speed_factor;
-        settings.voice.persona = Some(crate::voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states, clip: p.clip });
-    } else if settings.voice.engine == crate::voice::engine::VoiceEngine::Builtin {
+        settings.voice.persona = Some(crate::voice::engine::PersonaVoice { name: p.name, clip: p.clip });
+    } else {
         // No panel: the interviewer's name decides the voice, so women and men both get their own voice.
         let female = state.catalog.female_names.contains(&plan.persona);
         settings.voice.builtin_voice = crate::voice::builtin::clip_for_gender(if female { "female" } else { "male" }).into();

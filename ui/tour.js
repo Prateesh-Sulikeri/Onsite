@@ -99,7 +99,7 @@ const TOURS = {
   settings: [
     {sel: "#setNav", title: "Settings sections", text: "Most people only need AI model and Voice. The rest is look, updates, privacy and storage."},
     {sel: '.set-sec[data-sec="models"]', pre: () => setSection("models"), title: "AI model", text: "Choose what runs the interviewer: Claude Code (your Claude login), or your own key for Claude API, OpenAI, Gemini or Groq. Gemini and Groq have free tiers. Keys stay on this computer."},
-    {sel: '.set-sec[data-sec="voice"]', pre: () => setSection("voice"), title: "Voice", text: "The built-in voice works offline after a one-time download. VoiceStudio is the other engine. You also set the pause that ends your answer, and your mic and speaker."},
+    {sel: '.set-sec[data-sec="voice"]', pre: () => setSection("voice"), title: "Voice", text: "The voice works offline after a one-time download. You also set the pause that ends your answer, and your mic and speaker."},
     {sel: '.set-sec[data-sec="appearance"]', pre: () => setSection("appearance"), title: "Appearance", text: "Themes, light or dark, and a background image."},
   ],
 };

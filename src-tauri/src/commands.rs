@@ -9,8 +9,7 @@ use crate::store::{HistoryItem, RoundRow, Turn};
 use crate::{AppState, Settings};
 use serde::Serialize;
 use serde_json::Value;
-use crate::voice::engine::{Engine, VoiceEngine};
-use crate::voice::vs::VoiceStudio;
+use crate::voice::engine::Engine;
 use crate::voice::VoiceSettings;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -271,24 +270,10 @@ pub fn set_goal(state: State<AppState>, goal: std::collections::BTreeMap<String,
 
 #[derive(Serialize)]
 pub struct VoiceStatus {
+    /// Every voice model is installed, so spoken rounds can run.
     pub up: bool,
-    pub loaded: bool,
-    pub device: String,
-    pub profiles: Vec<crate::voice::vs::Profile>,
-    pub installed: bool,
-    /// The English-only speech-to-text model (installed on demand).
-    pub english: Option<crate::voice::stt::EnglishModel>,
-    /// Whisper on the GPU, which writes the text sent to the interviewer.
-    pub whisper: crate::voice::whisper::WhisperStatus,
-    /// Installed VoiceStudio version (from the backend, else its install folder). No network.
-    pub version: Option<String>,
-    /// The engine in settings. For the built-in engine `up` means "all models installed".
-    pub engine: VoiceEngine,
-    /// Built-in engine models and whether each is installed.
+    /// The voice models and whether each is installed.
     pub models: Vec<crate::voice::models::ModelInfo>,
-    /// VoiceStudio answers `/health`, whichever engine is picked. With the built-in engine it is only
-    /// checked while a model is missing (the UI offers it as the other way to speak).
-    pub studio_up: bool,
     /// The shipped interviewer voices.
     pub voices: Vec<BuiltinVoice>,
 }
@@ -300,56 +285,11 @@ pub struct BuiltinVoice {
     pub accent: &'static str,
 }
 
-fn voicestudio_exe() -> Option<std::path::PathBuf> {
-    let p = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("Programs").join("VoiceStudio").join("VoiceStudio.exe");
-    p.is_file().then_some(p)
-}
-
 #[tauri::command]
-pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus> {
-    let settings = state.settings().voice;
+pub fn voice_status(state: State<'_, AppState>) -> VoiceStatus {
     let models = crate::voice::models::status(&state.data_dir);
     let voices = crate::voice::builtin::VOICES.iter().map(|v| BuiltinVoice { id: v.0, name: v.1, accent: v.2 }).collect();
-    if settings.engine == VoiceEngine::Builtin {
-        let ready = models.iter().all(|m| m.installed);
-        let studio_up = !ready && VoiceStudio::new(&settings.base_url).health().await.is_ok();
-        return Ok(VoiceStatus {
-            up: ready,
-            loaded: ready,
-            device: "Built-in".into(),
-            profiles: vec![],
-            installed: voicestudio_exe().is_some(),
-            english: None,
-            whisper: crate::voice::whisper::status(),
-            version: None,
-            engine: settings.engine,
-            models,
-            voices,
-            studio_up,
-        });
-    }
-    let vs = VoiceStudio::new(&settings.base_url);
-    let installed = voicestudio_exe().is_some();
-    let engine = settings.engine;
-    let Ok(health) = vs.health().await else {
-        return Ok(VoiceStatus { up: false, loaded: false, device: String::new(), profiles: vec![], installed, english: None, whisper: crate::voice::whisper::status(), version: crate::updates::installed_voicestudio(), engine, models, voices, studio_up: false });
-    };
-    // These probes are independent. Run them together so the status costs one round trip, not three.
-    let (ready, profiles, english) = tokio::join!(vs.ready(), vs.profiles(), crate::voice::stt::english_model(&vs));
-    Ok(VoiceStatus {
-        up: true,
-        loaded: ready.unwrap_or(false),
-        device: health["device"].as_str().unwrap_or_default().to_string(),
-        profiles: profiles.unwrap_or_default(),
-        installed,
-        english: Some(english),
-        whisper: crate::voice::whisper::status(),
-        version: health["version"].as_str().map(String::from).or_else(crate::updates::installed_voicestudio),
-        engine,
-        models,
-        voices,
-        studio_up: true,
-    })
+    VoiceStatus { up: models.iter().all(|m| m.installed), models, voices }
 }
 
 /// Downloads one built-in voice model (progress arrives as `voice_model` events). Returns when it is installed.
@@ -381,41 +321,13 @@ pub fn voice_models_reload(state: State<AppState>) {
 #[tauri::command]
 pub async fn voice_builtin_preview(state: State<'_, AppState>, voice: String) -> Result<u64> {
     let mut settings = state.settings().voice;
-    settings.engine = VoiceEngine::Builtin;
     settings.persona = None;
     settings.builtin_voice = crate::voice::builtin::known_clip(&voice).into();
     crate::voice::audio::set_devices(&settings.input_device, &settings.output_device);
-    let engine = Engine::from_settings(&state, &settings).await?;
+    let engine = Engine::load(&state).await?;
     let name = crate::voice::builtin::VOICES.iter().find(|v| v.0 == settings.builtin_voice).map_or("your interviewer", |v| v.1);
     let line = format!("Hi, I'm {name}. I'll be one of the people interviewing you today.");
     state.voice.test_speak(&engine, &settings, &line).await
-}
-
-/// Opens the VoiceStudio desktop app; its backend takes about a minute to come up.
-#[tauri::command]
-pub fn voice_launch() -> Result<()> {
-    let exe = voicestudio_exe().ok_or_else(|| AppError::Voice("VoiceStudio is not installed.".into()))?;
-    std::process::Command::new(exe).spawn()?;
-    Ok(())
-}
-
-/// Speaks a short line once, in the interviewer's voice, so the first real reply skips
-/// VoiceStudio's warm-up (model load plus encoding the profile's reference sample).
-pub async fn warm_voice(settings: &VoiceSettings) {
-    // VoiceStudio only: the built-in engine warms up when a round starts.
-    let vs = VoiceStudio::new(&settings.base_url);
-    if vs.health().await.is_err() {
-        return;
-    }
-    let voice = match vs.resolve_voice(&settings.voice).await {
-        Ok(v) => v,
-        Err(e) => return tracing::warn!("VoiceStudio warm-up skipped: {e}"),
-    };
-    let started = std::time::Instant::now();
-    match vs.speak("Okay, let's begin.", &voice, settings.steps, settings.speed, |_| {}).await {
-        Ok(()) => tracing::info!(ms = started.elapsed().as_millis() as u64, "VoiceStudio warmed up"),
-        Err(e) => tracing::warn!("VoiceStudio warm-up failed: {e}"),
-    }
 }
 
 #[tauri::command]
@@ -466,7 +378,7 @@ pub fn mic_monitor_stop() {
 #[tauri::command]
 pub async fn voice_test_speak(state: State<'_, AppState>, settings: VoiceSettings, text: String) -> Result<u64> {
     crate::voice::audio::set_devices(&settings.input_device, &settings.output_device);
-    let engine = Engine::from_settings(&state, &settings).await?;
+    let engine = Engine::load(&state).await?;
     state.voice.test_speak(&engine, &settings, &text).await
 }
 
@@ -474,7 +386,7 @@ pub async fn voice_test_speak(state: State<'_, AppState>, settings: VoiceSetting
 pub async fn voice_test_listen(app: AppHandle, state: State<'_, AppState>, settings: VoiceSettings) -> Result<String> {
     crate::voice::audio::set_devices(&settings.input_device, &settings.output_device);
     let ctl = crate::voice::stt::ListenCtl::default();
-    let engine = Engine::from_settings(&state, &settings).await?;
+    let engine = Engine::load(&state).await?;
     let pause = if settings.pause_ms == 0 { 1800 } else { settings.pause_ms };
     let emit = move |ev: crate::voice::VoiceEvent| {
         let _ = app.emit("voice_test", &ev);
@@ -590,11 +502,6 @@ pub async fn install_update(app: AppHandle, tag: String) -> Result<String> {
 }
 
 #[tauri::command]
-pub async fn voicestudio_version(state: State<'_, AppState>) -> Result<crate::updates::VoiceStudioVersion> {
-    Ok(crate::updates::voicestudio(&state).await)
-}
-
-#[tauri::command]
 pub async fn storage_info(app: AppHandle) -> Result<crate::storage::StorageInfo> {
     // Walking the model cache can take a moment; keep it off the async workers.
     tauri::async_runtime::spawn_blocking(move || crate::storage::info(&app.state::<AppState>()))
@@ -630,7 +537,7 @@ pub fn vacuum_db(state: State<AppState>) -> Result<()> {
     state.store.lock().unwrap().vacuum()
 }
 
-/// Opens one of Onsite's folders in Explorer: "data", "log", "models" or "voicestudio".
+/// Opens one of Onsite's folders in Explorer: "data", "log" or "models".
 #[tauri::command]
 pub fn open_folder(state: State<AppState>, which: String) -> Result<()> {
     let path = match which.as_str() {
@@ -641,7 +548,6 @@ pub fn open_folder(state: State<AppState>, which: String) -> Result<()> {
             std::fs::create_dir_all(&p)?;
             p
         }
-        "voicestudio" => std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("OmniVoice").join("hf_cache"),
         _ => return Err(AppError::Invalid("Unknown folder.".into())),
     };
     crate::storage::open_folder(&path)
@@ -673,7 +579,6 @@ pub fn open_link(which: String) -> Result<()> {
         "author" => "https://github.com/Prateesh-Sulikeri".to_string(),
         "resume_matcher" => "https://github.com/srbhr/Resume-Matcher".to_string(),
         "ats_screener" => "https://github.com/sunnypatell/ats-screener".to_string(),
-        "voicestudio" => "https://github.com/debpalash/VoiceStudio".to_string(),
         "sherpa_onnx" => "https://github.com/k2-fsa/sherpa-onnx".to_string(),
         "codemirror" => "https://codemirror.net/".to_string(),
         "excalidraw" => "https://github.com/excalidraw/excalidraw".to_string(),
@@ -772,19 +677,15 @@ pub fn clear_backdrop(state: State<AppState>) -> Result<()> {
     crate::storage::clear_backdrop(&state)
 }
 
-/// Says a short line in a panel interviewer's own voice. Builds their VoiceStudio profile
-/// first if it doesn't exist yet (5-15 s, once). Returns ms to first audio.
+/// Says a short line in a panel interviewer's own voice. Returns ms to first audio.
 #[tauri::command]
 pub async fn voice_persona_preview(state: State<'_, AppState>, id: String) -> Result<u64> {
     let p = state.panels.persona_by_id(&id).ok_or_else(|| AppError::NotFound("No interviewer with that id.".into()))?;
     let mut settings = state.settings().voice;
     settings.speed *= p.speed_factor;
-    if settings.engine == VoiceEngine::Voicestudio {
-        VoiceStudio::new(&settings.base_url).health().await.map_err(|_| AppError::Voice("VoiceStudio isn't running. Start it to hear the interviewers.".into()))?;
-    }
-    settings.persona = Some(crate::voice::vs::PersonaVoice { name: p.name.clone(), instruct: p.voice_instruct, states: p.voice_states, clip: p.clip });
-    let engine = Engine::from_settings(&state, &settings).await?;
-    let voice = engine.voice(&settings).await?;
+    settings.persona = Some(crate::voice::engine::PersonaVoice { name: p.name.clone(), clip: p.clip });
+    let engine = Engine::load(&state).await?;
+    let voice = engine.voice(&settings);
     let line = format!("Hi, I'm {}, {}. I'll be one of the people interviewing you today.", p.first_name, p.role.split(" / ").next().unwrap_or(&p.role));
     crate::voice::audio::set_devices(&settings.input_device, &settings.output_device);
     state.voice.speak_as(&voice, &settings, &line).await

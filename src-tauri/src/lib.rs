@@ -210,7 +210,6 @@ pub fn run() {
             let db = data_dir.join("onsite.db");
             tracing::info!(db = %db.display(), "opening store");
             let prompts_dir = resource(app, "prompts");
-            voice::whisper::set_script_dir(voice::whisper::script_dir_for(app.path().resource_dir().ok().as_deref()));
             let catalog = Catalog::load(&prompts_dir)?;
             let store = Store::open(&db)?;
             match store.delete_unanswered_rounds() {
@@ -244,29 +243,9 @@ pub fn run() {
             if let Err(e) = storage::enforce(&app.state::<AppState>()) {
                 tracing::warn!("storage limits: {e}");
             }
-            // Warm VoiceStudio up so the first spoken reply is not a 60 s cold start.
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let settings = handle.state::<AppState>().settings().voice;
-                voice::audio::set_devices(&settings.input_device, &settings.output_device);
-                if settings.enabled {
-                    // Loads Whisper onto the GPU (~10 s) while VoiceStudio warms up.
-                    voice::whisper::start();
-                }
-                // The built-in engine loads its models when a round starts. Nothing to warm up here.
-                if settings.enabled && settings.engine == voice::engine::VoiceEngine::Voicestudio {
-                    commands::warm_voice(&settings).await;
-                    // Build panel voices now, so a round never waits on one (~5-15 s each, once).
-                    let personas = handle.state::<AppState>().panels.all_personas();
-                    let vs = voice::vs::VoiceStudio::new(&settings.base_url);
-                    for p in personas {
-                        let pv = voice::vs::PersonaVoice { name: p.name, instruct: p.voice_instruct, states: p.voice_states, clip: p.clip };
-                        if let Err(e) = vs.persona_voice(&pv).await {
-                            tracing::warn!(name = %pv.name, "interviewer voice prebuild: {e}");
-                        }
-                    }
-                }
-            });
+            // The voice models load when a round starts; only the audio devices are set here.
+            let settings = app.state::<AppState>().settings().voice;
+            voice::audio::set_devices(&settings.input_device, &settings.output_device);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -302,7 +281,6 @@ pub fn run() {
             commands::set_update_channel,
             commands::check_updates,
             commands::install_update,
-            commands::voicestudio_version,
             commands::storage_info,
             commands::set_storage_limits,
             commands::uninstall_app,
@@ -332,7 +310,6 @@ pub fn run() {
             commands::set_round_lang,
             commands::project_diff,
             commands::voice_status,
-            commands::voice_launch,
             commands::voice_model_download,
             commands::voice_model_delete,
             commands::voice_models_reload,

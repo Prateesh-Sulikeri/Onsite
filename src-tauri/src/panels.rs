@@ -48,10 +48,7 @@ pub struct Persona {
     pub first_name: String,
     pub role: String,
     pub panel_name: String,
-    /// VoiceStudio voice-design tags, e.g. "male, middle-aged, low pitch, indian accent".
-    pub voice_instruct: String,
-    pub voice_states: Value,
-    /// Built-in engine voice clip (women: Charlotte, everyone else: Ethan).
+    /// Shipped voice clip (women: Charlotte, everyone else: Ethan).
     pub clip: String,
     /// Multiplies the user's speaking speed: brisk people talk a little faster.
     pub speed_factor: f32,
@@ -68,15 +65,12 @@ fn with(v: &str, what: &str) -> String {
 
 fn build_persona(panel: &Value, iv: &Value) -> Persona {
     let name = s(&iv["name"]);
-    let (instruct, states) = voice_design(&iv["voice"]);
     Persona {
         id: s(&iv["id"]),
         first_name: name.split_whitespace().next().unwrap_or(&name).to_string(),
         name,
         role: s(&iv["role"]),
         panel_name: s(&panel["name"]),
-        voice_instruct: instruct,
-        voice_states: states,
         clip: crate::voice::builtin::clip_for_gender(&s(&iv["voice"]["gender"])).into(),
         speed_factor: match s(&iv["voice"]["pace"]).as_str() {
             "brisk" => 1.05,
@@ -232,41 +226,9 @@ impl Panels {
     }
 }
 
-const ACCENTS: [&str; 10] =
-    ["american", "british", "australian", "chinese", "canadian", "indian", "korean", "portuguese", "russian", "japanese"];
-
-/// Maps a persona's free-text voice onto VoiceStudio's design whitelist
-/// (one tag per category: gender, age, pitch, English accent).
-pub fn voice_design(voice: &Value) -> (String, Value) {
-    let low = |k: &str| s(&voice[k]).to_lowercase();
-    let gender = match low("gender").as_str() {
-        g @ ("male" | "female") => g.to_string(),
-        _ => String::new(),
-    };
-    let age = match low("age").as_str() {
-        a @ ("child" | "teenager" | "young adult" | "middle-aged" | "elderly") => a.to_string(),
-        _ => String::new(),
-    };
-    let pitch = match low("pitch").as_str() {
-        p @ ("very low" | "low" | "moderate" | "high" | "very high") => format!("{p} pitch"),
-        _ => String::new(),
-    };
-    let accent_text = low("accent");
-    let accent = ACCENTS.iter().find(|a| accent_text.contains(*a)).map(|a| format!("{a} accent")).unwrap_or_default();
-    let instruct = [&gender, &age, &pitch, &accent].iter().filter(|t| !t.is_empty()).map(|t| t.as_str()).collect::<Vec<_>>().join(", ");
-    let auto = |t: &str| if t.is_empty() { "Auto".to_string() } else { t.to_string() };
-    let states = serde_json::json!({
-        "Gender": auto(&gender), "Age": auto(&age), "Pitch": auto(&pitch),
-        "Style": "Auto", "EnglishAccent": auto(&accent), "ChineseDialect": "Auto",
-    });
-    (instruct, states)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
-
     fn repo() -> Panels {
         Panels::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts"))
     }
@@ -279,7 +241,7 @@ mod tests {
         for panel in p.list() {
             for key in cat.rounds.keys() {
                 let persona = p.persona(&panel.id, key).unwrap_or_else(|| panel_missing(&panel.id, key));
-                assert!(!persona.voice_instruct.is_empty(), "{} has no voice", persona.id);
+                assert!(!persona.clip.is_empty(), "{} has no voice", persona.id);
                 let vars = p.persona_vars(&panel.id, key, DEFAULT_FAMILY).unwrap();
                 for (k, v) in &vars {
                     assert!(!v.is_empty(), "{}.{k} empty", persona.id);
@@ -311,16 +273,6 @@ mod tests {
         let out = crate::brain::prompts::render(&tpl, &vars);
         assert!(!out.contains("{{"), "{out}");
         assert!(out.contains("Karthik Reddy"));
-    }
-
-    #[test]
-    fn voice_maps_to_design_whitelist() {
-        let (i, st) = voice_design(&json!({"gender":"Male","age":"young adult","accent":"indian accent (south indian English)","pitch":"moderate","pace":"brisk"}));
-        assert_eq!(i, "male, young adult, moderate pitch, indian accent");
-        assert_eq!(st["EnglishAccent"], "indian accent");
-        let (i, st) = voice_design(&json!({"gender":"female","accent":"Mumbai English"}));
-        assert_eq!(i, "female");
-        assert_eq!(st["Age"], "Auto");
     }
 
     #[test]

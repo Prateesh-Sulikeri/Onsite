@@ -25,7 +25,7 @@ const PRIVATE_CAP_CHARS: usize = 400_000;
 
 pub const OS_OPTIONS: &[&str] = &["Windows", "macOS", "Linux (AppImage)", "Linux (.deb)"];
 pub const AI_OPTIONS: &[&str] = &["Claude Code", "Claude API", "OpenAI", "Gemini", "Groq"];
-pub const VOICE_OPTIONS: &[&str] = &["Typed", "Spoken (built-in voice)", "Spoken (VoiceStudio)", "Not in a round"];
+pub const VOICE_OPTIONS: &[&str] = &["Typed", "Spoken (built-in voice)", "Not in a round"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -477,8 +477,6 @@ pub async fn context(state: &crate::AppState, version: String) -> ReportContext 
         "Not in a round"
     } else if !s.voice.enabled {
         "Typed"
-    } else if s.voice.engine == crate::voice::engine::VoiceEngine::Voicestudio {
-        "Spoken (VoiceStudio)"
     } else {
         "Spoken (built-in voice)"
     };
