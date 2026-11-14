@@ -148,3 +148,4 @@ voice · R11 typed fallback · R12 device switch + lost-mic message · R13 Engli
 - 2.5 s target unmet on Claude Code CLI. Ideas: clause-level TTS start, streaming TTS.
 - Parakeet mishears some tech terms ("Postgres Creole", "reddish" for Redis); `fix_vocab` repairs some. A GPU Whisper pass is a possible optional download.
 - No echo cancellation → no voice barge-in, only tap.
+- Decoder hotwords for Parakeet wait for a sherpa-onnx release with PR 4084 (merged 2026-10-27, after v2.0.1; no newer release or crate, checked 2026-11-14).
