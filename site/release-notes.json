@@ -4,6 +4,15 @@
     "Voice: the interviewer's name follows its voice",
     "Faster first reply on Groq"
   ],
+  "v1.1.0-exp.16": [
+    "Voice: clearer speech. Numbers, units, code names and symbols are read the way people say them.",
+    "Voice: the mic opens by itself when the interviewer finishes.",
+    "Voice: no pause after a short \"Okay.\", and pauses fall between sentences, not inside them.",
+    "Voice: keyboard clicks and room noise no longer start an answer. Quiet voices are boosted.",
+    "Voice: names and tech terms from your resume and the job post are heard more reliably.",
+    "Voice: settings adapt to your laptop's speed, so slower machines speak without gaps.",
+    "Interviews: each new loop meets different interviewers."
+  ],
   "v1.0.0": [
     "First official release.",
     "Voice: speech works without VoiceStudio. Supertonic 3 speaks and Parakeet listens, on your CPU. Settings > Voice downloads the models once (about 580 MB).",
