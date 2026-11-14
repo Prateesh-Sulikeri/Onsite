@@ -393,25 +393,7 @@ pub async fn start_round(app: &AppHandle, loop_id: i64, index: usize, ready_made
         settings.voice.builtin_voice = crate::voice::builtin::clip_for_gender(if female { "female" } else { "male" }).into();
     }
     // Names and terms the recognizer should get right in this round.
-    let mut names = vec![plan.persona.clone(), setup.company_name(&state.catalog)];
-    names.extend(question.as_ref().map(|q| q.title.clone()));
-    let dossier_text = setup
-        .dossier
-        .as_ref()
-        .map(|d| {
-            let reported = d.process.get(index).map(|r| r.questions.join("
-")).unwrap_or_default();
-            [d.company.as_str(), d.style.as_str(), reported.as_str()].join("
-")
-        })
-        .unwrap_or_default();
-    settings.voice.vocab = crate::voice::vocab::round_terms(&crate::voice::vocab::Sources {
-        resume: &setup.resume,
-        jd: &setup.jd,
-        notes: &setup.notes,
-        names,
-        dossier: &dossier_text,
-    });
+    settings.voice.vocab = super::voice_terms(&setup, cat, &plan.persona, index, question.as_ref().map(|q| q.title.as_str()));
     tracing::info!(terms = settings.voice.vocab.len(), "round vocabulary");
     prep(app, "claude", "run", "Connecting to the AI model");
     let backend = match state.backend().await {
@@ -892,6 +874,11 @@ pub async fn generate_report(app: &AppHandle, round_id: i64) -> Result<Value> {
             turns: &round.transcript,
             workspace: &round.workspace,
             metrics: &m,
+            stt_terms: &super::stt_terms_line(
+                &super::voice_terms(&setup, cat, &round.persona, round.idx as usize, None),
+                &setup.resume,
+                &setup.jd,
+            ),
         },
     );
     let backend = state.backend().await?;

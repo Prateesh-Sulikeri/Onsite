@@ -149,6 +149,45 @@ fn or_default(s: &str, max: usize, fallback: &str) -> String {
     if t.is_empty() { fallback.to_string() } else { clip(t, max).to_string() }
 }
 
+/// Names and terms the recognizer may mishear in this round (resume, JD, dossier, persona, company, problem).
+/// Shared by the voice, the interviewer prompt and the report prompt, so all three see the same list.
+pub fn voice_terms(setup: &LoopSetup, cat: &Catalog, persona: &str, idx: usize, problem: Option<&str>) -> Vec<String> {
+    let mut names = vec![persona.to_string(), setup.company_name(cat)];
+    names.extend(problem.map(str::to_string));
+    let dossier = setup
+        .dossier
+        .as_ref()
+        .map(|d| {
+            let reported = d.process.get(idx).map(|r| r.questions.join("
+")).unwrap_or_default();
+            [d.company.as_str(), d.style.as_str(), reported.as_str()].join("
+")
+        })
+        .unwrap_or_default();
+    crate::voice::vocab::round_terms(&crate::voice::vocab::Sources { resume: &setup.resume, jd: &setup.jd, notes: &setup.notes, names, dossier: &dossier })
+}
+
+/// The `{{stt_terms}}` prompt line: the first 60 round terms, then static tech terms the resume or JD uses.
+pub fn stt_terms_line(terms: &[String], resume: &str, jd: &str) -> String {
+    let text = format!("{resume}
+{jd}");
+    let used = crate::voice::stt::TECH_TERMS.iter().filter(|t| contains_word(&text, t)).map(|t| t.to_string());
+    let mut out: Vec<String> = Vec::new();
+    for t in terms.iter().take(60).cloned().chain(used) {
+        if !out.iter().any(|o| o.eq_ignore_ascii_case(&t)) {
+            out.push(t);
+        }
+    }
+    if out.is_empty() { "(none)".into() } else { out.join(", ") }
+}
+
+/// Case-insensitive whole-word match ("Java" is not found in "JavaScript").
+fn contains_word(text: &str, word: &str) -> bool {
+    let (text, word) = (text.to_lowercase(), word.to_lowercase());
+    let is_word = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+    text.match_indices(&word).any(|(i, _)| !is_word(text[..i].chars().next_back()) && !is_word(text[i + word.len()..].chars().next()))
+}
+
 /// Templates the interviewer prompt is built from.
 pub struct PromptTemplates {
     pub interviewer: String,
@@ -193,6 +232,7 @@ pub fn interviewer_prompt(t: &PromptTemplates, cat: &Catalog, panels: &Panels, s
         ("resume", or_default(&setup.resume, RESUME_MAX, "(not provided, ask them to walk you through their background)")),
         ("jd", or_default(&setup.jd, JD_MAX, "(none, use a typical role at this level)")),
         ("candidate_notes", or_default(&setup.notes, 4_000, "(none)")),
+        ("stt_terms", stt_terms_line(&voice_terms(setup, cat, &plan.persona, idx, None), &setup.resume, &setup.jd)),
     ]
     .into();
     render(&t.interviewer, &vars)
@@ -382,6 +422,15 @@ mod tests {
         assert!(p.contains("COMPANY STYLE: Google: structured"));
         assert!(p.contains("(not provided"));
         assert!(p.contains("Backend, payments"));
+        assert!(p.contains("Terms likely in this interview:"));
+    }
+
+    #[test]
+    fn stt_terms_line_lists_round_terms_then_static_ones_in_use() {
+        let line = stt_terms_line(&["Prateesh".into(), "Hazelcast".into()], "I use Kafka daily", "Redis experience");
+        assert_eq!(line, "Prateesh, Hazelcast, Kafka, Redis");
+        assert_eq!(stt_terms_line(&[], "", ""), "(none)");
+        assert_eq!(stt_terms_line(&[], "JavaScript only", ""), "(none)", "Java is not in JavaScript");
     }
 
     #[test]

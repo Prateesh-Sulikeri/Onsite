@@ -177,6 +177,7 @@ async fn run(client: ApiClient, iv_model: &str, rep_model: &str, skip_research: 
             turns: &turns,
             workspace: &ws,
             metrics: &metrics,
+            stt_terms: "(none)",
         },
     );
     let rep = run_once(&backend, &prompt, Tools::None, rep_model, |_| {}).await;

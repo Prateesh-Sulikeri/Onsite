@@ -76,6 +76,8 @@ pub struct ReportInput<'a> {
     pub turns: &'a [Turn],
     pub workspace: &'a Value,
     pub metrics: &'a Metrics,
+    /// Names and terms speech recognition may have misheard (see `stt_terms_line`).
+    pub stt_terms: &'a str,
 }
 
 pub fn report_prompt(template: &str, r: &ReportInput) -> String {
@@ -104,6 +106,7 @@ pub fn report_prompt(template: &str, r: &ReportInput) -> String {
         ("longest", r.metrics.longest.to_string()),
         ("transcript", transcript_text(r.turns)),
         ("final_workspace", final_ws),
+        ("stt_terms", r.stt_terms.to_string()),
     ]
     .into();
     render(template, &vars)
@@ -181,6 +184,7 @@ mod tests {
                 turns: &t,
                 workspace: &json!({"code": "int x;"}),
                 metrics: &m,
+                stt_terms: "Hazelcast, Kafka",
             },
         );
         assert!(!p.contains("{{"));
