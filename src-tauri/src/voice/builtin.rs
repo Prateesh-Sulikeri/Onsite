@@ -188,13 +188,12 @@ pub fn known_clip(id: &str) -> &'static str {
     VOICES.iter().find(|v| v.0 == id).map_or(DEFAULT_VOICE, |v| v.0)
 }
 
-/// Pace of a voice on top of the user's speed. Ethan's Supertonic voice reads slower than Charlotte's at the same setting.
-pub fn tempo(id: &str) -> f32 {
-    if known_clip(id) == "ethan_brooks" {
-        1.2
-    } else {
-        1.0
-    }
+/// Final speech speed (user's speed x persona pace) stays in this range. From the Task 7 sweep
+/// (`docs/plans/voice-bench-results.md`): every voice drops words at 1.3, and 1.2 still holds.
+pub const SPEED_RANGE: (f32, f32) = (0.9, 1.2);
+
+pub fn safe_speed(speed: f32) -> f32 {
+    speed.clamp(SPEED_RANGE.0, SPEED_RANGE.1)
 }
 
 /// The Supertonic speaker id for a voice key.
@@ -449,7 +448,13 @@ mod tests {
         assert_eq!(speaker_id("ethan_brooks"), 5);
         assert_eq!(speaker_id("nobody"), 5, "unknown keys fall back to the default voice");
         assert!(VOICES.iter().all(|v| (0..10).contains(&v.3)));
-        assert!(tempo("ethan_brooks") > tempo("priya_shah"), "Ethan is sped up, Charlotte is not");
+    }
+
+    #[test]
+    fn speed_is_clamped_to_the_safe_range() {
+        assert_eq!(safe_speed(2.0), SPEED_RANGE.1);
+        assert_eq!(safe_speed(0.5), SPEED_RANGE.0);
+        assert_eq!(safe_speed(1.0), 1.0);
     }
 
     #[test]

@@ -83,7 +83,7 @@ impl Tts {
         if text.is_empty() {
             return Ok(());
         }
-        let synth = Synth { sid: builtin::speaker_id(self.clip), speed: speed * builtin::tempo(self.clip), steps };
+        let synth = Synth { sid: builtin::speaker_id(self.clip), speed: builtin::safe_speed(speed), steps };
         let stop = Arc::new(AtomicBool::new(false));
         let _stop_on_drop = StopOnDrop(stop.clone());
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Piece>();

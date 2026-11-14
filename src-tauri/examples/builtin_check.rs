@@ -9,7 +9,7 @@
 //! Speech goes to `target/voice-spike/out/builtin/`. Models are `sherpa-onnx-supertonic-3-tts-int8-2026-05-11` and Parakeet.
 
 use onsite_lib::voice::audio::{f32_to_i16, i16_to_f32, Resampler, MIC_RATE};
-use onsite_lib::voice::builtin::{pieces, speaker_id, tempo, ParakeetStt, Supertonic, Synth, VOICES};
+use onsite_lib::voice::builtin::{pieces, speaker_id, ParakeetStt, Supertonic, Synth, VOICES};
 use onsite_lib::voice::health::Health;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ const LINES: [&str; 3] = [
 
 /// One piece through the round's guarded generation, at speed 1.0 and 8 steps.
 fn speak(tts: &Supertonic, text: &str, clip: &str) -> Vec<i16> {
-    let synth = Synth { sid: speaker_id(clip), speed: tempo(clip), steps: 8 };
+    let synth = Synth { sid: speaker_id(clip), speed: 1.0, steps: 8 };
     tts.speak_piece(text, &synth, &Arc::new(AtomicBool::new(false)), &Health::default()).expect("speak").pcm
 }
 
