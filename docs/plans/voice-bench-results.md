@@ -65,6 +65,55 @@ Both are the current voices. Speed 1.3 is where every voice breaks down (missing
 (sid 0: 16 / 7.3%, sid 5: 16 / 7.7%). Proposed `SPEED_MAX` = 1.2, pending the owner's listen.
 Raw text before the normalizer, same grid: 28-42 missing and 23-38% WER.
 
+## Task 7 gate (2026-11-14, `tts --runs 3`, 8 steps, 4 threads)
+
+| Voice | Mean WER | Lines with a missing word | RTF p50 / p90 / max | Min s/word |
+|---|---|---|---|---|
+| sid 0 (Charlotte) | 5.13% | 36/165 | 0.49 / 0.64 / 0.90 | 0.253 |
+| sid 5 (Ethan) | 5.40% | 35/165 | 0.34 / 0.46 / 0.67 | 0.252 |
+
+The plan's pass mark (zero missing-word lines) is not met and can't be: "missing" counts Parakeet's mishearings too.
+Min s/word 0.25 (vs `MIN_S_PER_WORD` 0.16) means no line lost audio. The bench calls raw `synth`, so cap hits and retries
+come from a real round instead: 2026-11-14, 7 replies, `cap_hits=0 retries=0`. Fallback TTS bake-off (Kokoro, Kitten):
+not run; the owner approved both voices by ear.
+
+## Task 3b: recognizer bake-off (2026-11-14, owner's 14 recordings)
+
+Recordings cut as a round cuts them (pieces of at most 20 s at the quietest point; 49 pieces). The first run fed whole
+recordings (up to 98 s) and Qwen3 returned nothing for any over ~30 s (75% WER): a bench fault, fixed. Term recall counts
+only terms that occur in the owner's own text (30 of 101 listed terms were topic labels or said another way).
+
+| Engine | WER recorded | Term recall recorded | Piece decode p90 (4 / 2 threads) | Silence | Licence |
+|---|---|---|---|---|---|
+| Parakeet TDT v2 (current) | 10.15% | 57/68 (84%) | 0.89 s / 1.39 s | PASS | CC-BY-4.0 |
+| Orukeet v0.1.0 | 11.49% | 48/68 (71%) | 1.16 s / 1.62 s | PASS | CC BY-SA 4.0 weights |
+| Qwen3-ASR 0.6B | 10.51% | 51/68 (75%) | 5.57 s / 5.82 s | PASS | not stated in the archive |
+| Qwen3-ASR + context | not run: already fails the 1.5 s decode rule | | | | |
+
+Verdict: no candidate passes the decision rule (recall +10 points, WER not worse, p90 at or under 1.5 s on 2 threads).
+**Owner's pick: keep Parakeet v2** (heard well in the 2026-11-14 round). Task 18 skipped.
+
+## Task 11 gate (2026-11-14)
+
+1. Real round on the owner's laptop (tier Ok): `voice health replies=7 pieces=27 dry_spells=3 cap_hits=0 retries=0 rtf_p50=0.47
+   rtf_p90=1.05`. All 3 dry spells followed a reply that opened with "Okay." alone (0.6 s of audio, next sentence 1.7-2.9 s to
+   make). Fixed in `838451d` (a 1-2 word opener waits up to 700 ms for the next sentence); not yet re-measured in a round.
+   First audio after answer 2.5-4.6 s, mostly Claude's first token (1.1-2.8 s); TTS first piece 0.75-1.6 s (at or under 1.5 s
+   in 6 of 7 replies).
+2. Slow laptop (`start /affinity 0x3`, `tts --threads 2 --steps 5`): RTF p50 0.64, p90 0.80, max 1.02. **Pass** (p90 under 1.0).
+
+## Task 16 gate (2026-11-14, Parakeet, `stt --clean` with each item's terms as round terms)
+
+| Source | WER raw -> clean | Term recall raw -> clean |
+|---|---|---|
+| Recorded (14) | 10.15% -> 10.08% | 84% -> 88% |
+| Synthetic (24, 3 runs; TTS output varies per run) | 7.4-9.9% -> 5.4-6.4% | 80-88% -> 89-95% |
+
+WER is not worse: pass. Recall target (90% or baseline + 15, so ~97-99%) is not met. The first version of the repair made
+recorded WER worse; the cause was sorting/sharing -> sharding, C -> C++ and on -> O(n), fixed in `675d4e6` with tests.
+Fixed on recordings: item potency -> idempotency, rabbit mq -> RabbitMQ, dbzium -> Debezium, write headlog -> write-ahead log.
+Still missed: e.g. "Mungo DB" (MongoDB is 7 letters, under the 8-letter sound rule), "Justbay" (Juspay).
+
 ## Measured facts
 
 See `docs/engineering/VOICE.md` "Measured facts": no input splitting by sherpa, no spin switch in 2.0.1, 0% idle CPU.

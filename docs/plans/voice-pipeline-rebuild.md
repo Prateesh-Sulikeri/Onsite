@@ -1,6 +1,8 @@
 # Plan: voice pipeline rebuild
 
-Status: draft for the owner's review (2026-11-13). Nothing is built yet.
+Status: built 2026-11-14 on `voice/rebuild` (Tasks 1-17; 18 skipped, the owner kept Parakeet). Gates, from
+`voice-bench-results.md`: TTS round-trip WER ~25% -> ~5%; slow-laptop RTF p90 0.80; term recall on the owner's recordings
+84% -> 88% after repair; the plan's zero-missing-word and 90% recall marks are not met (see the results doc for why).
 Replaces the open voice items in `docs/engineering/VOICE.md` ("Gaps", "TODO"). Earlier work: `voice-without-voicestudio.md`,
 `voice-spike-results.md`.
 

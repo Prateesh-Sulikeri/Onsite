@@ -151,6 +151,9 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   the candidate keeps talking; the open segment is re-decoded every 0.5 s for the live caption. Tech terms are fixed
   against a vocabulary and repetition loops collapsed.
 - Mic audio goes through a windowed-sinc low-pass before 48->16 kHz downsampling (aliasing hurt ASR).
+- Rebuilt 2026-11-12..14 (`docs/plans/voice-pipeline-rebuild.md`): `speech_text::to_speech` + `prompts/pronounce.json` turn written text
+  into spoken text for the voice; a machine tier (Fast/Ok/Slow) sets steps, piece size, captions and prebuffer; Silero VAD + gain on the mic;
+  per-round vocabulary (`vocab.rs`) and `prompts/stt_aliases.json` repair misheard terms. Measure with `cargo run --release --example voice_bench`.
 - VoiceStudio was the speech engine until 2026-11-11 and has been removed (plan: `docs/plans/voice-without-voicestudio.md`).
   Old settings blobs still carry `engine`, `base_url`, `voice`, `steps`; serde ignores them.
 - Details, files, pins and TODOs: `docs/engineering/VOICE.md`.

@@ -14,15 +14,16 @@ numbers were measured with throwaway probes that were deleted; the Supertonic nu
 
 | File | Contents |
 |---|---|
-| `engine.rs` | `PersonaVoice {name, clip}`, `Engine {tts, stt, lexicon}` (`load(state)` loads both models and `prompts/pronounce.json`, `voice(&settings)` -> `Tts`), `Tts` (`name`, `rate`, `speak(text, speed, steps, max_piece_words, health, on_piece)`: `to_speech` first, nothing said when empty) |
-| `builtin.rs` | `Supertonic::{load, load_with, synth, speak_piece}` (`synth` = one raw sherpa call; `speak_piece` = guarded: `judge` length check, one retry at +2 steps when too short, cut + 30 ms fade when too long, `trim_silence`, 10 ms edge fades, `gap_ms` after), `Synth {sid, speed, steps}`, `Piece {pcm, ends_sentence}`, `pieces(text, max_words)` (sentences via `splitter::first_sentence_len`), `ParakeetStt::{load, load_with, transcribe, transcribe_f32, caption}`, `Cache`, `VOICES`, `speaker_id`, `clip_for_gender`, `known_clip` |
+| `engine.rs` | `PersonaVoice {name, clip}`, `Engine {tts, stt, lexicon, tier, vad_model, aliases}` (`load(state)` loads both models, `prompts/pronounce.json` and `prompts/stt_aliases.json`, `voice(&settings)` -> `Tts`), `Tts` (`name`, `rate`, `speak(text, speed, steps, max_piece_words, health, on_piece)`: `to_speech` first, nothing said when empty) |
+| `builtin.rs` | `Supertonic::{load, load_with, synth, speak_piece}` (`synth` = one raw sherpa call; `speak_piece` = guarded: `judge` length check, one retry at +2 steps when too short, cut + 30 ms fade when too long, `trim_silence`, 10 ms edge fades, `gap_ms` after), `Synth {sid, speed, steps}`, `Piece {pcm, ends_sentence}`, `pieces(text, max_words)` (sentences via `splitter::first_sentence_len`), `ParakeetStt::{load, load_with, transcribe, transcribe_f32, caption}`, `Cache`, `VOICES`, `speaker_id`, `clip_for_gender`, `known_clip`, `SPEED_RANGE` (0.9-1.2) + `safe_speed` |
 | `speech_text.rs` | `to_speech(text, &Lexicon)`: written -> spoken text for the voice only (markdown, links, long values, lexicon, big-O, brackets, operators, numbers/units/codes, identifiers). `Lexicon::load` reads `prompts/pronounce.json` (empty + warning on error) |
 | `tier.rs` | `Tier {Fast, Ok, Slow}` from warm-up RTF (< 0.35, < 0.7): steps 8/6/5, piece words 40/24/14, captions 0.5 s/1 s/off, prebuffer 300/500/800 ms. Measured once per app run (`TIER_LINE` twice, second run timed; kept in `Cache`, cleared by Reload models). `Drift` lowers it mid-round when the median RTF of the last 5 calls is over the bound x 1.2. Settings > Voice shows "This laptop: ..." |
 | `health.rs` | `Health` counters per round (replies, pieces, dry spells, cap hits, retries, RTF p50/p90); `Voice::end` logs one `voice health` line |
 | `score.rs` | Bench scoring: `words`, `wer` (with missing words), `term_recall` |
-| `audio.rs` | `Mic`, `Player` (lock-free `rtrb` ring, 30 s at the device rate; the callback owns the consumer + `Jitter` and reads atomics only; `push` waits up to 2 s for room then drops), `Jitter::next` over a `Source` (ring or `VecDeque`), `set_streaming`, `set_prebuffer_ms`, `take_underruns`; cpal `realtime` feature = audio-priority speaker thread, `Vad`, `LowPass` (windowed sinc), `Downsampler` (->16 kHz, own low-pass + private linear), `Resampler` (speaker path: sherpa-onnx filtered resampler, `flush` after each call; linear fallback), `on_audio_thread`, `set_devices`, `list_devices` |
+| `vocab.rs` | `round_terms(Sources)`: up to 150 names and terms from the resume, JD, dossier, persona, company and problem (`terms_in`, `candidate_name`). Built per round in `interview::voice_terms`; feeds STT repair and the `{{stt_terms}}` line in the interviewer and report prompts |
+| `audio.rs` | `Mic`, `Player` (lock-free `rtrb` ring, 30 s at the device rate; the callback owns the consumer + `Jitter` and reads atomics only; `push` waits up to 2 s for room then drops), `Jitter::next` over a `Source` (ring or `VecDeque`), `set_streaming`, `set_prebuffer_ms`, `take_underruns`, `is_idle` (read from the ring itself: a shared counter raced and kept the mic shut, fixed 2026-11-14); cpal `realtime` feature = audio-priority speaker thread, `Vad` (`push` energy, `push_flag` state machine), `Agc`, `SpeechGate` (Silero), `LowPass` (windowed sinc), `Downsampler` (->16 kHz, own low-pass + private linear), `Resampler` (speaker path: sherpa-onnx filtered resampler, `flush` after each call; linear fallback), `on_audio_thread`, `set_devices`, `list_devices` |
 | `models.rs` | pinned list `PINS` (id, url, bytes, sha256, unpacked), `install` (also deletes the retired Pocket folder), `delete`, `status`, `installed`, `allowed_host`, `Progress` (`voice_model` event) |
-| `stt.rs` | `listen`/`listen_with`/`run`: mic -> VAD -> segments -> Parakeet -> `ListenEnd {Text{text,stt_ms}, Cancelled{heard}, NoSpeech}`; `spawn_decode` (finished segment), `spawn_caption` (every 500 ms); `SttState`; `clean_transcript` (`collapse_repeats`, `fix_vocab` Levenshtein); `domain_vocab` |
+| `stt.rs` | `listen`/`listen_with`/`run`: mic -> VAD -> segments -> Parakeet -> `ListenEnd {Text{text,stt_ms}, Cancelled{heard}, NoSpeech}`; `spawn_decode` (finished segment), `spawn_caption` (`SttOptions.caption_every`, from the tier); `SttState`; `clean_transcript` (`collapse_repeats`, `fix_vocab`); `domain_vocab` -> `Vocab {base, round}`; `Aliases`; `sound_key` |
 | `mod.rs` | `VoiceSettings`, `VoiceEvent`, `Voice` (player + current `RoundVoice`), `begin` (round loop task), `say`, `turn_done`, `answer_sent`, `end`, mute/listen/interrupt, `Batch`, `coalesce_wait`, `listen_once`, `speak_into` |
 
 - Models (GitHub release assets of k2-fsa/sherpa-onnx; size / SHA-256 checked, see `models.rs`):
@@ -33,16 +34,18 @@ numbers were measured with throwaway probes that were deleted; the Supertonic nu
   Only github.com and `*.githubusercontent.com` (GitHub's release CDN redirect) over https; redirect policy enforces it.
   Disk check: (download + unpacked) x 1.1 free, else "Needs X GB free to install ...". Network error: "Couldn't reach GitHub. Check your connection and press Retry."
 - TTS: Supertonic 3 int8, CPU, threads = logical CPUs / 2 clamped 1-4 (`threads()`, also Parakeet; all cores starved the audio threads),
-  `lang: "en"` in `extra`, steps and piece size from the machine tier (`tier.rs`), `speed` = persona pace x user speed. No reference clip: the voice is a preset speaker id.
+  `lang: "en"` in `extra`, steps and piece size from the machine tier (`tier.rs`), `speed` = persona pace x user speed, clamped to `SPEED_RANGE` 0.9-1.2
+  (the 2026-11-14 sweep: every voice drops words at 1.3). No reference clip: the voice is a preset speaker id.
   Output 44.1 kHz (read from the model). Two voices: Ethan (`ethan_brooks`, speaker 5, male) and Charlotte (`priya_shah`, speaker 0, female).
-  Speaker ids are inferred from median pitch of the model's own output (0-4 female, 5-9 male, 2026-11-02): not yet checked by ear.
+  Speaker ids from median pitch (0-4 female, 5-9 male, 2026-11-02). Sids 0 and 5 won the 2026-11-14 sweep (fewest lost words; both 2.55 words/s,
+  so Ethan's old 1.2x tempo is gone) and the owner approved them by ear.
   The model reads raw characters, so `Tts::speak` runs `speech_text::to_speech` first ("1.5 ms" -> "one point five milliseconds",
   "PostgreSQL" -> lexicon). The screen and transcript keep the original text. Panel persona -> `Persona.clip` via `voice.gender`.
-  `Tts::speak` sends `builtin::pieces(text, 14)` one guarded call each (`speak_piece`): sentences > 14 words cut at a
+  `Tts::speak` sends `builtin::pieces(text, <tier piece words>)` one guarded call each (`speak_piece`): sentences > 14 words cut at a
   `, ; :` and the em dash character (U+2014) near the middle (parts >= 4 words), short ones packed to 14. Measured 2026-11-02 (`builtin_check`):
   six-sentence reply, first audio 1.7 s for the parts vs 4.1 s for the whole 18.5 s reply in one call.
 - STT: Parakeet TDT v2 int8 (`nemo_transducer`, CPU, 4 threads), offline model, English only. Finished segment
-  -> `spawn_blocking` decode -> a `final_kind: summary` message on the segment channel. Captions = re-decode of the open segment every 500 ms (`spawn_caption`;
+  -> `spawn_blocking` decode -> a `final_kind: summary` message on the segment channel. Captions = re-decode of the open segment every 0.5 s / 1 s / never by tier (`spawn_caption`;
   skipped while one runs, while a final decode holds the recognizer, when the audio hasn't grown, or during a rest as long as the last
   caption decode took (`CaptionGate`, <= 50% CPU; back-to-back decodes caused mic overruns on slow laptops)); text is a `partial`.
 - Lifecycle: models load when a round starts (`live::start_voice` -> `Engine::load`), then stay in `AppState.builtin` for later
@@ -79,16 +82,23 @@ Blobs saved by older versions also hold `engine`, `base_url`, `voice`, `steps`; 
   `Agc` (gain 1-8x toward RMS 0.08, moves only on voiced chunks) scales the mic first. Model missing = energy VAD, no gain.
 - Segment cut (decode while candidate talks): < 3 s never; 3-20 s at 700 ms pause; > 20 s at 300 ms.
 - Segment text = Parakeet final ?? last caption. Answer = segments joined → `clean_transcript`.
+- `fix_vocab`, per window of 1-3 words: exact term or a known mishearing (`prompts/stt_aliases.json`; `needs` = context words that
+  must be in the answer, e.g. reddish -> Redis only with cache/ttl/...), then spelling edits (first and last letters kept; round terms
+  one edit looser), then `sound_key` (static terms 8+ letters, round terms 5+). A window of only `EVERYDAY` words is never rewritten by
+  spelling or sound ("just pay" stays). Round terms = `VoiceSettings.vocab` (per round, never saved).
 - Health tick 500 ms: dead mic → `Voice("The microphone changed. Tap the mic to listen again.")`. `FINAL_WAIT` 15 s.
 
 ## Speaking (round loop in `Voice::begin`)
 
 - One voice for the round (`Engine::voice`): the persona's clip, else `builtin_voice`.
 - Warm-up: generate "Okay, let's begin." and discard; then `ready` → loader. Nothing plays until `go`.
-- `Cmd::Say`: drop if `cut`. Short sentence (< 4 words or < 24 chars) waits for more: ≤ 150 ms if player idle, ≤ 300 ms if
-  playing; merge ≤ 220 chars (`MAX_BATCH_CHARS`). Generate next batch while current plays.
+- `Cmd::Say`: drop if `cut`. Short sentence (< 4 words or < 24 chars) waits for more: ≤ 150 ms if player idle, ≤ 700 ms if it is
+  a 1-2 word opener ("Okay." alone played, then a gap while the next sentence was made), ≤ 300 ms if playing; merge ≤ 220 chars
+  (`MAX_BATCH_CHARS`). Generate next batch while current plays.
+- Release (`release_now`): on Ok/Slow tiers audio goes to the player a whole sentence at a time, so any pause falls between sentences;
+  Fast pushes each piece. First-audio latency is logged at the first push.
 - Playback smoothing (`audio.rs` `Jitter`): `Cmd::Say` sets `Player::set_streaming(true)` when a reply starts; the device waits for
-  the prebuffer (300 ms by default) before it starts, and again after any dry spell while the reply is still generating. `TurnDone` clears the flag
+  the tier's prebuffer (300/500/800 ms) before it starts, and again after any dry spell while the reply is still generating. `TurnDone` clears the flag
   first, then waits for the queue to drain. A `reply playback ran dry` info line counts the dry spells per reply.
 - `Cmd::TurnDone{ended}`: wait for player idle (or cut) → always emit `speaking false` → `awaiting_answer = !ended` →
   listen unless muted.
@@ -133,6 +143,8 @@ voice · R11 typed fallback · R12 device switch + lost-mic message · R13 Engli
   Measure via `voice latency` events and the `tts` log line (`audio_ms`, `rtf`; > 1 = pauses mid-reply). `builtin_check` compares whole vs pieces.
 - New persona voice: set `voice.gender` in `panels.json`; the clip follows it.
 - A term said wrong: add `{"term", "as"}` to `prompts/pronounce.json` and check with `voice_bench tts --set tech`.
+- A term heard wrong: add `{"heard", "term", "needs"}` to `prompts/stt_aliases.json` (give `needs` when the misheard words are plain English);
+  check with `voice_bench stt --source recorded --clean`.
 - Measure a change: `cargo run --release --example voice_bench -- tts|sweep|stt|silence` (models in `D:\cargo-target\voice-bench\models`);
   results in `docs/plans/voice-bench-results.md`.
 
@@ -145,7 +157,8 @@ voice · R11 typed fallback · R12 device switch + lost-mic message · R13 Engli
 
 ## Gaps
 
-- 2.5 s target unmet on Claude Code CLI. Ideas: clause-level TTS start, streaming TTS.
-- Parakeet mishears some tech terms ("Postgres Creole", "reddish" for Redis); `fix_vocab` repairs some. A GPU Whisper pass is a possible optional download.
+- 2.5 s target unmet on Claude Code CLI: 2.5-4.6 s from end of answer to first audio (2026-11-14 round), mostly Claude's first token
+  (1.1-2.8 s); TTS adds 0.75-1.6 s. Ideas: clause-level TTS start, streaming TTS.
+- Parakeet misses ~12% of tech terms on the owner's recordings even after repair (88% recall, 2026-11-14). A GPU Whisper pass is a possible optional download.
 - No echo cancellation → no voice barge-in, only tap.
 - Decoder hotwords for Parakeet wait for a sherpa-onnx release with PR 4084 (merged 2026-10-27, after v2.0.1; no newer release or crate, checked 2026-11-14).
