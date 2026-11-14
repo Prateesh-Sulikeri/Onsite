@@ -97,6 +97,10 @@ const MAX_BATCH_CHARS: usize = 220;
 const WAIT_IDLE: Duration = Duration::from_millis(150);
 /// Extra wait while earlier audio is still playing; it hides behind that audio.
 const WAIT_BUSY: Duration = Duration::from_millis(300);
+/// A reply that opens with one or two words ("Okay.") waits this long for the next sentence. Spoken
+/// alone, it played in 0.6 s while the next sentence took 1.7-2.9 s to make: "Okay." ... gap ... rest.
+const WAIT_TINY: Duration = Duration::from_millis(700);
+const TINY_WORDS: usize = 2;
 
 fn is_short(s: &str) -> bool {
     s.split_whitespace().count() < SHORT_WORDS || s.trim().chars().count() < SHORT_CHARS
@@ -127,11 +131,11 @@ impl Batch {
     }
 }
 
-fn coalesce_wait(player_idle: bool) -> Duration {
-    if player_idle {
-        WAIT_IDLE
-    } else {
-        WAIT_BUSY
+fn coalesce_wait(player_idle: bool, text: &str) -> Duration {
+    match (player_idle, text.split_whitespace().count() <= TINY_WORDS) {
+        (true, true) => WAIT_TINY,
+        (true, false) => WAIT_IDLE,
+        (false, _) => WAIT_BUSY,
     }
 }
 
@@ -289,7 +293,7 @@ impl Voice {
                         // anything that doesn't fit waits in `pending` and goes next.
                         // One deadline per batch, so a chain of short lines can't add up.
                         let mut batch = Batch::new(&text);
-                        let deadline = tokio::time::Instant::now() + coalesce_wait(player.is_idle());
+                        let deadline = tokio::time::Instant::now() + coalesce_wait(player.is_idle(), &batch.0);
                         while batch.wants_more() {
                             match tokio::time::timeout_at(deadline, rx.recv()).await {
                                 Ok(Some(Cmd::Say(t))) => {
@@ -654,8 +658,17 @@ mod tests {
 
     #[test]
     fn first_audio_waits_at_most_150ms() {
-        assert!(coalesce_wait(true) <= Duration::from_millis(150));
-        assert!(coalesce_wait(false) >= coalesce_wait(true));
+        let first = "Let's start with your current project.";
+        assert!(coalesce_wait(true, first) <= Duration::from_millis(150));
+        assert!(coalesce_wait(false, first) >= coalesce_wait(true, first));
+    }
+
+    #[test]
+    fn a_one_word_opener_waits_for_the_next_sentence() {
+        assert_eq!(coalesce_wait(true, "Okay."), WAIT_TINY);
+        assert_eq!(coalesce_wait(true, "Got it."), WAIT_TINY);
+        assert_eq!(coalesce_wait(true, "Got it, thanks."), WAIT_IDLE);
+        assert_eq!(coalesce_wait(false, "Okay."), WAIT_BUSY, "mid-reply it hides behind the audio playing");
     }
 
     #[test]
