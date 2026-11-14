@@ -305,7 +305,9 @@ fn run_stt(a: &Args, root: &Path, out: &Path, threads: i32) {
         let d = t.elapsed().as_secs_f32();
         let audio_s = pcm.len() as f32 / STT_RATE as f32;
         let w = spoken_wer(reference, &heard);
-        let (f, n) = score::term_recall(&heard, terms);
+        // Score only terms the reference itself contains: a label like "Audio Confirmation" was never said.
+        let said: Vec<String> = terms.iter().filter(|t| score::term_recall(reference, std::slice::from_ref(t)).0 == 1).cloned().collect();
+        let (f, n) = score::term_recall(&heard, &said);
         found += f;
         total += n;
         println!("{id}: wer {:.2} terms {f}/{n} decode {d:.2}s audio {audio_s:.1}s\n  heard: {heard}", w.rate());
