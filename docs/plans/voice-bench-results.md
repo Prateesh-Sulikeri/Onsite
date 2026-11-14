@@ -38,7 +38,32 @@ mean WER 12.6%, term recall 46/56 (82%), decode p50 0.21 s, p90 0.25 s, RTF p50 
 
 Silence (5 s zeros + 5 s noise at RMS 0.005): Parakeet PASS, Orukeet PASS (both returned empty text).
 
-Sweep (`sweep --save-wav`, raw text): running at the time of writing; grid and `listen/sid<N>.wav` go here.
+Sweep (raw text, before the normalizer): see the Task 7 sweep below.
+
+## Task 7 sweep (2026-11-14, normalizer on, 55 lines, 8 steps, 4 threads)
+
+Lines (of 55) with a missing word / mean WER, per speed. "Missing" is the full round trip: a word the voice dropped
+or one Parakeet misheard, so zero is not reachable for any voice.
+
+| sid | 0.9 | 1.0 | 1.1 | 1.2 | 1.3 | words/s at 1.0 |
+|---|---|---|---|---|---|---|
+| 0 (F) | 9 / 3.62% | 10 / 4.27% | 14 / 7.09% | 16 / 7.25% | 26 / 16.73% | 2.55 |
+| 1 (F) | 10 / 4.75% | 11 / 5.12% | 18 / 9.00% | 19 / 10.16% | 23 / 13.59% | 2.70 |
+| 2 (F) | 9 / 4.34% | 13 / 6.23% | 15 / 6.15% | 23 / 13.23% | 29 / 19.00% | 2.47 |
+| 3 (F) | 10 / 6.24% | 11 / 4.61% | 14 / 6.71% | 23 / 8.91% | 26 / 13.78% | 2.88 |
+| 4 (F) | 15 / 6.96% | 13 / 6.55% | 17 / 7.86% | 20 / 11.94% | 31 / 19.22% | 2.63 |
+| 5 (M) | 10 / 4.37% | 12 / 5.21% | 13 / 5.20% | 16 / 7.70% | 20 / 12.50% | 2.55 |
+| 6 (M) | 13 / 4.93% | 15 / 7.36% | 14 / 6.56% | 22 / 13.24% | 31 / 18.17% | 2.61 |
+| 7 (M) | 11 / 4.27% | 11 / 4.39% | 15 / 6.48% | 22 / 9.44% | 28 / 12.23% | 2.96 |
+| 8 (M) | 12 / 4.59% | 11 / 4.61% | 14 / 7.23% | 19 / 8.14% | 25 / 12.12% | 2.71 |
+| 9 (M) | 12 / 5.18% | 13 / 5.29% | 18 / 9.98% | 19 / 10.57% | 29 / 15.08% | 2.56 |
+
+The plan's rule (zero missing-word lines at 1.0 and 1.1) can't be met by any voice, so the picks use the same order
+of tests on the counts: female = fewest missing at 1.0 + 1.1, then lowest WER (sid 0: 10 + 14, tie rule keeps sid 0);
+male = words/s at 1.0 closest to the female pick's 2.55 (sid 5: 2.55, also the fewest missing among 5-9).
+Both are the current voices. Speed 1.3 is where every voice breaks down (missing 20-31, WER 12-19%); 1.2 holds
+(sid 0: 16 / 7.3%, sid 5: 16 / 7.7%). Proposed `SPEED_MAX` = 1.2, pending the owner's listen.
+Raw text before the normalizer, same grid: 31-36 missing and ~24-29% WER at every speed.
 
 ## Measured facts
 
