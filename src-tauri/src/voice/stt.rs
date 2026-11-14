@@ -364,7 +364,8 @@ pub fn fix_vocab(text: &str, vocab: &Vocab, aliases: &Aliases) -> String {
         .map(|t| (t, false))
         .chain(vocab.round.iter().map(|t| (t, true)))
         .map(|(t, round)| Term { chars: norm(t).chars().collect(), key: sound_key(t), canon: t.as_str(), round })
-        .filter(|t| !t.chars.is_empty())
+        // "C++" is just "c" once symbols go: it would turn every "C" into "C++".
+        .filter(|t| t.chars.len() >= 2)
         .collect();
     let words: Vec<&str> = text.split_whitespace().collect();
     let normed: Vec<String> = words.iter().map(|w| norm(w)).collect();
@@ -389,10 +390,15 @@ pub fn fix_vocab(text: &str, vocab: &Vocab, aliases: &Aliases) -> String {
             }
             for t in &terms {
                 if joined == t.chars {
-                    offer(&mut best, 0, 0, len, t.canon);
+                    // Everyday words only change case ("key" -> "Key"), never form ("on" -> "O(n)").
+                    if !everyday || t.canon.eq_ignore_ascii_case(&words[i..i + len].join(" ")) {
+                        offer(&mut best, 0, 0, len, t.canon);
+                    }
                     continue;
                 }
-                if everyday {
+                // A lowercase term (sharding, idempotency) is a common word: a single real word near it is
+                // more likely right ("sorting", "sharing"), so fuzzy rules only join splits ("idem potency").
+                if everyday || (len == 1 && !t.canon.chars().any(char::is_uppercase)) {
                     continue;
                 }
                 let max = if t.round { allowed_edits_round(t.chars.len()) } else { allowed_edits(t.chars.len()) };
@@ -849,6 +855,19 @@ mod tests {
         ] {
             assert_eq!(fix_vocab(s, &v, &a), s);
         }
+    }
+
+    /// Found on the owner's recordings (Task 16 gate, 2026-11-14).
+    #[test]
+    fn real_words_near_lowercase_terms_stay() {
+        let v = domain_vocab(&["C++", "Kafka", "O(n)"]);
+        let a = aliases();
+        for s in ["first sorting the array then two pointers", "data sharing between teams", "I wrote C and Java", "it runs on the server"] {
+            assert_eq!(fix_vocab(s, &v, &a), s);
+        }
+        // Splits of a lowercase term are still joined.
+        assert_eq!(fix_vocab("we added shard ing later", &v, &a), "we added sharding later");
+        assert_eq!(fix_vocab("an item potency key", &v, &a), "an idempotency key");
     }
 
     #[test]
