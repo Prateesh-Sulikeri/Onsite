@@ -71,6 +71,8 @@ Write plain, short sentences in user-facing copy. Do not water down technical co
   `openers` in `catalog.json` (the last half used are skipped; kept in `settings` under `openers:<round_key>`),
   plus the first two interviewer turns of the last 4 rounds of that kind as "do not reuse". Coding rounds skip
   the history (the bank picks the problem). Persona opening lines are a tone guide, never said word for word.
+- Interviewer names (and so voices) for rounds without a panel come from `LoopSetup.persona_seed`, random per loop
+  (rolled in the UI so the setup preview matches; `create_loop` fills a 0). Before 2026-11-14 round 1 was always Arjun.
 - Run every session with `current_dir` set to an **empty per-session temp dir**, so no CLAUDE.md,
   repo files, or project settings leak into the interviewer.
 - Write candidate turns to stdin as JSONL user messages:

@@ -288,6 +288,9 @@ pub fn create_loop(state: &AppState, setup: &LoopSetup) -> Result<i64> {
         setup.company = "auto".into();
         setup.dossier = Some(d);
     }
+    if setup.persona_seed == 0 {
+        setup.persona_seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64 % (1 << 31) + 1);
+    }
     let setup = &setup;
     setup.validate(&state.catalog, &state.panels)?;
     let mut config = serde_json::to_value(setup)?;

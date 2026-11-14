@@ -729,21 +729,24 @@ $("#quickStart").onclick = () => {
   $("#startBtn").click();
 };
 /* Who runs round i. A panel gives each round type a fixed person; "Mixed" rotates names. */
-function interviewerFor(i, key, panelId){
+function interviewerFor(i, key, panelId, seed){
   const panel = PANELS.find(p => p.id === panelId);
   const iv = panel && panel.interviewers.find(x => x.id === (panel.round_owner || {})[key]);
-  return iv ? {name: iv.name.split(" ")[0], full: iv.name, role: iv.role, voice: iv.voice} : {name: catalogName(i), full: null, role: null};
+  return iv ? {name: iv.name.split(" ")[0], full: iv.name, role: iv.role, voice: iv.voice} : {name: catalogName(i, seed || 0), full: null, role: null};
 }
-/* A round without a panel alternates: odd rounds are a woman's name (and voice), even rounds a man's.
-   Same rule as interview::mod.rs plan() and Catalog::persona in Rust. */
-function catalogName(i){
-  const female = i % 2 === 1;
+/* Seed for the next loop's interviewer names; sent with the setup so the preview matches the rounds. */
+let PERSONA_SEED = Math.floor(Math.random() * 2147483647) + 1;
+/* A round without a panel: women and men alternate, starting with either; the name rotates by seed.
+   Same rule as LoopSetup::catalog_persona and Catalog::persona in Rust. */
+function catalogName(i, seed){
+  const s = seed % 2147483648;
+  const female = (i + s) % 2 === 1;
   const women = CAT.FEMALE_NAMES || [];
   let pool = CAT.NAMES.filter(n => women.includes(n) === female);
   if (!pool.length) pool = CAT.NAMES;
-  return pool[(i*5+3) % pool.length];
+  return pool[((i + Math.floor(s / 2)) * 5 + 3) % pool.length];
 }
-function persona(i){ return interviewerFor(i, selectedRounds()[i], $("#panel").value).name; }
+function persona(i){ return interviewerFor(i, selectedRounds()[i], $("#panel").value, PERSONA_SEED).name; }
 function syncPanels(){
   const sel = $("#panel"); if (!sel || !PANELS.length) return;
   // There are two international voices, so there is no panel to choose: always "Mixed".
@@ -796,6 +799,7 @@ $("#startBtn").onclick = async () => {
     minutes: Number($("#roundLen").value) || null,
     panel: $("#panel").value,
     ready_made_project: $("#readyMade").checked,
+    persona_seed: PERSONA_SEED,
     // Company mode: Rust copies the dossier into the loop. The rest is for this screen only.
     dossier_id: d ? d.id : "", dossier_rounds: d ? on.map(b => Number(b.dataset.di)) : [],
     dossier_company: d ? d.company : "", dossierRounds: on.map(b => ({name: b.dataset.name, minutes: Number(b.dataset.min)})),
@@ -814,6 +818,8 @@ $("#startBtn").onclick = async () => {
     m.textContent = "Setting up your loop…";
     const id = await api.invoke("create_loop", {setup});
     loop = {id, setup, count: rounds.length};
+    // The next loop meets different interviewers.
+    PERSONA_SEED = Math.floor(Math.random() * 2147483647) + 1;
     m.textContent = "";
     openReady(0);
   }catch(e){ m.className = "form-msg err"; m.textContent = errText(e); }
@@ -868,7 +874,7 @@ async function openRoom(index){
     }
     readyMade = loop.projChoice[index];
   }
-  const who = interviewerFor(index, loop.setup.rounds[index], loop.setup.panel);
+  const who = interviewerFor(index, loop.setup.rounds[index], loop.setup.panel, loop.setup.persona_seed);
   const name = who.name;
   const voiceOn = !!(SETTINGS && SETTINGS.voice.enabled && VS.up);
   const s = session = {roundId: null, index, key: k, name: loopRound(index).name, persona: name, minutes: loopRound(index).minutes, startedAt: Date.now(),
@@ -3292,7 +3298,7 @@ async function openReady(index){
   nav("ready");
   STAGE_MAX = 4; renderStepper($("#readyStepper"), 5);
   const k = loop.setup.rounds[index];
-  const who = interviewerFor(index, k, loop.setup.panel);
+  const who = interviewerFor(index, k, loop.setup.panel, loop.setup.persona_seed);
   const comp = companyLabel(loop.setup);
   $("#readyIc").textContent = comp[0];
   $("#readyRound").textContent = `${comp}: ${loopRound(index).name}`;
@@ -3335,7 +3341,7 @@ async function renderAudioCheck(){
   const off = mode === "typed" ? "Typed round: chat only, no mic or speaker needed."
     : !VS.up ? "The voice models aren’t downloaded, so this round will be typed. Download them in Settings > Voice to talk." : "";
   if (!testing && (off || / will be typed|^Typed round:/.test($("#acResult").textContent))) msg("#acResult", off);
-  const who = interviewerFor(readyIndex, loop.setup.rounds[readyIndex], loop.setup.panel);
+  const who = interviewerFor(readyIndex, loop.setup.rounds[readyIndex], loop.setup.panel, loop.setup.persona_seed);
   $("#readyMode").textContent = modeLine(who);
   $("#readyPanelWarn").hidden = true;
   $("#readyJoin").firstChild.textContent = on ? "Join interview" : "Join and type";

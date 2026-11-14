@@ -49,6 +49,10 @@ pub struct LoopSetup {
     /// Comprehension round: use a ready-made project instead of one the AI writes for this job.
     #[serde(default)]
     pub ready_made_project: bool,
+    /// Picks the interviewers' names (and so voices) for rounds without a panel. Random per loop, so
+    /// round 1 is not always the same person; 0 (loops saved before this) keeps the old order.
+    #[serde(default)]
+    pub persona_seed: u64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -114,6 +118,13 @@ impl LoopSetup {
         }
     }
 
+    /// A round without a panel: women and men alternate, starting with either; the name rotates by seed.
+    /// `ui/app.js` `catalogName` uses the same rule for the setup preview.
+    fn catalog_persona<'c>(&self, cat: &'c Catalog, idx: usize) -> &'c str {
+        let seed = (self.persona_seed % (1 << 31)) as usize;
+        cat.persona(idx + seed / 2, Some((idx + seed) % 2 == 1))
+    }
+
     pub fn plan(&self, cat: &Catalog, panels: &Panels, idx: usize) -> PlannedRound {
         let k = &self.rounds[idx];
         let r = &cat.rounds[k];
@@ -124,7 +135,7 @@ impl LoopSetup {
             key: k.clone(),
             name: reported.map_or_else(|| r.name.clone(), |d| d.name.clone()),
             // Rounds without a panel alternate: odd rounds are a woman's name, and her voice (see start_round).
-            persona: p.as_ref().map_or_else(|| cat.persona(idx, Some(idx % 2 == 1)).to_string(), |p| p.first_name.clone()),
+            persona: p.as_ref().map_or_else(|| self.catalog_persona(cat, idx).to_string(), |p| p.first_name.clone()),
             persona_id: p.as_ref().map(|p| p.id.clone()),
             persona_role: p.map(|p| p.role),
             minutes: self.minutes.or(reported.map(|d| d.minutes)).unwrap_or(r.min),
@@ -385,6 +396,7 @@ mod tests {
             dossier_rounds: Vec::new(),
             dossier: None,
             ready_made_project: false,
+            persona_seed: 0,
         }
     }
 
@@ -448,10 +460,28 @@ mod tests {
         let (cat, _, panels) = fixtures();
         let mut s = setup();
         s.rounds = vec!["coding".into(), "comprehension".into(), "behavioral".into(), "coding".into(), "resume".into(), "fundamentals".into()];
-        for i in 0..6 {
-            let name = s.plan(&cat, &panels, i).persona;
-            assert_eq!(cat.female_names.contains(&name), i % 2 == 1, "round {i}: {name}");
+        for seed in [0, 1, 7] {
+            s.persona_seed = seed;
+            let first = cat.female_names.contains(&s.plan(&cat, &panels, 0).persona);
+            for i in 0..6 {
+                let name = s.plan(&cat, &panels, i).persona;
+                assert_eq!(cat.female_names.contains(&name), first ^ (i % 2 == 1), "seed {seed} round {i}: {name}");
+            }
         }
+    }
+
+    #[test]
+    fn new_loops_get_different_interviewers() {
+        let (cat, _, panels) = fixtures();
+        let mut s = setup();
+        let names: std::collections::HashSet<String> = (0..16)
+            .map(|seed| {
+                s.persona_seed = seed;
+                s.plan(&cat, &panels, 0).persona
+            })
+            .collect();
+        assert!(names.len() >= 8, "round 1 is not always the same person: {names:?}");
+        assert!(names.iter().any(|n| cat.female_names.contains(n)) && names.iter().any(|n| !cat.female_names.contains(n)));
     }
 
     #[test]

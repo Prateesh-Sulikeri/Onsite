@@ -93,6 +93,7 @@ async fn run(client: ApiClient, iv_model: &str, rep_model: &str, skip_research: 
         dossier_rounds: vec![],
         dossier: None,
         ready_made_project: false,
+        persona_seed: 0,
     };
     let templates = PromptTemplates {
         interviewer: prompts::load(&dir, "interviewer.md").unwrap(),
