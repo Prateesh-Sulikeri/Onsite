@@ -307,6 +307,7 @@ impl Voice {
                         if !speaking {
                             speaking = true;
                             // The reply is still being generated: playback prebuffers and waits out dry spells.
+                            player.set_prebuffer_ms(drift.tier().prebuffer_ms());
                             player.set_streaming(true);
                             task_speaking.store(true, Ordering::SeqCst);
                             task_health.reply();
@@ -501,6 +502,12 @@ async fn measure_tier(voice: &Tts, cache: &builtin::Cache) -> Result<()> {
     Ok(())
 }
 
+/// True when held audio goes to the speaker now: every piece on Fast, else at a sentence end
+/// or at the end of the call.
+fn release_now(tier: Tier, ends_sentence: bool, last: bool) -> bool {
+    tier == Tier::Fast || ends_sentence || last
+}
+
 /// One TTS call into the speaker queue. Errors are reported, never replaced by another voice.
 /// Returns the call's real-time factor when it produced audio.
 #[allow(clippy::too_many_arguments)]
@@ -520,26 +527,38 @@ async fn speak_into(
     let started = Instant::now();
     let mut first_ms: Option<u64> = None;
     let mut samples = 0usize;
+    // Pieces held until a sentence ends, so any pause falls between sentences (not on Fast).
+    let mut held: Vec<i16> = Vec::new();
+    let mut release = |pcm: &[i16], first_ms: &mut Option<u64>| {
+        if first_ms.is_none() {
+            *first_ms = Some(started.elapsed().as_millis() as u64);
+            if let Some(t) = answered_at.lock().unwrap().take() {
+                let ms = t.elapsed().as_millis() as u64;
+                tracing::info!(ms, "first interviewer audio after answer");
+                emit(VoiceEvent::Latency { ms });
+            }
+        }
+        player.push(&mut rs, pcm);
+    };
     let res = voice
         .speak(text, settings.speed, tier.steps(), tier.piece_words(), health.clone(), |piece| {
-            let pcm = &piece.pcm;
-            samples += pcm.len();
+            samples += piece.pcm.len();
             if !alive.load(Ordering::SeqCst) || cut.load(Ordering::SeqCst) {
+                held.clear();
                 return;
             }
-            if first_ms.is_none() {
-                first_ms = Some(started.elapsed().as_millis() as u64);
-                if let Some(t) = answered_at.lock().unwrap().take() {
-                    let ms = t.elapsed().as_millis() as u64;
-                    tracing::info!(ms, "first interviewer audio after answer");
-                    emit(VoiceEvent::Latency { ms });
-                }
+            held.extend_from_slice(&piece.pcm);
+            if release_now(tier, piece.ends_sentence, false) {
+                release(&held, &mut first_ms);
+                held.clear();
             }
-            player.push(&mut rs, pcm);
         })
         .await;
     // rtf > 1 = speech is made slower than it plays: the reply will pause between parts.
     if alive.load(Ordering::SeqCst) && !cut.load(Ordering::SeqCst) {
+        if release_now(tier, false, true) && !held.is_empty() {
+            release(&held, &mut first_ms);
+        }
         player.flush(&mut rs);
     }
     let (total_ms, audio_ms) = (started.elapsed().as_millis() as u64, samples as u64 * 1000 / voice.rate().max(1) as u64);
@@ -659,6 +678,15 @@ mod tests {
         assert_eq!(chosen.builtin_voice, "priya_shah");
         let saved = serde_json::to_value(VoiceSettings::default()).unwrap();
         assert!(saved.get("engine").is_none() && saved.get("base_url").is_none());
+    }
+
+    #[test]
+    fn slower_machines_release_whole_sentences() {
+        assert!(release_now(Tier::Fast, false, false));
+        assert!(!release_now(Tier::Ok, false, false));
+        assert!(release_now(Tier::Ok, true, false));
+        assert!(!release_now(Tier::Slow, false, false));
+        assert!(release_now(Tier::Slow, false, true), "the end of the call always flushes");
     }
 
     #[test]
