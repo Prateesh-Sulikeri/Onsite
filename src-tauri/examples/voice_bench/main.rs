@@ -5,7 +5,7 @@
 //!                   [--threads <n>] [--runs <n>] [--raw] [--save-wav]
 //! voice_bench sweep [--models <root>] [--threads <n>] [--save-wav]
 //! voice_bench stt   --engine parakeet|orukeet|qwen3 [--models <root>] [--source synthetic|recorded]
-//!                   [--context] [--threads <n>]
+//!                   [--context] [--clean] [--threads <n>]
 //! voice_bench silence --engine parakeet|orukeet|qwen3 [--models <root>]
 //! voice_bench facts [--models <root>]   (Supertonic splitting, idle CPU after a synthesis)
 //! ```
@@ -285,6 +285,29 @@ fn stt_items(a: &Args, root: &Path, threads: i32) -> Vec<(String, Vec<f32>, Stri
     out
 }
 
+/// Cuts audio the way a round does (pieces of at most 20 s, cut at the quietest 100 ms between 12 and
+/// 20 s), so every engine gets segment-sized input. Qwen3 returns nothing for audio over ~30 s.
+fn app_pieces(pcm: &[f32]) -> Vec<&[f32]> {
+    let rate = STT_RATE as usize;
+    let (min, max, win) = (12 * rate, 20 * rate, rate / 10);
+    let mut out = Vec::new();
+    let mut start = 0;
+    while pcm.len() - start > max {
+        let cut = (start + min..start + max - win)
+            .step_by(win / 2)
+            .min_by(|&a, &b| {
+                let e = |i: usize| pcm[i..i + win].iter().map(|v| v * v).sum::<f32>();
+                e(a).total_cmp(&e(b))
+            })
+            .unwrap_or(start + max)
+            + win / 2;
+        out.push(&pcm[start..cut]);
+        start = cut;
+    }
+    out.push(&pcm[start..]);
+    out
+}
+
 fn run_stt(a: &Args, root: &Path, out: &Path, threads: i32) {
     let engine = a.get("--engine").unwrap_or_else(|| "parakeet".into());
     let items = stt_items(a, root, threads);
@@ -292,8 +315,11 @@ fn run_stt(a: &Args, root: &Path, out: &Path, threads: i32) {
     let rec = engines::open(&engine, root, threads).unwrap_or_else(|e| panic!("{engine}: {e}"));
     println!("{} loaded in {} ms", rec.name(), t.elapsed().as_millis());
     let use_ctx = a.has("--context");
+    let clean = a.has("--clean");
+    let aliases = stt::Aliases::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts"));
     let (mut wers, mut decode, mut rtfs, mut found, mut total) = (Vec::new(), Vec::new(), Vec::new(), 0, 0);
     let mut rows = Vec::new();
+    let (mut piece_decode, mut piece_audio): (Vec<f32>, Vec<f32>) = (Vec::new(), Vec::new());
     for (id, pcm, reference, terms) in &items {
         let ctx: Vec<String> = if use_ctx {
             terms.iter().cloned().chain(stt::TECH_TERMS.iter().map(|s| s.to_string())).collect()
@@ -301,7 +327,21 @@ fn run_stt(a: &Args, root: &Path, out: &Path, threads: i32) {
             Vec::new()
         };
         let t = Instant::now();
-        let heard = rec.decode(pcm, &ctx);
+        let mut parts = Vec::new();
+        for piece in app_pieces(pcm) {
+            let pt = Instant::now();
+            parts.push(rec.decode(piece, &ctx));
+            piece_decode.push(pt.elapsed().as_secs_f32());
+            piece_audio.push(piece.len() as f32 / STT_RATE as f32);
+        }
+        let heard = parts.iter().map(|p| p.trim()).filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" ");
+        // `--clean`: the app's transcript repair, with this item's terms as the round's terms.
+        let heard = if clean {
+            let refs: Vec<&str> = terms.iter().map(String::as_str).collect();
+            stt::clean_transcript(&heard, &stt::domain_vocab(&refs), &aliases)
+        } else {
+            heard
+        };
         let d = t.elapsed().as_secs_f32();
         let audio_s = pcm.len() as f32 / STT_RATE as f32;
         let w = spoken_wer(reference, &heard);
@@ -319,13 +359,17 @@ fn run_stt(a: &Args, root: &Path, out: &Path, threads: i32) {
     let mean = wers.iter().sum::<f32>() / wers.len().max(1) as f32;
     let recall = found as f32 / total.max(1) as f32;
     println!(
-        "SUMMARY engine={engine} context={use_ctx} threads={threads} items={}: mean WER {:.2}%, term recall {found}/{total} ({:.0}%), decode p50 {:.2}s p90 {:.2}s, RTF p50 {:.2}",
+        "SUMMARY engine={engine} context={use_ctx} clean={clean} threads={threads} items={}: mean WER {:.2}%, term recall {found}/{total} ({:.0}%), decode p50 {:.2}s p90 {:.2}s, RTF p50 {:.2}, pieces {} (max {:.1}s audio) decode p50 {:.2}s p90 {:.2}s",
         items.len(),
         mean * 100.0,
         recall * 100.0,
         pct(&decode, 50.0),
         pct(&decode, 90.0),
-        pct(&rtfs, 50.0)
+        pct(&rtfs, 50.0),
+        piece_decode.len(),
+        piece_audio.iter().cloned().fold(0.0, f32::max),
+        pct(&piece_decode, 50.0),
+        pct(&piece_decode, 90.0)
     );
     save_json(out, "stt", &json!({"args": a.0, "engine": engine, "mean_wer": mean, "terms_found": found, "terms_total": total,
         "decode_p50": pct(&decode, 50.0), "decode_p90": pct(&decode, 90.0), "rows": rows}));
