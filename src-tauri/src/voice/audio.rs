@@ -4,7 +4,7 @@ use crate::error::{AppError, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::Serialize;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -498,8 +498,6 @@ struct Shared {
     flush: AtomicBool,
     /// Wait for the prebuffer again before playing (a new reply started).
     rebuffer: AtomicBool,
-    /// Samples written and not yet played.
-    queued: AtomicUsize,
     prebuffer_ms: AtomicU32,
     underruns: AtomicU32,
 }
@@ -510,7 +508,6 @@ impl Default for Shared {
             streaming: AtomicBool::new(false),
             flush: AtomicBool::new(false),
             rebuffer: AtomicBool::new(false),
-            queued: AtomicUsize::new(0),
             prebuffer_ms: AtomicU32::new(300),
             underruns: AtomicU32::new(0),
         }
@@ -566,7 +563,6 @@ impl Player {
         *self.built_for.lock().unwrap() = want;
         // Samples queued for the old device were resampled for its rate; the new ring starts empty.
         *self.producer.lock().unwrap() = Some(producer);
-        self.shared.queued.store(0, Ordering::SeqCst);
         self.rate.store(rate, Ordering::SeqCst);
         *self.stream.lock().unwrap() = Some(stream);
         self.dead.store(false, Ordering::SeqCst);
@@ -603,7 +599,6 @@ impl Player {
             for &v in &rest[..n] {
                 let _ = prod.push(v);
             }
-            self.shared.queued.fetch_add(n, Ordering::SeqCst);
             rest = &rest[n..];
         }
     }
@@ -645,8 +640,15 @@ impl Player {
 
     /// Idle when nothing is queued, or when the stream died (the queue would never drain).
     pub fn is_idle(&self) -> bool {
-        self.dead.load(Ordering::SeqCst) || self.shared.queued.load(Ordering::SeqCst) == 0
+        self.dead.load(Ordering::SeqCst) || self.producer.lock().unwrap().as_ref().is_none_or(|p| unplayed(p) == 0)
     }
+}
+
+/// Samples in the ring not yet taken by the device, read from the ring itself. A separate counter
+/// updated by both threads raced: a push landing mid-callback hid what the callback played, the
+/// count never reached 0, and the mic never opened after a reply.
+fn unplayed(p: &rtrb::Producer<f32>) -> usize {
+    p.buffer().capacity() - p.slots()
 }
 
 /// The device callback's own state: the consumer end of the ring and the jitter buffer.
@@ -667,7 +669,6 @@ impl Feed {
             if let Ok(chunk) = self.ring.read_chunk(n) {
                 chunk.commit_all();
             }
-            sh.queued.store(0, Ordering::SeqCst);
             self.jitter.rebuffering = sh.streaming.load(Ordering::SeqCst);
         }
         if sh.rebuffer.swap(false, Ordering::SeqCst) {
@@ -675,15 +676,12 @@ impl Feed {
         }
         self.jitter.prebuffer = self.rate as usize * sh.prebuffer_ms.load(Ordering::Relaxed) as usize / 1000;
         let streaming = sh.streaming.load(Ordering::SeqCst);
-        let before = self.ring.slots();
         let mut sum = 0.0;
         for f in 0..frames {
             let v = self.jitter.next(&mut self.ring, streaming);
             sum += v * v;
             out(f, v);
         }
-        let popped = before.saturating_sub(self.ring.slots());
-        let _ = sh.queued.try_update(Ordering::SeqCst, Ordering::SeqCst, |q| Some(q.saturating_sub(popped)));
         if self.jitter.underruns > 0 {
             sh.underruns.fetch_add(std::mem::take(&mut self.jitter.underruns), Ordering::SeqCst);
         }
@@ -937,6 +935,30 @@ mod tests {
         assert!((0..50).all(|_| v.push(0.01) == VadEvent::None));
         let ends: Vec<_> = (0..10).map(|_| v.push(0.003)).collect();
         assert_eq!(ends.last(), Some(&VadEvent::SpeechEnd));
+    }
+
+    #[test]
+    fn unplayed_tracks_pushes_and_pops_from_any_thread() {
+        let (mut p, mut c) = rtrb::RingBuffer::<f32>::new(1000);
+        assert_eq!(unplayed(&p), 0);
+        // The device pops while pushes keep landing; the count must still reach 0 at the end.
+        let player = std::thread::spawn(move || {
+            let mut got = 0;
+            while got < 50_000 {
+                if c.pop().is_ok() {
+                    got += 1;
+                }
+            }
+            c
+        });
+        let mut sent = 0;
+        while sent < 50_000 {
+            if p.push(0.1).is_ok() {
+                sent += 1;
+            }
+        }
+        let _c = player.join().unwrap();
+        assert_eq!(unplayed(&p), 0, "everything pushed was played");
     }
 
     #[test]
