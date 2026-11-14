@@ -516,7 +516,7 @@ fn stt(engine: &str, o: &Opts) {
                 )
             }
         };
-        let cleaned = clean_transcript(&hyp, &vocab);
+        let cleaned = clean_transcript(&hyp, &vocab, &Default::default());
         if reference.trim().is_empty() {
             println!("  {id}: no reference text yet\n    hyp: {hyp}");
             continue;

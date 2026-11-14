@@ -39,21 +39,78 @@ pub const TECH_TERMS: &[&str] = &[
     "camt.053", "UPI", "NEFT", "RTGS", "IMPS", "PCI DSS", "Razorpay",
 ];
 
+/// Words to restore in a transcript: the static tech list, and this round's names and terms
+/// (resume, JD, dossier), which match a little more loosely.
+#[derive(Debug, Clone, Default)]
+pub struct Vocab {
+    pub base: Vec<String>,
+    pub round: Vec<String>,
+}
+
 /// Vocabulary for one answer: the static tech list plus caller context (company, JD, round terms).
-pub fn domain_vocab(extra: &[&str]) -> Vec<String> {
-    let mut v: Vec<String> = TECH_TERMS.iter().map(|s| s.to_string()).collect();
+pub fn domain_vocab(extra: &[&str]) -> Vocab {
+    let base: Vec<String> = TECH_TERMS.iter().map(|s| s.to_string()).collect();
+    let mut round: Vec<String> = Vec::new();
     for e in extra.iter().map(|e| e.trim()).filter(|e| !e.is_empty()) {
-        if !v.iter().any(|t| t.eq_ignore_ascii_case(e)) {
-            v.push(e.to_string());
+        if !base.iter().chain(&round).any(|t| t.eq_ignore_ascii_case(e)) {
+            round.push(e.to_string());
         }
     }
-    v
+    Vocab { base, round }
+}
+
+/// Known mishearings (`prompts/stt_aliases.json`): what the recognizer wrote -> the term.
+#[derive(Debug, Clone, Default)]
+pub struct Aliases(Vec<Alias>);
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct Alias {
+    heard: Vec<String>,
+    term: String,
+    /// Words that must appear somewhere in the answer, for mishearings that are also plain English.
+    #[serde(default)]
+    needs: Vec<String>,
+}
+
+impl Aliases {
+    pub fn from_json(text: &str) -> std::result::Result<Self, String> {
+        #[derive(serde::Deserialize)]
+        struct File {
+            aliases: Vec<Alias>,
+        }
+        let f: File = serde_json::from_str(text).map_err(|e| e.to_string())?;
+        // Stored as normalised words, so matching is a plain comparison.
+        let aliases = f
+            .aliases
+            .into_iter()
+            .map(|a| Alias {
+                heard: a.heard.iter().map(|h| h.split_whitespace().map(norm).collect::<Vec<_>>().join(" ")).collect(),
+                needs: a.needs.iter().map(|n| norm(n)).collect(),
+                term: a.term,
+            })
+            .collect();
+        Ok(Self(aliases))
+    }
+
+    /// Empty (with a warning) when the file is missing or broken: repair still works without it.
+    pub fn load(prompts_dir: &std::path::Path) -> Self {
+        let path = prompts_dir.join("stt_aliases.json");
+        match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| Self::from_json(&t)) {
+            Ok(a) => a,
+            Err(e) => {
+                tracing::warn!(path = %path.display(), "stt aliases not loaded: {e}");
+                Self::default()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct SttOptions {
     /// Words to restore in the transcript (see [`fix_vocab`]).
-    pub vocab: Vec<String>,
+    pub vocab: Vocab,
+    /// Known mishearings (see [`Aliases`]).
+    pub aliases: Arc<Aliases>,
     /// How often the open segment is re-decoded for the live caption. None = no live caption.
     pub caption_every: Option<Duration>,
     /// Silero VAD model. None, or a model that won't load = the energy VAD and no gain control.
@@ -62,7 +119,7 @@ pub struct SttOptions {
 
 impl Default for SttOptions {
     fn default() -> Self {
-        Self { vocab: domain_vocab(&[]), caption_every: Some(Duration::from_millis(500)), vad_model: None }
+        Self { vocab: domain_vocab(&[]), aliases: Default::default(), caption_every: Some(Duration::from_millis(500)), vad_model: None }
     }
 }
 
@@ -194,38 +251,167 @@ fn allowed_edits(len: usize) -> usize {
     }
 }
 
-/// Restores vocabulary words split, misspelt or mis-cased by the recogniser, e.g.
-/// "IDEM potency" -> "idempotency", "PostgresUL" -> "PostgreSQL", "IBM, MQ" -> "IBM MQ".
-/// Short terms must match exactly (ignoring case, spaces and punctuation); long terms may be a
-/// couple of edits off, but must share their first and last letters.
-pub fn fix_vocab(text: &str, vocab: &[String]) -> String {
-    let terms: Vec<(Vec<char>, &str)> =
-        vocab.iter().map(|t| (norm(t).chars().collect::<Vec<_>>(), t.as_str())).filter(|(n, _)| !n.is_empty()).collect();
+/// This round's names and terms get one more edit than the static list.
+fn allowed_edits_round(len: usize) -> usize {
+    match len {
+        0..=4 => 0,
+        5..=7 => 1,
+        _ => 3,
+    }
+}
+
+/// Common English words. A window made only of these is never turned into a term by spelling or
+/// sound ("just pay" stays, even when it was "Juspay"): rewriting ordinary speech is worse than
+/// missing a name, and the interviewer prompt lists the terms anyway.
+const EVERYDAY: &[&str] = &[
+    "the", "be", "to", "of", "and", "a", "in", "that", "have", "i", "it", "for", "not", "on", "with", "he", "as", "you",
+    "do", "at", "this", "but", "his", "by", "from", "they", "we", "say", "her", "she", "or", "an", "will", "my", "one",
+    "all", "would", "there", "their", "what", "so", "up", "out", "if", "about", "who", "get", "which", "go", "me",
+    "when", "make", "can", "like", "time", "no", "just", "him", "know", "take", "people", "into", "year", "your",
+    "good", "some", "could", "them", "see", "other", "than", "then", "now", "look", "only", "come", "its", "over",
+    "think", "also", "back", "after", "use", "two", "how", "our", "work", "first", "well", "way", "even", "new",
+    "want", "because", "any", "these", "give", "day", "most", "us", "is", "was", "are", "were", "been", "has", "had",
+    "did", "does", "said", "made", "went", "got", "here", "where", "why", "very", "much", "more", "many", "such",
+    "own", "same", "each", "few", "both", "those", "every", "still", "through", "down", "off", "before", "between",
+    "under", "again", "never", "always", "often", "while", "should", "may", "might", "must", "need", "let", "put",
+    "set", "run", "ran", "pay", "read", "reads", "write", "wrote", "post", "press", "rate", "rates", "trade", "cost",
+    "speed", "data", "team", "part", "next", "last", "long", "great", "little", "right", "big", "high", "small",
+    "large", "old", "young", "late", "early", "important", "public", "bad", "able", "thing", "things", "man", "world",
+    "life", "hand", "week", "case", "point", "number", "group", "problem", "fact", "end", "start", "call", "try",
+    "ask", "feel", "become", "leave", "keep", "begin", "seem", "help", "talk", "turn", "show", "hear", "play", "move",
+    "live", "believe", "hold", "bring", "happen", "provide", "sit", "stand", "lose", "add", "change", "lead",
+    "understand", "watch", "follow", "stop", "create", "speak", "allow", "spend", "grow", "open", "walk", "win",
+    "offer", "remember", "love", "consider", "appear", "buy", "wait", "serve", "send", "expect", "build", "stay",
+    "fall", "cut", "reach", "remain", "attention", "service", "hour", "result", "results", "red", "yeah", "okay",
+    "um", "uh", "really", "actually", "basically", "something", "anything", "nothing", "everything", "someone",
+    "system", "level", "side", "kind", "sort", "lot", "too", "yes", "since", "without", "around", "against", "during",
+    "though", "until", "already", "maybe", "sure", "story", "money", "account", "order", "place", "table", "store",
+    "line", "key", "value", "list", "file", "code", "test", "tests", "rest", "sky", "dusk", "im", "dont", "thats",
+];
+
+/// A rough sound-alike key: similar spellings of the same sounds ("cubernetties", "Kubernetes") share it.
+pub fn sound_key(word: &str) -> String {
+    let s: Vec<char> = word.chars().filter(char::is_ascii_alphabetic).map(|c| c.to_ascii_lowercase()).collect();
+    let is_vowel = |c: char| matches!(c, 'a' | 'e' | 'i' | 'o' | 'u');
+    let mut out = String::new();
+    let mut i = 0;
+    while i < s.len() {
+        let (c, next) = (s[i], s.get(i + 1).copied());
+        let pair = match (c, next) {
+            ('p', Some('h')) => Some("f"),
+            ('c', Some('k')) | ('c', Some('h')) => Some("k"),
+            ('s', Some('h')) => Some("s"),
+            _ => None,
+        };
+        if let Some(p) = pair {
+            out.push_str(p);
+            i += 2;
+            continue;
+        }
+        match c {
+            'c' if matches!(next, Some('e' | 'i' | 'y')) => out.push('s'),
+            'c' | 'q' | 'g' => out.push('k'),
+            'x' => out.push_str("ks"),
+            'z' => out.push('s'),
+            'd' => out.push('t'),
+            'b' => out.push('p'),
+            'v' => out.push('f'),
+            'h' | 'w' | 'y' => {}
+            v if is_vowel(v) => {
+                if i == 0 {
+                    out.push(v);
+                }
+            }
+            other => out.push(other),
+        }
+        i += 1;
+    }
+    let mut key = String::new();
+    for c in out.chars() {
+        if !key.ends_with(c) {
+            key.push(c);
+        }
+    }
+    key
+}
+
+/// One vocabulary term, prepared for matching.
+struct Term<'a> {
+    chars: Vec<char>,
+    key: String,
+    canon: &'a str,
+    round: bool,
+}
+
+/// (rule, edits, window len, term). Lower rule wins, then fewer edits, then the longer window.
+type Pick<'a> = Option<(u8, usize, usize, &'a str)>;
+
+fn offer<'a>(best: &mut Pick<'a>, rule: u8, d: usize, len: usize, canon: &'a str) {
+    if best.is_none_or(|(br, bd, bl, _)| (rule, d) < (br, bd) || ((rule, d) == (br, bd) && len > bl)) {
+        *best = Some((rule, d, len, canon));
+    }
+}
+
+/// Restores vocabulary words split, misspelt, mis-cased or misheard by the recogniser, e.g.
+/// "IDEM potency" -> "idempotency", "PostgresUL" -> "PostgreSQL", "IBM, MQ" -> "IBM MQ",
+/// "reddish" -> "Redis" (in a caching answer). Per window of 1-3 words, in order of preference:
+/// exact (ignoring case, spaces, punctuation) or a known mishearing; a few spelling edits with the
+/// first and last letters kept; the same sound key (long terms, or this round's names).
+pub fn fix_vocab(text: &str, vocab: &Vocab, aliases: &Aliases) -> String {
+    let terms: Vec<Term> = vocab
+        .base
+        .iter()
+        .map(|t| (t, false))
+        .chain(vocab.round.iter().map(|t| (t, true)))
+        .map(|(t, round)| Term { chars: norm(t).chars().collect(), key: sound_key(t), canon: t.as_str(), round })
+        .filter(|t| !t.chars.is_empty())
+        .collect();
     let words: Vec<&str> = text.split_whitespace().collect();
+    let normed: Vec<String> = words.iter().map(|w| norm(w)).collect();
+    let in_text = |w: &str| normed.iter().any(|n| n == w);
     let mut out: Vec<String> = Vec::with_capacity(words.len());
     let mut i = 0;
     while i < words.len() {
-        // (edits, window len, term); exact beats fuzzy, then longer window wins.
-        let mut best: Option<(usize, usize, &str)> = None;
+        let mut best: Pick = None;
         for len in 1..=3.min(words.len() - i) {
-            let win = &words[i..i + len];
-            if win.iter().any(|w| norm(w).is_empty()) {
+            let win = &normed[i..i + len];
+            if win.iter().any(String::is_empty) {
                 break;
             }
-            let joined: Vec<char> = win.iter().map(|w| norm(w)).collect::<String>().chars().collect();
-            for (t, canon) in &terms {
-                let max = allowed_edits(t.len());
-                if joined.len().abs_diff(t.len()) > max || joined.first() != t.first() || joined.last() != t.last() {
+            let joined: Vec<char> = win.concat().chars().collect();
+            let spaced = win.join(" ");
+            let everyday = win.iter().all(|w| EVERYDAY.contains(&w.as_str()));
+            for a in &aliases.0 {
+                let context = a.needs.is_empty() || a.needs.iter().any(|n| in_text(n)) || vocab.round.iter().any(|r| r.eq_ignore_ascii_case(&a.term));
+                if context && a.heard.contains(&spaced) {
+                    offer(&mut best, 0, 0, len, a.term.as_str());
+                }
+            }
+            for t in &terms {
+                if joined == t.chars {
+                    offer(&mut best, 0, 0, len, t.canon);
                     continue;
                 }
-                let d = if joined == *t { 0 } else if max == 0 { continue } else { levenshtein(&joined, t) };
-                if d <= max && best.is_none_or(|(bd, bl, _)| d < bd || (d == bd && len > bl)) {
-                    best = Some((d, len, canon));
+                if everyday {
+                    continue;
+                }
+                let max = if t.round { allowed_edits_round(t.chars.len()) } else { allowed_edits(t.chars.len()) };
+                let ends_match = joined.first() == t.chars.first() && joined.last() == t.chars.last();
+                if max > 0 && ends_match && joined.len().abs_diff(t.chars.len()) <= max {
+                    let d = levenshtein(&joined, &t.chars);
+                    if d <= max {
+                        offer(&mut best, 1, d, len, t.canon);
+                        continue;
+                    }
+                }
+                let long_enough = t.chars.len() >= 8 || (t.round && t.chars.len() >= 5);
+                if long_enough && t.key.len() >= 3 && sound_key(&spaced) == t.key {
+                    offer(&mut best, 2, 0, len, t.canon);
                 }
             }
         }
         match best {
-            Some((_, len, canon)) => {
+            Some((_, _, len, canon)) => {
                 let first = words[i];
                 let last = words[i + len - 1];
                 let lead: String = first.chars().take_while(|c| !c.is_alphanumeric()).collect();
@@ -246,8 +432,8 @@ pub fn fix_vocab(text: &str, vocab: &[String]) -> String {
 }
 
 /// Final clean-up applied to every transcript we hand out.
-pub fn clean_transcript(text: &str, vocab: &[String]) -> String {
-    collapse_repeats(&fix_vocab(text, vocab))
+pub fn clean_transcript(text: &str, vocab: &Vocab, aliases: &Aliases) -> String {
+    collapse_repeats(&fix_vocab(text, vocab, aliases))
 }
 
 // ---------- listening ----------
@@ -316,7 +502,7 @@ fn seg_pause_ms(seg_samples: usize) -> Option<u32> {
 
 /// Listens until the pause after speech (or `finish`), then returns the transcript.
 pub async fn listen(engine: &Engine, pause_ms: u32, ctl: &ListenCtl, emit: impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
-    listen_with(engine, pause_ms, ctl, &SttOptions { vad_model: Some(engine.vad_model.clone()), ..Default::default() }, emit).await
+    listen_with(engine, pause_ms, ctl, &SttOptions { vad_model: Some(engine.vad_model.clone()), aliases: engine.aliases.clone(), ..Default::default() }, emit).await
 }
 
 /// Decodes a finished segment off the async runtime and reports it as the segment's final text.
@@ -385,7 +571,7 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
     let mut seg_samples = 0usize;
     let mut last_level = Instant::now();
     let mut shown = String::new();
-    let heard = |ans: &Answer| clean_transcript(&ans.text(), &opts.vocab);
+    let heard = |ans: &Answer| clean_transcript(&ans.text(), &opts.vocab, &opts.aliases);
     let mut health = tokio::time::interval(Duration::from_millis(500));
     let mut mic_lost = false;
     // Without a live caption the timer still ticks (hourly) so the select stays simple; it never decodes.
@@ -530,7 +716,7 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
         }
     }
     let raw = ans.text();
-    let text = clean_transcript(&raw, &opts.vocab);
+    let text = clean_transcript(&raw, &opts.vocab, &opts.aliases);
     let stt_ms = ended_at.elapsed().as_millis() as u64;
     tracing::info!(stt_ms, segments = ans.segs.len(), words = text.split_whitespace().count(), "utterance transcribed");
     if raw != text {
@@ -592,12 +778,12 @@ mod tests {
             ("a hazel cast cluster", "a Hazelcast cluster"),
         ];
         for (input, want) in cases {
-            assert_eq!(fix_vocab(input, &v), want, "{input}");
+            assert_eq!(fix_vocab(input, &v, &Aliases::default()), want, "{input}");
         }
         // Must not eat neighbouring words or touch ordinary English.
-        assert_eq!(fix_vocab("a PostgreSQL table", &v), "a PostgreSQL table");
-        assert_eq!(fix_vocab("the microservice and the rest of it", &v), "the microservice and the rest of it");
-        assert_eq!(fix_vocab("I ran the tests again.", &v), "I ran the tests again.");
+        assert_eq!(fix_vocab("a PostgreSQL table", &v, &Aliases::default()), "a PostgreSQL table");
+        assert_eq!(fix_vocab("the microservice and the rest of it", &v, &Aliases::default()), "the microservice and the rest of it");
+        assert_eq!(fix_vocab("I ran the tests again.", &v, &Aliases::default()), "I ran the tests again.");
     }
 
     #[test]
@@ -607,7 +793,7 @@ mod tests {
                    ISO 2022 MX messages. They talk to each other over IBM, MQ and Kafka. One of the hardest \
                    problems was idem potency. The acknowledgments from Swift.";
         assert_eq!(
-            clean_transcript(raw, &domain_vocab(&[])),
+            clean_transcript(raw, &domain_vocab(&[]), &Aliases::default()),
             "we send SWIFT MT300 and MT103 messages to counterparties. We are also migrating to \
              ISO 20022 MX messages. They talk to each other over IBM MQ and Kafka. One of the hardest \
              problems was idempotency. The acknowledgments from SWIFT."
@@ -617,8 +803,52 @@ mod tests {
     #[test]
     fn domain_vocab_dedupes_extras() {
         let v = domain_vocab(&["kafka", "  ", "Juspay"]);
-        assert_eq!(v.len(), TECH_TERMS.len() + 1);
-        assert_eq!(v.last().map(String::as_str), Some("Juspay"));
+        assert_eq!(v.base.len(), TECH_TERMS.len());
+        assert_eq!(v.round, ["Juspay"]);
+    }
+
+    fn aliases() -> Aliases {
+        Aliases::from_json(include_str!("../../../prompts/stt_aliases.json")).unwrap()
+    }
+
+    #[test]
+    fn sound_keys() {
+        assert_eq!(sound_key("Kubernetes"), sound_key("cubernetties"));
+        assert_eq!(sound_key("Elasticsearch"), sound_key("elastic surch"));
+        assert_ne!(sound_key("Cassandra"), sound_key("Kubernetes"));
+    }
+
+    #[test]
+    fn aliases_fix_short_terms_only_in_context() {
+        let v = domain_vocab(&[]);
+        let a = aliases();
+        assert_eq!(fix_vocab("we cache it in reddish with a ttl", &v, &a), "we cache it in Redis with a ttl");
+        assert_eq!(fix_vocab("the sky was reddish at dusk", &v, &a), "the sky was reddish at dusk");
+        assert_eq!(fix_vocab("stored in postgres creole tables", &v, &a), "stored in PostgreSQL tables");
+    }
+
+    #[test]
+    fn round_terms_match_more_loosely() {
+        let v = domain_vocab(&["Juspay", "Prateesh", "Hazelcast"]);
+        let a = Aliases::default();
+        assert_eq!(fix_vocab("I worked at juspe for two years", &v, &a), "I worked at Juspay for two years");
+        assert_eq!(fix_vocab("my name is pratish", &v, &a), "my name is Prateesh");
+        assert_eq!(fix_vocab("a hazel cast cluster", &v, &a), "a Hazelcast cluster");
+    }
+
+    #[test]
+    fn ordinary_english_is_left_alone() {
+        let v = domain_vocab(&["Juspay", "Prateesh", "Karthik", "Razorpay"]);
+        let a = aliases();
+        for s in [
+            "I just pay attention to the reads and the rates",
+            "we read this data from the other team and wrote it back",
+            "there is a trade off between speed and the cost of the read",
+            "I would post the results and press on with the next part",
+            "the service was down for an hour and we were late",
+        ] {
+            assert_eq!(fix_vocab(s, &v, &a), s);
+        }
     }
 
     #[test]

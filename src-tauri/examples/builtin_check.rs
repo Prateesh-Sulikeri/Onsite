@@ -117,7 +117,7 @@ async fn main() {
         let t = Instant::now();
         let raw = stt.transcribe(pcm);
         let ms = t.elapsed().as_millis();
-        println!("STT {:.1} s audio in {ms} ms\n  said: {line}\n  heard: {}", pcm.len() as f32 / MIC_RATE as f32, clean_transcript(&raw, &vocab));
+        println!("STT {:.1} s audio in {ms} ms\n  said: {line}\n  heard: {}", pcm.len() as f32 / MIC_RATE as f32, clean_transcript(&raw, &vocab, &Default::default()));
     }
     // Option A caption: re-decode the growing segment every 0.5 s of audio.
     if let Some((_, pcm)) = inputs.iter().max_by_key(|(_, p)| p.len()) {

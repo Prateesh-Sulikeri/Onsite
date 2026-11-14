@@ -604,7 +604,12 @@ async fn listen_once(
     hold.store(false, Ordering::SeqCst);
     *ctl_slot.lock().unwrap() = ctl.clone();
     let refs: Vec<&str> = settings.vocab.iter().map(String::as_str).collect();
-    let opts = stt::SttOptions { vocab: stt::domain_vocab(&refs), caption_every: engine.tier.caption_every(), vad_model: Some(engine.vad_model.clone()) };
+    let opts = stt::SttOptions {
+        vocab: stt::domain_vocab(&refs),
+        aliases: engine.aliases.clone(),
+        caption_every: engine.tier.caption_every(),
+        vad_model: Some(engine.vad_model.clone()),
+    };
     match stt::listen_with(engine, settings.pause_ms, &ctl, &opts, emit.clone()).await {
         Ok(ListenEnd::Text { text, stt_ms }) => {
             *answered_at.lock().unwrap() = Some(Instant::now() - Duration::from_millis(stt_ms));

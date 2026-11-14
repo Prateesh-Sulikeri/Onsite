@@ -1,0 +1,14 @@
+{ "aliases": [
+  { "heard": ["reddish", "red is", "readies", "red dis"], "term": "Redis", "needs": ["cache", "key", "ttl", "memory", "cluster", "store", "pub", "lua"] },
+  { "heard": ["postgres creole", "post grass", "post gress", "postgres ql", "post gray sql"], "term": "PostgreSQL" },
+  { "heard": ["cafca", "kafta", "cough ka"], "term": "Kafka" },
+  { "heard": ["g r p c", "grpc", "gr pc"], "term": "gRPC" },
+  { "heard": ["jay w t", "j w t", "jot"], "term": "JWT", "needs": ["token", "auth", "claim", "signed"] },
+  { "heard": ["o auth", "oh auth", "oath"], "term": "OAuth", "needs": ["token", "login", "scope", "auth"] },
+  { "heard": ["cube ernetes", "cooper netties"], "term": "Kubernetes" },
+  { "heard": ["dynamo db", "dynamo d b"], "term": "DynamoDB" },
+  { "heard": ["mongo db", "mongo d b"], "term": "MongoDB" },
+  { "heard": ["rabbit mq", "rabbit m q"], "term": "RabbitMQ" },
+  { "heard": ["graph ql", "graph q l"], "term": "GraphQL" },
+  { "heard": ["elastic search"], "term": "Elasticsearch" }
+] }
