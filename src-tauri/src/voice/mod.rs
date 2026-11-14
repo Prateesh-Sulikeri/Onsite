@@ -11,6 +11,7 @@ pub mod score;
 pub mod speech_text;
 pub mod stt;
 pub mod tier;
+pub mod vocab;
 
 use crate::error::{AppError, Result};
 use audio::Player;
@@ -45,7 +46,9 @@ pub struct VoiceSettings {
     pub output_device: String,
     /// Set per round for panel interviewers; overrides `builtin_voice`. Never saved.
     #[serde(skip)]
-    pub persona: Option<PersonaVoice>,
+    pub persona: Option<PersonaVoice>,    /// Names and terms for this round (resume, job description, dossier, setup). Never saved.
+    #[serde(skip)]
+    pub vocab: Vec<String>,
 }
 
 impl Default for VoiceSettings {
@@ -59,6 +62,7 @@ impl Default for VoiceSettings {
             input_device: String::new(),
             output_device: String::new(),
             persona: None,
+            vocab: Vec::new(),
         }
     }
 }
@@ -595,7 +599,8 @@ async fn listen_once(
     let ctl = Arc::new(ListenCtl::default());
     hold.store(false, Ordering::SeqCst);
     *ctl_slot.lock().unwrap() = ctl.clone();
-    let opts = stt::SttOptions { caption_every: engine.tier.caption_every(), ..Default::default() };
+    let refs: Vec<&str> = settings.vocab.iter().map(String::as_str).collect();
+    let opts = stt::SttOptions { vocab: stt::domain_vocab(&refs), caption_every: engine.tier.caption_every() };
     match stt::listen_with(engine, settings.pause_ms, &ctl, &opts, emit.clone()).await {
         Ok(ListenEnd::Text { text, stt_ms }) => {
             *answered_at.lock().unwrap() = Some(Instant::now() - Duration::from_millis(stt_ms));
