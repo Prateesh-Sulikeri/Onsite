@@ -2,7 +2,7 @@
 //!
 //! Long answers are cut into segments at short pauses, so each finished segment decodes while the
 //! candidate keeps talking and the tail left to decode at the end stays short. The open segment is
-//! re-decoded every [`CAPTION_EVERY`] for the live caption. Domain words are fixed against a
+//! re-decoded every [`SttOptions::caption_every`] for the live caption. Domain words are fixed against a
 //! vocabulary and repetition loops are collapsed.
 
 use super::audio::{i16_to_f32, rms, Level, Mic, Vad, VadEvent, MIC_RATE};
@@ -54,11 +54,13 @@ pub fn domain_vocab(extra: &[&str]) -> Vec<String> {
 pub struct SttOptions {
     /// Words to restore in the transcript (see [`fix_vocab`]).
     pub vocab: Vec<String>,
+    /// How often the open segment is re-decoded for the live caption. None = no live caption.
+    pub caption_every: Option<Duration>,
 }
 
 impl Default for SttOptions {
     fn default() -> Self {
-        Self { vocab: domain_vocab(&[]) }
+        Self { vocab: domain_vocab(&[]), caption_every: Some(Duration::from_millis(500)) }
     }
 }
 
@@ -315,9 +317,6 @@ pub async fn listen(engine: &Engine, pause_ms: u32, ctl: &ListenCtl, emit: impl 
     listen_with(engine, pause_ms, ctl, &SttOptions::default(), emit).await
 }
 
-/// Parakeet re-decodes the open segment this often to show a caption.
-const CAPTION_EVERY: Duration = Duration::from_millis(500);
-
 /// Decodes a finished segment off the async runtime and reports it as the segment's final text.
 fn spawn_decode(stt: Arc<ParakeetStt>, idx: usize, pcm: Vec<i16>, tx: UnboundedSender<SegMsg>) {
     tokio::task::spawn_blocking(move || {
@@ -379,7 +378,8 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
     let heard = |ans: &Answer| clean_transcript(&ans.text(), &opts.vocab);
     let mut health = tokio::time::interval(Duration::from_millis(500));
     let mut mic_lost = false;
-    let mut caption = tokio::time::interval(CAPTION_EVERY);
+    // Without a live caption the timer still ticks (hourly) so the select stays simple; it never decodes.
+    let mut caption = tokio::time::interval(opts.caption_every.unwrap_or(Duration::from_secs(3600)));
     caption.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let caption_gate = Arc::new(CaptionGate::default());
     // (segment, samples) of the last caption started: no re-decode of audio that hasn't grown.
@@ -400,7 +400,7 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
                 break;
             },
             _ = caption.tick() => {
-                if let Some(i) = active {
+                if let (Some(i), Some(_)) = (active, opts.caption_every) {
                     let n = ans.segs[i].pcm.len();
                     if n >= MIC_RATE as usize / 2 && captioned != (i, n) && caption_gate.ready() {
                         captioned = (i, n);
@@ -521,6 +521,11 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn options_default_to_half_second_captions() {
+        assert_eq!(SttOptions::default().caption_every, Some(Duration::from_millis(500)));
+    }
 
     #[test]
     fn stt_state_prefers_summary() {

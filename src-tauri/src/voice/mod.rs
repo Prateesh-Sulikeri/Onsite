@@ -595,7 +595,8 @@ async fn listen_once(
     let ctl = Arc::new(ListenCtl::default());
     hold.store(false, Ordering::SeqCst);
     *ctl_slot.lock().unwrap() = ctl.clone();
-    match stt::listen(engine, settings.pause_ms, &ctl, emit.clone()).await {
+    let opts = stt::SttOptions { caption_every: engine.tier.caption_every(), ..Default::default() };
+    match stt::listen_with(engine, settings.pause_ms, &ctl, &opts, emit.clone()).await {
         Ok(ListenEnd::Text { text, stt_ms }) => {
             *answered_at.lock().unwrap() = Some(Instant::now() - Duration::from_millis(stt_ms));
             emit(VoiceEvent::Final { text, stt_ms });
