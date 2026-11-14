@@ -63,7 +63,7 @@ of tests on the counts: female = fewest missing at 1.0 + 1.1, then lowest WER (s
 male = words/s at 1.0 closest to the female pick's 2.55 (sid 5: 2.55, also the fewest missing among 5-9).
 Both are the current voices. Speed 1.3 is where every voice breaks down (missing 20-31, WER 12-19%); 1.2 holds
 (sid 0: 16 / 7.3%, sid 5: 16 / 7.7%). Proposed `SPEED_MAX` = 1.2, pending the owner's listen.
-Raw text before the normalizer, same grid: 31-36 missing and ~24-29% WER at every speed.
+Raw text before the normalizer, same grid: 28-42 missing and 23-38% WER.
 
 ## Measured facts
 
