@@ -5,7 +5,7 @@
 //! re-decoded every [`SttOptions::caption_every`] for the live caption. Domain words are fixed against a
 //! vocabulary and repetition loops are collapsed.
 
-use super::audio::{i16_to_f32, rms, Level, Mic, Vad, VadEvent, MIC_RATE};
+use super::audio::{f32_to_i16, i16_to_f32, rms, Agc, Level, Mic, SpeechGate, Vad, VadEvent, MIC_RATE};
 use super::builtin::ParakeetStt;
 use super::engine::Engine;
 use super::VoiceEvent;
@@ -56,11 +56,13 @@ pub struct SttOptions {
     pub vocab: Vec<String>,
     /// How often the open segment is re-decoded for the live caption. None = no live caption.
     pub caption_every: Option<Duration>,
+    /// Silero VAD model. None, or a model that won't load = the energy VAD and no gain control.
+    pub vad_model: Option<std::path::PathBuf>,
 }
 
 impl Default for SttOptions {
     fn default() -> Self {
-        Self { vocab: domain_vocab(&[]), caption_every: Some(Duration::from_millis(500)) }
+        Self { vocab: domain_vocab(&[]), caption_every: Some(Duration::from_millis(500)), vad_model: None }
     }
 }
 
@@ -314,7 +316,7 @@ fn seg_pause_ms(seg_samples: usize) -> Option<u32> {
 
 /// Listens until the pause after speech (or `finish`), then returns the transcript.
 pub async fn listen(engine: &Engine, pause_ms: u32, ctl: &ListenCtl, emit: impl FnMut(VoiceEvent)) -> Result<ListenEnd> {
-    listen_with(engine, pause_ms, ctl, &SttOptions::default(), emit).await
+    listen_with(engine, pause_ms, ctl, &SttOptions { vad_model: Some(engine.vad_model.clone()), ..Default::default() }, emit).await
 }
 
 /// Decodes a finished segment off the async runtime and reports it as the segment's final text.
@@ -368,6 +370,14 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
     let (seg_tx, mut seg_rx) = unbounded_channel::<SegMsg>();
     let mic = Mic::open(tx)?;
     let mut vad = Vad::new(20, pause_ms);
+    // Silero decides speech when its model loads; gain control runs only with it, because the
+    // energy VAD's thresholds are tuned to the raw mic level.
+    let mut gate = opts.vad_model.as_deref().and_then(SpeechGate::open);
+    if opts.vad_model.is_some() && gate.is_none() {
+        tracing::warn!("silero vad did not load; using the energy vad");
+    }
+    let mut agc = Agc::new();
+    let mut gate_voiced = false;
     let mut frame: Vec<i16> = Vec::with_capacity(FRAME);
     let mut preroll: VecDeque<i16> = VecDeque::with_capacity(PREROLL + FRAME);
     let mut ans = Answer::default();
@@ -419,7 +429,14 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
                 }
             }
             chunk = rx.recv() => {
-                let Some(chunk) = chunk else { break };
+                let Some(mut chunk) = chunk else { break };
+                if let Some(g) = gate.as_mut() {
+                    // Gain follows the previous chunk's verdict; the gate then judges the scaled chunk.
+                    let mut f = i16_to_f32(&chunk);
+                    agc.process(&mut f, gate_voiced);
+                    gate_voiced = g.voiced(&f);
+                    chunk = f32_to_i16(&f);
+                }
                 ctl.mic_level.set(mic.level.get());
                 if last_level.elapsed() >= Duration::from_millis(80) {
                     last_level = Instant::now();
@@ -429,9 +446,15 @@ async fn run(stt: &Arc<ParakeetStt>, pause_ms: u32, ctl: &ListenCtl, opts: &SttO
                 for &s in &chunk {
                     frame.push(s);
                     if frame.len() == FRAME {
-                        let level = rms(&i16_to_f32(&frame));
-                        loud |= level > vad.threshold();
-                        match vad.push(level) {
+                        let event = if gate.is_some() {
+                            loud |= gate_voiced;
+                            vad.push_flag(gate_voiced, gate_voiced)
+                        } else {
+                            let level = rms(&i16_to_f32(&frame));
+                            loud |= level > vad.threshold();
+                            vad.push(level)
+                        };
+                        match event {
                             VadEvent::SpeechStart => started = true,
                             VadEvent::SpeechEnd => ended = true,
                             VadEvent::None => {}

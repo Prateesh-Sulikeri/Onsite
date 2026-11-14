@@ -73,6 +73,10 @@ Blobs saved by older versions also hold `engine`, `base_url`, `voice`, `steps`; 
 
 - Mic at device rate → (callback only copies samples; thread `onsite-mic-dsp` does the low-pass, never filter inside the cpal callback: overruns drop audio = missing words) → low-pass → 16 kHz mono i16; 20 ms frames → RMS → `Vad` (noise floor learned pre-speech, start >
   3× floor, hold > 2× floor, mins/caps; answer ends after `pause_ms` quiet). Pre-roll 400 ms kept with each segment.
+- Silero VAD (`prompts/models/silero_vad.onnx`, 643,854 bytes, SHA-256
+  `9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6`, from the sherpa-onnx `asr-models` release, MIT) decides
+  speech when it loads (`SpeechGate`, threshold 0.5, opened per answer): then `Vad::push_flag(gate, gate)` per frame, and
+  `Agc` (gain 1-8x toward RMS 0.08, moves only on voiced chunks) scales the mic first. Model missing = energy VAD, no gain.
 - Segment cut (decode while candidate talks): < 3 s never; 3-20 s at 700 ms pause; > 20 s at 300 ms.
 - Segment text = Parakeet final ?? last caption. Answer = segments joined → `clean_transcript`.
 - Health tick 500 ms: dead mic → `Voice("The microphone changed. Tap the mic to listen again.")`. `FINAL_WAIT` 15 s.

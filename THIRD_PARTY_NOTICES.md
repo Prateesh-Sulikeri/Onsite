@@ -41,6 +41,12 @@ cargo install cargo-about
 cd src-tauri && cargo about generate about.hbs > ../licenses-rust.html
 ```
 
+## Bundled model
+
+| Model | License | Used for |
+| --- | --- | --- |
+| [Silero VAD](https://github.com/snakers4/silero-vad) (`prompts/models/silero_vad.onnx`, the sherpa-onnx export) | MIT | Telling speech from noise on the mic |
+
 ## Images
 
 The background (`ui/assets/twilight.webp`, from `public/images/`) was generated with ChatGPT. OpenAI's Terms of Use

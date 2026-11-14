@@ -9,3 +9,5 @@ LICENSES/
 # The 150 KB artifact the UI was ported from
 ui/onsite-artifact-reference.html
 graphify-out/
+# Bundled ONNX models (binary)
+prompts/models/

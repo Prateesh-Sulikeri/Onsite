@@ -223,12 +223,19 @@ impl Vad {
         (self.noise * 2.0).max(Self::MIN_HOLD)
     }
 
+    /// One frame from its energy: learns the noise floor while nobody speaks, then runs [`Vad::push_flag`].
     pub fn push(&mut self, frame_rms: f32) -> VadEvent {
+        let loud = frame_rms > self.threshold();
+        if !self.speaking && !loud {
+            self.noise = (self.noise * 0.95 + frame_rms * 0.05).min(Self::MAX_NOISE);
+        }
+        self.push_flag(frame_rms > self.hold_threshold(), loud)
+    }
+
+    /// The turn state machine. `loud` starts speech (after `START_FRAMES` in a row); once speaking,
+    /// `voiced` keeps it open and the pause after the last voiced frame ends it.
+    pub fn push_flag(&mut self, voiced: bool, loud: bool) -> VadEvent {
         if !self.speaking {
-            let loud = frame_rms > self.threshold();
-            if !loud {
-                self.noise = (self.noise * 0.95 + frame_rms * 0.05).min(Self::MAX_NOISE);
-            }
             self.loud_frames = if loud { self.loud_frames + 1 } else { 0 };
             if self.loud_frames >= Self::START_FRAMES {
                 self.speaking = true;
@@ -237,7 +244,6 @@ impl Vad {
             }
             return VadEvent::None;
         }
-        let voiced = frame_rms > self.hold_threshold();
         self.quiet_ms = if voiced { 0 } else { self.quiet_ms + self.frame_ms };
         if self.pause_ms > 0 && self.quiet_ms >= self.pause_ms {
             self.speaking = false;
@@ -245,6 +251,80 @@ impl Vad {
             return VadEvent::SpeechEnd;
         }
         VadEvent::None
+    }
+}
+
+/// Slow gain control toward a normal speech level. Pure.
+pub struct Agc {
+    gain: f32,
+}
+
+impl Default for Agc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Agc {
+    pub const TARGET_RMS: f32 = 0.08;
+    pub const MAX_GAIN: f32 = 8.0;
+
+    pub fn new() -> Self {
+        Self { gain: 1.0 }
+    }
+
+    /// Scales `chunk` in place. The gain moves 5% of the way to TARGET_RMS / rms per voiced chunk,
+    /// stays put on unvoiced chunks, and is clamped to 1.0..=MAX_GAIN. Output is clamped to -1..=1.
+    pub fn process(&mut self, chunk: &mut [f32], voiced: bool) {
+        let level = rms(chunk);
+        if voiced && level > 0.0 {
+            let want = Self::TARGET_RMS / level;
+            self.gain = (self.gain + 0.05 * (want - self.gain)).clamp(1.0, Self::MAX_GAIN);
+        }
+        for v in chunk.iter_mut() {
+            *v = (*v * self.gain).clamp(-1.0, 1.0);
+        }
+    }
+
+    pub fn gain(&self) -> f32 {
+        self.gain
+    }
+}
+
+/// Speech or not, per chunk of 16 kHz audio. Silero when the model loads, else None (energy VAD is used).
+pub struct SpeechGate {
+    vad: sherpa_onnx::VoiceActivityDetector,
+}
+
+impl SpeechGate {
+    pub fn open(model: &std::path::Path) -> Option<Self> {
+        // sherpa-onnx is not reliable about a missing file; check first.
+        if !model.is_file() {
+            return None;
+        }
+        let config = sherpa_onnx::VadModelConfig {
+            silero_vad: sherpa_onnx::SileroVadModelConfig {
+                model: Some(model.to_string_lossy().into_owned()),
+                threshold: 0.5,
+                min_silence_duration: 0.1,
+                min_speech_duration: 0.1,
+                window_size: 512,
+                max_speech_duration: 30.0,
+            },
+            sample_rate: MIC_RATE as i32,
+            num_threads: 1,
+            ..Default::default()
+        };
+        sherpa_onnx::VoiceActivityDetector::create(&config, 30.0).map(|vad| Self { vad })
+    }
+
+    /// Feeds the chunk; true while Silero reports speech. Drains finished segments so the buffer stays small.
+    pub fn voiced(&mut self, pcm16k: &[f32]) -> bool {
+        self.vad.accept_waveform(pcm16k);
+        while !self.vad.is_empty() {
+            self.vad.pop();
+        }
+        self.vad.detected()
     }
 }
 
@@ -857,6 +937,57 @@ mod tests {
         assert!((0..50).all(|_| v.push(0.01) == VadEvent::None));
         let ends: Vec<_> = (0..10).map(|_| v.push(0.003)).collect();
         assert_eq!(ends.last(), Some(&VadEvent::SpeechEnd));
+    }
+
+    #[test]
+    fn agc_raises_quiet_speech_and_leaves_noise_alone() {
+        let mut a = Agc::new();
+        let quiet = tone(16_000, 300.0, 0.02); // rms ~0.35 at amplitude 0.5
+        let mut scaled: Vec<f32> = quiet.iter().map(|v| v * 0.05).collect(); // rms ~0.018
+        for _ in 0..200 {
+            let mut c = scaled.clone();
+            a.process(&mut c, true);
+        }
+        assert!(a.gain() > 3.0 && a.gain() <= Agc::MAX_GAIN, "{}", a.gain());
+        let before = a.gain();
+        a.process(&mut scaled, false);
+        assert_eq!(a.gain(), before, "unvoiced chunks do not move the gain");
+        let mut loud = vec![0.9f32; 320];
+        Agc { gain: 8.0 }.process(&mut loud, true);
+        assert!(loud.iter().all(|v| v.abs() <= 1.0));
+    }
+
+    #[test]
+    fn vad_flags_drive_the_same_state_machine() {
+        let mut v = Vad::new(20, 100);
+        assert_eq!(v.push_flag(true, true), VadEvent::None);
+        assert_eq!(v.push_flag(true, true), VadEvent::None);
+        assert_eq!(v.push_flag(true, true), VadEvent::SpeechStart);
+        let ends: Vec<_> = (0..5).map(|_| v.push_flag(false, false)).collect();
+        assert_eq!(ends.last(), Some(&VadEvent::SpeechEnd));
+    }
+
+    /// Review focus 5: typing and room noise are not speech.
+    #[test]
+    fn silero_ignores_clicks_and_noise() {
+        let model = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../prompts/models/silero_vad.onnx");
+        let mut gate = SpeechGate::open(&model).expect("bundled model loads");
+        // 3 s of low noise with a 5 ms click every 150 ms (a keyboard).
+        let mut seed = 1u32;
+        let mut pcm: Vec<f32> = (0..48_000)
+            .map(|_| {
+                seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                ((seed >> 16) as f32 / 32768.0 - 1.0) * 0.004
+            })
+            .collect();
+        for start in (0..48_000).step_by(2400) {
+            for s in pcm[start..start + 80].iter_mut() {
+                *s = 0.6;
+            }
+        }
+        let voiced = pcm.chunks(320).filter(|c| gate.voiced(c)).count();
+        assert_eq!(voiced, 0, "{voiced} chunks flagged as speech");
+        assert!(SpeechGate::open(std::path::Path::new("no-such-file.onnx")).is_none());
     }
 
     #[test]

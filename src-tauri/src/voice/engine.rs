@@ -26,6 +26,8 @@ pub struct Engine {
     pub lexicon: Arc<Lexicon>,
     /// This machine's tier; `Tier::Ok` until the first warm-up measures it.
     pub tier: Tier,
+    /// Silero VAD model, bundled with the prompts.
+    pub vad_model: std::path::PathBuf,
 }
 
 impl Engine {
@@ -33,7 +35,7 @@ impl Engine {
     pub async fn load(state: &AppState) -> Result<Self> {
         let (tts, stt) = tokio::try_join!(state.builtin.tts(&state.data_dir), state.builtin.stt(&state.data_dir))?;
         let lexicon = Arc::new(Lexicon::load(&state.prompts_dir));
-        Ok(Self { tts, stt, lexicon, tier: state.builtin.tier().unwrap_or(Tier::Ok) })
+        Ok(Self { tts, stt, lexicon, tier: state.builtin.tier().unwrap_or(Tier::Ok), vad_model: state.prompts_dir.join("models/silero_vad.onnx") })
     }
 
     /// The voice for a round: a panel interviewer's, else the one chosen in Settings.
